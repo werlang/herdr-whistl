@@ -37,6 +37,12 @@ class TransportLost(message: String, cause: Throwable? = null) : HcException(mes
 class Timeout(method: String, timeoutMillis: Long) :
     HcException("no reply to $method within $timeoutMillis ms")
 
+/**
+ * The SSH login was refused: a wrong key, a wrong password, or a method the server does not accept. It is not
+ * retried automatically. The message names neither the user, the host nor any credential.
+ */
+class AuthFailed : HcException("ssh login was refused")
+
 /** `hello` reported a protocol generation other than 1. The app refuses to talk to that core. */
 class UnsupportedGeneration(val generation: Int) :
     HcException("hc protocol generation $generation is not supported; this app needs generation 1")

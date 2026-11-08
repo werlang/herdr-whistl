@@ -40,6 +40,28 @@ interface HostKeyStore {
      * @param key the key to pin.
      */
     fun pin(machineId: String, key: PinnedHostKey)
+
+    /**
+     * Drops the pin for [machineId], if any. Only machine removal calls this: a pin is never replaced silently.
+     *
+     * @param machineId the app's machine id.
+     */
+    fun forget(machineId: String)
+}
+
+/**
+ * A host key as the server presented it during a refused connection: the algorithm and the blob. It is public
+ * data, handed back only so the user's confirmation can pin exactly the key that was shown. It is never produced for
+ * a changed key.
+ *
+ * @property algorithm the presented key type.
+ * @property blob the presented SSH public-key blob, copied.
+ */
+class PresentedHostKey(val algorithm: String, blob: ByteArray) {
+    /** The blob, copied so the caller cannot change what was presented. */
+    val blob: ByteArray = blob.copyOf()
+
+    override fun toString(): String = "PresentedHostKey($algorithm, ${SshFingerprint.of(blob)})"
 }
 
 /**
@@ -137,10 +159,23 @@ class HostKeyPolicy(private val store: HostKeyStore) {
  * confirmation ([HostKeyDecision.Unknown]) or show the blocking warning ([HostKeyDecision.Changed]). Its message names
  * neither the host nor the key.
  *
+ * For [HostKeyDecision.Unknown] the refusal also carries the [presented] key, which is what
+ * [HostKeyPolicy.trust] needs once the user confirms. For [HostKeyDecision.Changed] it never does: a changed key
+ * cannot be pinned from a refusal.
+ *
  * @property decision the refused decision; never [HostKeyDecision.Trusted].
+ * @property presented the key shown during the refused connection, only for [HostKeyDecision.Unknown]; `null` otherwise.
  */
-class HostKeyRefused(val decision: HostKeyDecision) :
-    RuntimeException("host key was not trusted: ${decision::class.java.simpleName}")
+class HostKeyRefused(
+    val decision: HostKeyDecision,
+    val presented: PresentedHostKey? = null,
+) : RuntimeException("host key was not trusted: ${decision::class.java.simpleName}") {
+    init {
+        require(presented == null || decision is HostKeyDecision.Unknown) {
+            "a presented key is only handed back for an unknown host key"
+        }
+    }
+}
 
 /**
  * The verifier-side view of [HostKeyPolicy] for one machine: admits a presented key only when it is trusted, and
@@ -157,6 +192,10 @@ class HostKeyGate(
     var lastDecision: HostKeyDecision? = null
         private set
 
+    /** The key behind [lastDecision] when it was [HostKeyDecision.Unknown]; `null` otherwise. */
+    var lastPresented: PresentedHostKey? = null
+        private set
+
     /**
      * Admits a presented key.
      *
@@ -167,6 +206,7 @@ class HostKeyGate(
     fun admit(algorithm: String, blob: ByteArray): Boolean {
         val decision = policy.check(machineId, algorithm, blob)
         lastDecision = decision
+        lastPresented = if (decision is HostKeyDecision.Unknown) PresentedHostKey(algorithm, blob) else null
         return decision is HostKeyDecision.Trusted
     }
 
