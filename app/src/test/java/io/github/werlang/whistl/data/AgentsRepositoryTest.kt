@@ -3,6 +3,7 @@ package io.github.werlang.whistl.data
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.TerminalState
 import io.github.werlang.whistl.support.FakeLinePipe
+import io.github.werlang.whistl.support.RecordingLog
 import io.github.werlang.whistl.support.FakeMachineConnector
 import io.github.werlang.whistl.support.RepoStack
 import io.github.werlang.whistl.support.requestIdOf
@@ -27,6 +28,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 
 /**
@@ -36,6 +38,10 @@ import org.junit.Test
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AgentsRepositoryTest {
+    /** Reaches the warning for a failed events subscription; the recording sink replaces the Android logger (phase 7 r6). */
+    @get:Rule
+    val log = RecordingLog()
+
 
     /** A stack with one connected machine seeded with [terminals]. */
     private suspend fun TestScope.connected(terminals: List<JsonObject> = emptyList()): Pair<RepoStack, String> {

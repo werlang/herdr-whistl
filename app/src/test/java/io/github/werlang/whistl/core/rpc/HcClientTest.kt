@@ -3,6 +3,8 @@ package io.github.werlang.whistl.core.rpc
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.TerminalState
 import io.github.werlang.whistl.support.FakeLinePipe
+import io.github.werlang.whistl.support.LoggedLine
+import io.github.werlang.whistl.support.RecordingLog
 import io.github.werlang.whistl.support.Fixtures
 import io.github.werlang.whistl.support.assertThrowsSuspend
 import io.github.werlang.whistl.support.clientWith
@@ -28,6 +30,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 
 /**
@@ -38,6 +41,10 @@ import org.junit.Test
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HcClientTest {
+    /** Reaches the warning for a skipped terminal entry; the recording sink replaces the Android logger (phase 7 r6). */
+    @get:Rule
+    val log = RecordingLog()
+
 
     /** `hello` at generation 2 is refused. The generation is patched in memory; the fixture on disk is unchanged. */
     @Test
@@ -165,6 +172,8 @@ class HcClientTest {
 
         assertEquals(listOf("t15s", "t-other"), sub.terminals.map { it.address })
         assertEquals(1, sub.skippedTerminals)
+        // The warning names the exception's class only: no entry text, no address (phase 7 r6 step 0).
+        assertEquals(listOf(LoggedLine("w", "Whistl.rpc", "skipped a terminal entry: JsonDecodingException")), log.lines)
     }
 
     /** Replaces the `terminals` array of a subscribe response. */

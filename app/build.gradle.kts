@@ -57,9 +57,6 @@ android {
         unitTests {
             // Robolectric renders the merged resources (strings, theme, fonts) in the screenshot tests.
             isIncludeAndroidResources = true
-            // The debug log writes to android.util.Log; a JVM test that reaches a warning (a skipped terminal entry, a failed
-            // subscription) must not throw "not mocked". Calls return defaults; the logged text is checked by no test.
-            isReturnDefaultValues = true
         }
     }
 }
