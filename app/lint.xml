@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Lint severities for Herdr Whistl (SPEC §7 and §8).
+
+  Every issue ID in the Security, Accessibility and Internationalization categories
+  (including Internationalization:Bidirectional Text) is an error. The IDs come from
+  the SDK lint's per-category listing. MissingTranslation and ExtraTranslation
+  are kept as errors too: they sit in Correctness:Messages, and SPEC §7 requires them.
+
+  No suppression lives here except one path-scoped ignore: TrustAllX509TrustManager for the bcpkix jar (see below).
+  No baseline, no disable.
+-->
+<lint>
+
+    <!-- Security -->
+    <issue id="AddJavascriptInterface" severity="error" />
+    <issue id="AllowAllHostnameVerifier" severity="error" />
+    <issue id="BadHostnameVerifier" severity="error" />
+    <issue id="BidiSpoofing" severity="error" />
+    <issue id="BinderGetCallingInMainThread" severity="error" />
+    <issue id="UsingC2DM" severity="error" />
+    <issue id="UseCheckPermission" severity="error" />
+    <issue id="DeprecatedProvider" severity="error" />
+    <issue id="GetInstance" severity="error" />
+    <issue id="EasterEgg" severity="error" />
+    <issue id="VulnerableCordovaVersion" severity="error" />
+    <issue id="DeletedProvider" severity="error" />
+    <issue id="IntentFilterExportedReceiver" severity="error" />
+    <issue id="RiskyLibrary" severity="error" />
+    <issue id="HardcodedDebugMode" severity="error" />
+    <issue id="HardwareIds" severity="error" />
+    <issue id="IntentWithNullActionLaunch" severity="error" />
+    <issue id="JavascriptInterface" severity="error" />
+    <issue id="AllowBackup" severity="error" />
+    <issue id="DataExtractionRules" severity="error" />
+    <issue id="InvalidPermission" severity="error" />
+    <issue id="AcceptsUserCertificates" severity="error" />
+    <issue id="InsecureBaseConfiguration" severity="error" />
+    <issue id="UnspecifiedImmutableFlag" severity="error" />
+    <issue id="MutableImplicitPendingIntent" severity="error" />
+    <issue id="CustomPermissionTypo" severity="error" />
+    <issue id="KnownPermissionError" severity="error" />
+    <issue id="PermissionNamingConvention" severity="error" />
+    <issue id="ReservedSystemPermission" severity="error" />
+    <issue id="SystemPermissionTypo" severity="error" />
+    <issue id="ExportedPreferenceActivity" severity="error" />
+    <issue id="PackagedPrivateKey" severity="error" />
+    <issue id="UsingHttp" severity="error" />
+    <issue id="ProxyPassword" severity="error" />
+    <issue id="ProviderReadPermissionOnly" severity="error" />
+    <issue id="SecretInSource" severity="error" />
+    <issue id="SecureRandom" severity="error" />
+    <issue id="TrulyRandom" severity="error" />
+    <issue id="ExportedContentProvider" severity="error" />
+    <issue id="ExportedReceiver" severity="error" />
+    <issue id="ExportedService" severity="error" />
+    <issue id="GrantAllUris" severity="error" />
+    <issue id="SetWorldReadable" severity="error" />
+    <issue id="SetWorldWritable" severity="error" />
+    <issue id="WorldReadableFiles" severity="error" />
+    <issue id="WorldWriteableFiles" severity="error" />
+    <issue id="SetJavaScriptEnabled" severity="error" />
+    <issue id="SignatureOrSystemPermissions" severity="error" />
+    <issue id="SSLCertificateSocketFactoryCreateSocket" severity="error" />
+    <issue id="SSLCertificateSocketFactoryGetInsecure" severity="error" />
+    <issue id="AuthLeak" severity="error" />
+    <issue id="TileProviderPermissions" severity="error" />
+    <issue id="UnsafeProtectedBroadcastReceiver" severity="error" />
+    <issue id="UnprotectedSMSBroadcastReceiver" severity="error" />
+    <issue id="UnsafeImplicitIntentLaunch" severity="error" />
+    <issue id="UnsafeIntentLaunch" severity="error" />
+    <issue id="UnsafeDynamicallyLoadedCode" severity="error" />
+    <issue id="UnsafeNativeCodeLocation" severity="error" />
+    <issue id="WebViewClientOnReceivedSslError" severity="error" />
+    <issue id="CustomX509TrustManager" severity="error" />
+    <!--
+      bcpkix (BouncyCastle, phase 4 r1) carries EST classes with a trust-all X.509 manager. The app never uses
+      them: the ignore is scoped to the bcpkix jar, so TrustAllX509TrustManager stays an error for app code.
+    -->
+    <issue id="TrustAllX509TrustManager" severity="error">
+        <ignore path="**/bcpkix-jdk18on-*.jar" />
+    </issue>
+
+    <!-- Accessibility -->
+    <issue id="ContentDescription" severity="error" />
+    <issue id="AccessibilityFocus" severity="error" />
+    <issue id="AccessibilityScrollActions" severity="error" />
+    <issue id="AccessibilityWindowStateChangedEvent" severity="error" />
+    <issue id="ClickableViewAccessibility" severity="error" />
+    <issue id="GetContentDescriptionOverride" severity="error" />
+    <issue id="KeyboardInaccessibleWidget" severity="error" />
+    <issue id="LabelFor" severity="error" />
+
+    <!-- Internationalization, including Internationalization:Bidirectional Text -->
+    <issue id="ByteOrderMark" severity="error" />
+    <issue id="WeekBasedYear" severity="error" />
+    <issue id="HardcodedText" severity="error" />
+    <issue id="ConstantLocale" severity="error" />
+    <issue id="RelativeOverlap" severity="error" />
+    <issue id="RtlCompat" severity="error" />
+    <issue id="RtlEnabled" severity="error" />
+    <issue id="RtlSymmetry" severity="error" />
+    <issue id="RtlHardcoded" severity="error" />
+    <issue id="SetTextI18n" severity="error" />
+    <issue id="EnforceUTF8" severity="error" />
+
+    <!-- Translation (SPEC §7). Category Correctness:Messages, not in the four above. -->
+    <issue id="MissingTranslation" severity="error" />
+    <issue id="ExtraTranslation" severity="error" />
+
+</lint>

@@ -1,0 +1,9 @@
+{
+  "notification": {
+    "jsonrpc": "2.0",
+    "method": "heartbeat",
+    "params": {
+      "seq": 10640
+    }
+  }
+}

@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # The runner image already ships an Android SDK; android-actions/setup-android@v3
+      # fails on current repositories because it tries to install the removed "tools"
+      # package, so the packages we need are installed directly.
+      - name: Android SDK packages
+        run: |
+          set -euo pipefail
+          sdkmanager="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)"
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          "$sdkmanager" --list_installed | sed -n '1,20p'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Screenshot tests are SKIPPED on this Linux job: -Pwhistl.screenshots=skip excludes the *ScreenshotTest classes
+      # (app/build.gradle.kts). The goldens are recorded on macOS and Robolectric rasterises fonts per platform, so a
+      # Linux comparison would fail on fonts, not on UI. The comparison runs in the `screenshots` job (macOS).
+      - name: Unit tests (screenshot classes skipped)
+        run: ./gradlew --no-daemon testDebugUnitTest -Pwhistl.screenshots=skip
+
+      - name: Lint
+        run: ./gradlew --no-daemon lintDebug
+
+      - name: Assemble debug and release
+        run: ./gradlew --no-daemon assembleDebug assembleRelease
+
+      - name: Release must not contain debug-only code
+        run: |
+          set -euo pipefail
+          dexdump="$ANDROID_HOME/build-tools/35.0.0/dexdump"
+          count="$("$dexdump" app/build/outputs/apk/release/app-release-unsigned.apk | grep -c FakeCore || true)"
+          echo "FakeCore classes in the release dex: $count"
+          test "$count" -eq 0
+
+      - name: Verify the APK is what we think it is
+        run: |
+          set -euo pipefail
+          aapt2="$ANDROID_HOME/build-tools/35.0.0/aapt2"
+          "$aapt2" dump badging app/build/outputs/apk/debug/app-debug.apk | head -3
+          "$aapt2" dump resources app/build/outputs/apk/debug/app-debug.apk | grep -A3 'string/machines_title'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+
+  # Verifies the committed goldens (app/src/test/screenshots) on macOS, where they were recorded. It runs only the
+  # Roborazzi verify task: a difference fails the job and nothing is rewritten.
+  screenshots:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # The macOS runner image ships the Android SDK under the same ANDROID_HOME layout as the Linux image.
+      - name: Android SDK packages
+        run: |
+          set -euo pipefail
+          sdkmanager="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)"
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify screenshot goldens
+        run: ./gradlew --no-daemon verifyRoborazziDebug
+
+      - name: Screenshot diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-diffs
+          path: app/build/outputs/roborazzi/
+          if-no-files-found: ignore

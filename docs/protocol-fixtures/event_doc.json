@@ -1,0 +1,14 @@
+{
+  "notification": {
+    "jsonrpc": "2.0",
+    "method": "event",
+    "params": {
+      "data": {
+        "name": "whistl.fixture",
+        "version": 2
+      },
+      "seq": 10643,
+      "type": "doc"
+    }
+  }
+}

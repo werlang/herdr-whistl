@@ -1,0 +1,18 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "terminal.interrupt",
+    "params": {
+      "terminal": "t161"
+    }
+  },
+  "response": {
+    "id": 3,
+    "jsonrpc": "2.0",
+    "result": {
+      "key": "ctrl+c",
+      "outcome": "exited"
+    }
+  }
+}

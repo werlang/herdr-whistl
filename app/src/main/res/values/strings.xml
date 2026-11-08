@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Herdr Whistl</string>
+
+    <!-- Navigation (SPEC §2). Product names and key glyphs are not translated. -->
+    <string name="destination_machines">Machines</string>
+    <string name="destination_spaces">Spaces</string>
+    <string name="destination_agents">Agents</string>
+    <string name="destination_settings">Settings</string>
+    <plurals name="agents_badge_needs_you">
+        <item quantity="one">%1$d agent needs you</item>
+        <item quantity="other">%1$d agents need you</item>
+    </plurals>
+    <string name="machines_title">Machines</string>
+    <string name="machines_add_content_description">Add machine</string>
+
+    <!-- Common -->
+    <string name="common_back">Back</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_no_space">No space</string>
+
+    <!-- Agents list (SPEC §2.4) -->
+    <string name="agents_title">Agents</string>
+    <string name="agents_filter_all">All</string>
+    <string name="agents_filter_needs_you">Needs you</string>
+    <string name="agents_filter_working">Working</string>
+    <string name="agents_filter_idle">Idle</string>
+    <string name="agents_filter_empty">No agents with this status.</string>
+
+    <!-- Status labels, always beside the dot (SPEC §3) -->
+    <string name="status_working">working</string>
+    <string name="status_needs_you">needs you</string>
+    <string name="status_done">done</string>
+    <string name="status_idle">idle</string>
+    <string name="status_error">error</string>
+    <string name="status_plain">terminal</string>
+    <string name="status_finished">finished</string>
+
+    <!-- Agent terminal (SPEC §2.5) -->
+    <string name="agent_options">Agent options</string>
+    <string name="agent_terminal_description">Agent terminal</string>
+    <string name="agent_bar_place">[%1$s] %2$s · %3$s</string>
+    <string name="agent_input_description">Text for the terminal</string>
+    <string name="agent_input_placeholder">type to %1$s</string>
+    <string name="agent_send">Send</string>
+    <string name="agent_ctrl_on">Ctrl on: the next key is sent with Ctrl</string>
+    <string name="agent_ctrl_armed_description">Control, armed</string>
+    <string name="agent_key_sent">sent: %1$s</string>
+    <string name="agent_key_ctrl">Ctrl+%1$s</string>
+    <!-- Joins the place of an agent card: "machine · space". Quoted so the spaces survive. -->
+    <string name="separator_place">" · "</string>
+    <!-- Joins a list of agent names. Quoted so the space survives. -->
+    <string name="separator_list">", "</string>
+    <!-- The address notation is the same in every language (SPEC §2.1): user@host, host:port, [IPv6]. -->
+    <string name="address_user_host" translatable="false">%1$s@%2$s</string>
+    <string name="address_host_port" translatable="false">%1$s:%2$d</string>
+    <string name="address_host_ipv6" translatable="false">[%1$s]</string>
+    <string name="agent_hint_blocked">Waiting for you. Send goes in with force.</string>
+    <string name="agent_notice_offline">%1$s is offline. Reconnect it in Machines to keep reading and sending.</string>
+    <string name="agent_notice_gone">This terminal is no longer on the machine.</string>
+    <string name="agent_notice_finished">This program has finished. It is read-only.</string>
+    <string name="agent_notice_blocked">The program refused the text. Try again.</string>
+    <string name="agent_notice_refused">The machine did not accept that. Try again.</string>
+    <string name="agent_interrupt">Interrupt (Ctrl+C)</string>
+    <string name="agent_stop">Stop and remove</string>
+    <string name="agent_stop_title">Stop and remove %1$s?</string>
+    <string name="agent_stop_text">The program stops and its terminal is removed. This cannot be undone.</string>
+    <string name="agent_stop_confirm">Stop and remove</string>
+
+    <!-- Shortcut key names, for accessibility. The glyphs on the keys are not translated. -->
+    <string name="key_esc">Escape</string>
+    <string name="key_tab">Tab</string>
+    <string name="key_ctrl">Control (modifier)</string>
+    <string name="key_up">Up arrow</string>
+    <string name="key_down">Down arrow</string>
+    <string name="key_left">Left arrow</string>
+    <string name="key_right">Right arrow</string>
+    <string name="key_enter">Enter</string>
+    <string name="key_ctrl_c">Control C</string>
+    <string name="key_ctrl_d">Control D</string>
+    <string name="key_home">Home</string>
+    <string name="key_end">End</string>
+    <string name="key_pg_up">Page Up</string>
+    <string name="key_pg_dn">Page Down</string>
+    <string name="key_slash">Slash</string>
+    <string name="key_pipe">Pipe</string>
+    <string name="key_tilde">Tilde</string>
+    <string name="key_dash">Dash</string>
+
+    <!-- Settings (SPEC §2.6) -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_general">General</string>
+    <string name="settings_language">Language</string>
+    <string name="language_system">System</string>
+    <string name="language_english">English</string>
+    <string name="language_portuguese">Português</string>
+    <string name="settings_theme">Theme</string>
+    <string name="theme_system">System</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_light">Light</string>
+    <string name="settings_font">Terminal font</string>
+    <string name="font_small">Small</string>
+    <string name="font_medium">Medium</string>
+    <string name="font_large">Large</string>
+    <string name="settings_shortcuts">Shortcut keys</string>
+    <string name="settings_shortcuts_hint">Shown above the keyboard in the terminal, in this order.</string>
+    <string name="settings_add_key">Add key</string>
+    <string name="settings_restore_keys">Restore defaults</string>
+    <string name="settings_all_keys_added">Every key is already in the bar.</string>
+    <string name="settings_move_key_up">Move %1$s up</string>
+    <string name="settings_move_key_down">Move %1$s down</string>
+    <string name="settings_remove_key">Remove %1$s</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">version %1$s</string>
+    <string name="settings_about_text">Coordinates Herdr agents on your machines. Connects straight to each one’s herdr-core over ssh: no server, no account, no telemetry.</string>
+    <string name="settings_licenses">Open-source licenses</string>
+    <string name="licenses_title">Open-source licenses</string>
+    <string name="license_jetbrains_mono">JetBrains Mono: SIL Open Font License 1.1</string>
+    <string name="license_sshj">sshj: Apache License 2.0</string>
+    <string name="license_bouncy_castle">Bouncy Castle: MIT license</string>
+    <string name="license_androidx">AndroidX and Jetpack Compose: Apache License 2.0</string>
+    <string name="license_kotlinx">kotlinx libraries: Apache License 2.0</string>
+    <string name="settings_demo">Demo mode</string>
+    <string name="settings_demo_hint">Starts on sample data at the next start. Debug builds only.</string>
+
+    <!-- Machines (SPEC §2.1, phase 4b r1) -->
+    <string name="machines_empty_title">No machines yet</string>
+    <string name="machines_empty_hint">Add a computer you reach over ssh that runs herdr-core: a server, a Raspberry Pi, your Mac.</string>
+    <string name="machine_options">Machine options</string>
+    <string name="machine_status_connected">connected</string>
+    <string name="machine_status_connecting">connecting</string>
+    <string name="machine_status_offline">offline</string>
+    <string name="machine_issue_login_refused">login refused</string>
+    <string name="machine_issue_unsupported_core">unsupported hc version</string>
+    <string name="machine_issue_host_key">host key to confirm</string>
+    <string name="machine_issue_host_key_changed">host key changed</string>
+    <plurals name="machine_agents">
+        <item quantity="one">%1$d agent</item>
+        <item quantity="other">%1$d agents</item>
+    </plurals>
+    <string name="machine_meta">%1$s · hc %2$s</string>
+    <string name="machine_installed">Installed: %1$s</string>
+    <string name="machine_none_installed">No agents installed</string>
+    <string name="machine_reconnect">Reconnect</string>
+    <string name="machine_remove">Remove machine</string>
+    <string name="machine_confirm_remove_title">Remove %1$s?</string>
+    <string name="machine_confirm_remove_text">Its spaces leave the app. Agents keep running on the machine.</string>
+    <string name="common_remove">Remove</string>
+    <string name="common_close">Close</string>
+
+    <!-- Add machine (phase 4b r1 §2.5, §2.6) -->
+    <string name="add_machine_title">Add machine</string>
+    <string name="add_field_host">Host</string>
+    <string name="add_host_placeholder">e.g. 192.168.0.10 or my-pi.local</string>
+    <string name="add_field_user">User</string>
+    <string name="add_user_placeholder">pi</string>
+    <string name="add_field_port">Port</string>
+    <string name="add_field_name">Name</string>
+    <string name="add_field_auth">Authentication</string>
+    <string name="add_auth_key">SSH key</string>
+    <string name="add_auth_password">Password</string>
+    <string name="add_field_password">Password</string>
+    <string name="add_public_key_title">This device’s public key</string>
+    <string name="add_public_key_hint">Add it to ~/.ssh/authorized_keys on the machine.</string>
+    <string name="add_public_key_copy">Copy</string>
+    <string name="add_public_key_copied">Public key copied</string>
+    <string name="add_connect">Connect</string>
+    <string name="add_trust">Trust and connect</string>
+    <string name="add_retry">Retry</string>
+    <string name="add_close">Close</string>
+    <string name="add_connecting">Connecting to %1$s…</string>
+    <string name="add_host_key_title">First connection to %1$s</string>
+    <string name="add_host_key_hint">Check that the fingerprint matches the machine’s before you trust it:</string>
+    <string name="add_host_key_algorithm">Key type: %1$s</string>
+    <string name="add_host_key_changed_title">The host key of %1$s changed</string>
+    <string name="add_host_key_changed_text">The machine shows a key other than the one you trusted, so the connection is refused. Do not trust it. Remove the machine if you did not expect this.</string>
+    <string name="add_host_key_trusted">Trusted</string>
+    <string name="add_host_key_presented">Presented</string>
+    <string name="error_login_refused">The machine refused the login. Check the key or the password, then retry.</string>
+    <string name="error_unreachable">Could not reach the machine. The app keeps trying while this is open.</string>
+    <string name="error_unsupported_core">This machine runs an herdr-core protocol this app does not speak.</string>
+    <string name="problem_host_empty">Enter a host name or an address.</string>
+    <string name="problem_host_bad_characters">Use letters, digits, dots and hyphens, or an IPv6 address.</string>
+    <string name="problem_host_bad_format">This is not a valid host name or address.</string>
+    <string name="problem_host_too_long">This host name is too long.</string>
+    <string name="problem_user_empty">Enter the user name.</string>
+    <string name="problem_user_bad_characters">Use lowercase letters, digits, underscore and hyphen.</string>
+    <string name="problem_user_bad_format">A user name starts with a letter or an underscore.</string>
+    <string name="problem_user_too_long">This user name is too long.</string>
+    <string name="problem_port_not_a_number">The port is a number.</string>
+    <string name="problem_port_out_of_range">The port is between 1 and 65535.</string>
+    <string name="problem_name_empty">Enter a name.</string>
+    <string name="problem_name_too_long">This name is too long.</string>
+    <string name="problem_password_empty">Enter the password.</string>
+
+    <!-- Spaces, New space, Space detail and the picker (phase 4b r2). -->
+    <string name="spaces_new_content_description">New space</string>
+    <string name="spaces_empty_title">No spaces yet</string>
+    <string name="spaces_empty_hint">A space is a folder on a machine where your agents work.</string>
+    <string name="spaces_no_machine">A space lives on a machine. Add a machine first.</string>
+    <string name="spaces_waiting_badge">waiting</string>
+    <string name="spaces_pinned">Pinned</string>
+    <string name="spaces_summary">%1$s · %2$s</string>
+    <string name="space_folder_not_checked">Folder not checked yet</string>
+    <string name="space_unresolved_not_found">The folder is not on the machine.</string>
+    <string name="space_unresolved_unsupported_tilde">Only ~ and ~/… are expanded here, not another user’s home.</string>
+    <string name="space_unresolved_timeout">The machine did not answer the folder check in time.</string>
+    <string name="space_unresolved_bad_output">The machine’s answer was not a folder path.</string>
+    <string name="space_unresolved_no_home">The machine has no home folder to expand ~ with.</string>
+    <string name="space_unresolved_invalid">The folder path is not valid: it is blank, or has a line break or a NUL character.</string>
+    <string name="space_options">Space options</string>
+    <string name="space_menu_pin">Pin to top</string>
+    <string name="space_menu_unpin">Unpin</string>
+    <string name="space_menu_move_up">Move up</string>
+    <string name="space_menu_move_down">Move down</string>
+    <string name="space_menu_rename">Rename</string>
+    <string name="space_menu_close">Close space</string>
+    <string name="space_menu_offline">Offline: these actions need a connection.</string>
+    <string name="space_new_title">New space</string>
+    <string name="space_field_machine">Machine</string>
+    <string name="space_field_folder">Folder</string>
+    <string name="space_folder_placeholder">~ (machine home)</string>
+    <string name="space_field_name">Name</string>
+    <string name="space_create">Create space</string>
+    <string name="space_machine_offline">This machine is offline. Connect it in Machines first.</string>
+    <string name="problem_space_folder_empty">Enter a folder, or leave it for ~.</string>
+    <string name="problem_space_folder_bad">A folder cannot have a line break.</string>
+    <string name="space_rename_title">Rename space</string>
+    <string name="space_rename_save">Save</string>
+    <string name="space_close_title">Close %1$s?</string>
+    <string name="space_close_none">It is empty; nothing runs in it.</string>
+    <string name="space_detail_empty_title">No agents here yet.</string>
+    <string name="space_detail_empty_hint">Tap New agent to start an agent or a terminal.</string>
+    <string name="space_detail_offline">%1$s is offline. Reconnect it in Machines to see and start agents here.</string>
+    <string name="space_detail_missing">This space is no longer on its machine.</string>
+    <string name="space_detail_header">%1$s:%2$s</string>
+    <string name="new_agent">New agent</string>
+    <string name="new_agent_off_machine">New agent is off: %1$s is offline.</string>
+    <string name="new_agent_off_folder">New agent is off: the folder is not available on the machine.</string>
+    <string name="new_agent_off_folder_unchecked">New agent is off: the folder has not been checked yet.</string>
+    <string name="picker_installed">Installed on %1$s</string>
+    <string name="picker_terminal">Terminal</string>
+    <string name="picker_terminal_sub">The machine’s shell</string>
+    <string name="picker_starting">Starting…</string>
+    <string name="start_could_not">The machine could not start it. Check that the program is installed there.</string>
+    <string name="start_offline">The machine is offline.</string>
+    <string name="start_unknown_space">This space is no longer on the machine.</string>
+    <plurals name="space_agents_count">
+        <item quantity="one">%1$d agent</item>
+        <item quantity="other">%1$d agents</item>
+    </plurals>
+    <plurals name="space_close_agents">
+        <item quantity="one">Its %1$d agent will be stopped.</item>
+        <item quantity="other">Its %1$d agents will be stopped.</item>
+    </plurals>
+    <string name="machines_problem_missing">That machine is no longer added. Nothing was changed.</string>
+    <string name="add_machine_missing">That machine is no longer added. Close this sheet and add it again.</string>
+</resources>
