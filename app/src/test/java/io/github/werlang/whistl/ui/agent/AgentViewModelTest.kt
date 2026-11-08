@@ -4,12 +4,15 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import io.github.werlang.whistl.data.DefaultSettingsRepository
 import io.github.werlang.whistl.data.TerminalReach
+import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.ShortcutKey
 import io.github.werlang.whistl.support.InMemorySettingsStore
 import io.github.werlang.whistl.support.MainDispatcherRule
 import io.github.werlang.whistl.support.RepoStack
 import io.github.werlang.whistl.support.eventsSnapshot
 import io.github.werlang.whistl.support.snapshotPipe
+import io.github.werlang.whistl.support.spaceJson
+import io.github.werlang.whistl.support.spacesDocJson
 import io.github.werlang.whistl.support.terminalJson
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
@@ -307,6 +310,42 @@ class AgentViewModelTest {
         assertFalse(state.canType)
         assertFalse(state.canSend)
         assertTrue(h.sent("terminal.send").isEmpty())
+    }
+
+    /**
+     * An agent whose machine drops keeps the status and the space it had while connected (phase 7 r7). Its label says offline:
+     * the core never reported it finished, so the screen must not say "finished" and must not say "No space" for it.
+     */
+    @Test
+    fun anOfflineAgentKeepsItsStatusAndSpaceAndSaysOffline() = runTest {
+        val h = RepoStack(this)
+        h.core.value = spacesDocJson(listOf(spaceJson("sp_a", "web", "/home/u/web")))
+        val terminal = terminalJson(
+            "t1",
+            status = "working",
+            labels = mapOf("whistl.space" to "sp_a"),
+            cwd = "/home/u/web",
+        )
+        h.core.terminals += terminal
+        h.core.screens["t1"] = "compiling"
+        h.connector.eventsPipeFactory = { snapshotPipe(eventsSnapshot(1, listOf(terminal))) }
+        h.addMachine()
+        runCurrent()
+        val vm = AgentViewModel(h.terminals, h.agents, h.machines, DefaultSettingsRepository(InMemorySettingsStore()), "m1", "t1")
+        runCurrent()
+        assertEquals(AgentStatusLabel.Working, vm.state.value.statusLabel)
+        assertEquals("web", vm.state.value.spaceName)
+
+        h.connector.lastSession!!.kill()
+        advanceTimeBy(500)
+        runCurrent()
+
+        val state = vm.state.value
+        assertEquals(TerminalReach.Offline, state.reach)
+        assertEquals(AgentStatusLabel.Offline, state.statusLabel)
+        assertEquals("web", state.spaceName)
+        assertEquals(AgentStatus.Working, state.status)
+        assertEquals("t1", state.address)
     }
 
     /** Leaving the screen stops the reads: no `terminal.read` is sent during the next ten seconds. */

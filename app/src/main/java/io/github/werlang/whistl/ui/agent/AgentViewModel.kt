@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -73,6 +74,9 @@ enum class AgentStatusLabel {
 
     /** The program has exited. */
     Finished,
+
+    /** The machine is not connected, so the agent is shown as it was last seen (phase 7 r7). */
+    Offline,
 }
 
 /**
@@ -156,6 +160,8 @@ private data class Interaction(
  * - `/ | ~ -` insert their character at the cursor. Every other bar key is sent at once with `terminal.keys`.
  * - Interrupt sends Ctrl+C. Stop and remove asks first, then kills and removes the terminal, and the screen closes.
  * - Input is disabled while the machine is offline, the terminal is gone, or the program has finished.
+ * - While the machine has no connection (offline or connecting), the agent is shown as it was last seen: its status and its
+ *   space stay, and its label says offline. Only a program the core reported finished says finished (phase 7 r7).
  *
  * @param terminals opens the terminal.
  * @param agents the agent's status and state.
@@ -180,9 +186,15 @@ class AgentViewModel(
         open?.screen ?: flowOf(TerminalScreen(text = "", reach = TerminalReach.Offline))
     }
 
-    private val agent = agents.agents.map { list ->
-        list.firstOrNull { it.machineId == machineId && it.agent.terminal.address == address }
-    }
+    /**
+     * The agent the machine lists now ([now]), and the last one it listed ([lastSeen]). The repository drops an offline
+     * machine's agents from its list, so the screen keeps the last one while the machine has no connection (phase 7 r7).
+     */
+    private data class Sighting(val now: MachineAgent? = null, val lastSeen: MachineAgent? = null)
+
+    private val agent = agents.agents
+        .map { list -> list.firstOrNull { it.machineId == machineId && it.agent.terminal.address == address } }
+        .scan(Sighting()) { seen, now -> Sighting(now = now, lastSeen = now ?: seen.lastSeen) }
 
     /** The screen's state. */
     val state: StateFlow<AgentUiState> = combine(
@@ -191,8 +203,8 @@ class AgentViewModel(
         machines.machines(),
         settings.settings,
         interaction,
-    ) { output, current, machineList, prefs, own ->
-        build(output, current, machineList.firstOrNull { it.id == machineId }?.name ?: machineId, prefs.fontSize, prefs.shortcutBar, own)
+    ) { output, sighting, machineList, prefs, own ->
+        build(output, sighting, machineList.firstOrNull { it.id == machineId }?.name ?: machineId, prefs.fontSize, prefs.shortcutBar, own)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, placeholder())
 
     init {
@@ -331,14 +343,19 @@ class AgentViewModel(
 
     private fun build(
         output: TerminalScreen,
-        current: MachineAgent?,
+        sighting: Sighting,
         machineName: String,
         fontSize: FontSize,
         keyBar: List<ShortcutKey>,
         own: Interaction,
     ): AgentUiState {
+        // No connection (offline, or still connecting): the agent is shown as last seen, so its status and space stay (phase 7 r7).
+        val offline = output.reach == TerminalReach.Offline && !own.unavailable
+        val current = if (offline) sighting.now ?: sighting.lastSeen else sighting.now
         val terminal = current?.agent?.terminal
         val live = terminal?.state == TerminalState.Live
+        // The label says offline unless the core reported the program finished: a missing or unlisted agent is never "finished".
+        val reportedFinished = terminal?.state == TerminalState.Finished
         val derived = when {
             own.unavailable -> AgentNotice.Gone
             output.reach == TerminalReach.Offline -> AgentNotice.Offline
@@ -355,7 +372,11 @@ class AgentViewModel(
             address = address,
             machineName = machineName,
             spaceName = current?.space?.name,
-            statusLabel = statusLabel(status, live, terminal != null),
+            statusLabel = if (offline && !reportedFinished) {
+                AgentStatusLabel.Offline
+            } else {
+                statusLabel(status, live, terminal != null)
+            },
             status = status,
             screenText = output.text,
             reach = output.reach,
@@ -389,7 +410,7 @@ class AgentViewModel(
         address = address,
         machineName = "",
         spaceName = null,
-        statusLabel = AgentStatusLabel.Finished,
+        statusLabel = AgentStatusLabel.Offline,
         status = null,
         screenText = "",
         reach = TerminalReach.Offline,

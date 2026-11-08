@@ -217,7 +217,10 @@ private fun AgentHeader(state: AgentUiState, onBack: () -> Unit, onOptions: () -
             }
             StatusLabel(
                 label = stringResource(statusLabelRes(state.statusLabel)),
-                color = if (state.statusLabel == AgentStatusLabel.Finished) LocalWhistlTokens.current.idle else statusColor(state.status),
+                color = when (state.statusLabel) {
+                    AgentStatusLabel.Finished, AgentStatusLabel.Offline -> LocalWhistlTokens.current.idle
+                    else -> statusColor(state.status)
+                },
             )
         }
         IconButton(onClick = onOptions, modifier = Modifier.size(MinTouchTarget)) {
@@ -462,4 +465,5 @@ private fun statusLabelRes(label: AgentStatusLabel): Int = when (label) {
     AgentStatusLabel.Error -> R.string.status_error
     AgentStatusLabel.Plain -> R.string.status_plain
     AgentStatusLabel.Finished -> R.string.status_finished
+    AgentStatusLabel.Offline -> R.string.machine_status_offline
 }

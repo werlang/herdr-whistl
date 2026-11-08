@@ -77,7 +77,10 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    sticky modifier: armed, the next bar key is sent with Ctrl (`ctrl+<key>`).
    Typing only inserts and keeps Ctrl armed. Send never applies Ctrl: the text
    goes out plainly and clears the latch (phase 7 r5 amendment U3). Menu:
-   Interrupt (Ctrl+C), Stop and remove.
+   Interrupt (Ctrl+C), Stop and remove. While the machine has no connection
+   (offline or connecting), the screen keeps the agent's last known status and
+   space and its status bar says `offline`; it says `finished` only when the
+   core reported the program finished (phase 7 r7).
 6. **Settings** — General: Language (System / English / Português), terminal
    font size (S/M/L), theme (System / Dark / Light). Shortcut keys: list in bar
    order with move up / move down / remove, "Add key" sheet listing the keys
