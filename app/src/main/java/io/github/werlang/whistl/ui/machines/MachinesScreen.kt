@@ -48,7 +48,7 @@ const val MACHINES_LIST_TAG: String = "machines-list"
  * @param id the machine id.
  * @return the tag.
  */
-fun machineCardTag(id: String): String = "machine-card-$id"
+fun machineCardTag(id: String): String = "machine-card-$id" // i18n-ok: test tag, never shown
 
 /**
  * The Machines list (SPEC §2.1): one card per machine, or the empty state. Each card's menu button opens its menu.
@@ -75,6 +75,14 @@ fun MachinesScreen(
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.semantics { heading() },
+            )
+        }
+        state.problem?.let {
+            Text(
+                text = stringResource(R.string.machines_problem_missing),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
             )
         }
         if (state.cards.isEmpty()) {
@@ -154,7 +162,7 @@ private fun MachineCardView(card: MachineCard, onMenu: () -> Unit) {
                 StatusLabel(label = stringResource(cardStatusLabelRes(card)), color = cardStatusColor(card.status))
                 // Two lines, not one: the port is the part that tells two machines apart, so it must not be cut off.
                 Text(
-                    text = card.address,
+                    text = card.address.text(),
                     style = MaterialTheme.typography.bodyMedium,
                     fontFamily = WhistlMono,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -179,7 +187,7 @@ private fun MachineCardView(card: MachineCard, onMenu: () -> Unit) {
                         text = if (names.isEmpty()) {
                             stringResource(R.string.machine_none_installed)
                         } else {
-                            stringResource(R.string.machine_installed, names.joinToString(", "))
+                            stringResource(R.string.machine_installed, names.joinToString(stringResource(R.string.separator_list)))
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = tokens.muted,
@@ -211,7 +219,6 @@ private fun cardStatusLabelRes(card: MachineCard): Int = when (card.status) {
     MachineStatus.Offline -> R.string.machine_status_offline
     MachineStatus.Error -> when (card.issue) {
         MachineIssue.LoginRefused -> R.string.machine_issue_login_refused
-        MachineIssue.Unreachable -> R.string.machine_issue_unreachable
         MachineIssue.UnsupportedCore -> R.string.machine_issue_unsupported_core
         MachineIssue.HostKeyToConfirm -> R.string.machine_issue_host_key
         MachineIssue.HostKeyChanged -> R.string.machine_issue_host_key_changed

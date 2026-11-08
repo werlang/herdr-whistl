@@ -1,6 +1,7 @@
 package io.github.werlang.whistl.ui
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
@@ -56,6 +57,7 @@ import io.github.werlang.whistl.ui.spaces.RENAME_SPACE_SHEET_TAG
 import io.github.werlang.whistl.ui.spaces.SPACE_MENU_SHEET_TAG
 import io.github.werlang.whistl.ui.theme.WhistlTheme
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.robolectric.RuntimeEnvironment
 import java.io.ByteArrayOutputStream
@@ -236,6 +238,40 @@ fun ShotScreen.sheetTag(): String? = when (this) {
 }
 
 /**
+ * The text a screen must show, read from the resources of the locale under test, or from the demo data for a screen named after
+ * one of its items.
+ *
+ * @return the text.
+ */
+fun ShotScreen.expectedText(): String {
+    val app = RuntimeEnvironment.getApplication()
+    return when (this) {
+        ShotScreen.AgentsAll, ShotScreen.AgentsNeedsYou -> app.getString(R.string.agents_title)
+        ShotScreen.AgentWorking -> "claude"
+        ShotScreen.AgentBlocked -> "codex"
+        ShotScreen.Settings -> app.getString(R.string.settings_title)
+        ShotScreen.AddKeySheet -> app.getString(R.string.settings_add_key)
+        ShotScreen.Machines, ShotScreen.MachinesEmpty, ShotScreen.MachinesLong -> app.getString(R.string.machines_title)
+        ShotScreen.AddMachineKey, ShotScreen.AddMachinePassword, ShotScreen.HostKeyUnknown, ShotScreen.HostKeyChanged ->
+            app.getString(R.string.add_machine_title)
+
+        ShotScreen.MachineMenu -> "mac"
+        ShotScreen.RemoveMachineConfirm -> app.getString(R.string.machine_confirm_remove_title, "mac")
+        ShotScreen.Spaces, ShotScreen.SpacesEmpty, ShotScreen.SpacesLong -> app.getString(R.string.destination_spaces)
+        ShotScreen.NewSpace, ShotScreen.NewSpaceNoMachine -> app.getString(R.string.space_new_title)
+        ShotScreen.SpaceMenu -> "api"
+        ShotScreen.RenameSpace -> app.getString(R.string.space_rename_title)
+        ShotScreen.CloseSpaceConfirm -> app.getString(R.string.space_close_title, "api")
+        ShotScreen.SpaceDetail -> "web"
+        ShotScreen.SpaceDetailOffline -> "lab"
+        ShotScreen.NewAgentPicker -> app.getString(R.string.new_agent)
+        ShotScreen.AgentMenu -> app.getString(R.string.agent_interrupt)
+        ShotScreen.LicencesSheet -> app.getString(R.string.licenses_title)
+        ShotScreen.MachineHostKeySheet -> app.getString(R.string.add_host_key_title, "build")
+    }
+}
+
+/**
  * Puts the demo into the state a screen needs, before its first frame: the machines it lists.
  *
  * @param core the demo's data.
@@ -345,6 +381,7 @@ abstract class ScreenHarness {
         }
         composeRule.waitForIdle()
         prepare(screen)
+        assertShowsItsText(screen, locale)
         val frames = LinkedHashMap<ShotVariant, ByteArray>()
         variants.forEach { variant ->
             composeRule.runOnIdle {
@@ -354,7 +391,9 @@ abstract class ScreenHarness {
             composeRule.waitForIdle()
             val name = fileName(screen, variant, locale)
             record(screen, name)
-            frames[variant] = frameBytes()
+            val png = frameBytes()
+            assertRealFrame(screen, variant, png)
+            frames[variant] = png
         }
         return frames
     }
@@ -518,6 +557,52 @@ abstract class ScreenHarness {
     }
 
     /**
+     * The screen must show its title, read from the resources of the locale under test. A blank screen, or a frame of the
+     * wrong screen, has no such text in its tree.
+     *
+     * @param screen the screen.
+     * @param locale the locale token of the test, for the message.
+     */
+    private fun assertShowsItsText(screen: ShotScreen, locale: String) {
+        val text = screen.expectedText()
+        val nodes = composeRule.onAllNodes(hasText(text, substring = true), useUnmergedTree = true).fetchSemanticsNodes()
+        assertTrue("${screen.slug} ($locale) does not show its text \"$text\"", nodes.isNotEmpty())
+    }
+
+    /**
+     * A frame is a real screen when it has at least [MIN_DISTINCT_COLOURS] distinct colours and a luminance spread of at least
+     * [MIN_LUMINANCE_SPREAD]. A blank frame, or one tinted in a single colour, has one colour and no spread; the smallest golden
+     * the suite records has far more.
+     *
+     * @param screen the screen.
+     * @param variant the rendering.
+     * @param png the frame.
+     */
+    private fun assertRealFrame(screen: ShotScreen, variant: ShotVariant, png: ByteArray) {
+        val bitmap = BitmapFactory.decodeByteArray(png, 0, png.size)
+        val pixels = IntArray(bitmap.width * bitmap.height)
+        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        val colours = pixels.toHashSet().size
+        var sum = 0.0
+        var sumSquares = 0.0
+        for (pixel in pixels) {
+            val luminance = 0.2126 * ((pixel shr 16) and 0xff) + 0.7152 * ((pixel shr 8) and 0xff) + 0.0722 * (pixel and 0xff)
+            sum += luminance
+            sumSquares += luminance * luminance
+        }
+        val mean = sum / pixels.size
+        val spread = kotlin.math.sqrt((sumSquares / pixels.size - mean * mean).coerceAtLeast(0.0))
+        assertTrue(
+            "${screen.slug} ${variant.theme}: $colours distinct colours, need $MIN_DISTINCT_COLOURS",
+            colours >= MIN_DISTINCT_COLOURS,
+        )
+        assertTrue(
+            "${screen.slug} ${variant.theme}: luminance spread ${"%.1f".format(spread)}, need $MIN_LUMINANCE_SPREAD",
+            spread >= MIN_LUMINANCE_SPREAD,
+        )
+    }
+
+    /**
      * Records the frame: a sheet from its own node (it is a separate window), the rest from the root.
      *
      * @param screen the screen.
@@ -560,6 +645,18 @@ abstract class ScreenHarness {
 
         /** How long a sheet or a stage may take to appear after it is opened or after a connection attempt. */
         const val SHEET_TIMEOUT_MS: Long = 5_000L
+
+        /**
+         * The fewest distinct colours a real frame has. The smallest golden the suite records has 553 (sampled every fourth
+         * pixel); a blank or single-tint frame has one. Text anti-aliasing is what makes the difference.
+         */
+        const val MIN_DISTINCT_COLOURS: Int = 64
+
+        /**
+         * The least luminance spread (standard deviation, 0 to 255) a real frame has. The smallest golden has 13.5; a blank frame
+         * has 0.
+         */
+        const val MIN_LUMINANCE_SPREAD: Double = 5.0
 
         /** PNG is lossless; the quality argument is ignored by the encoder. */
         const val PNG_QUALITY: Int = 100

@@ -145,7 +145,7 @@ fun AddMachineSheet(
         AddStage.HostKeyUnknown -> PrimaryAction(R.string.add_trust, ADD_TRUST_TAG, true, false, onTrust)
         AddStage.HostKeyChanged -> PrimaryAction(R.string.machine_remove, ADD_REMOVE_TAG, true, true, onRemove)
         AddStage.LoginRefused, AddStage.Unreachable -> PrimaryAction(R.string.add_retry, ADD_RETRY_TAG, true, false, onRetry)
-        AddStage.Connecting, AddStage.UnsupportedCore, AddStage.Connected -> null
+        AddStage.Connecting, AddStage.UnsupportedCore, AddStage.Connected, AddStage.Missing -> null
     }
     // Opens fully expanded: the form is taller than a partly open sheet, and its fields and actions must be reachable at once.
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -501,6 +501,12 @@ private fun StagePanel(state: AddMachineUiState) {
 
         AddStage.UnsupportedCore -> Text(
             text = stringResource(R.string.error_unsupported_core),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+
+        AddStage.Missing -> Text(
+            text = stringResource(R.string.add_machine_missing),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.error,
         )

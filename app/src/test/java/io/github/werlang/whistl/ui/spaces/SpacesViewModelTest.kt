@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.ui.spaces
 
+import io.github.werlang.whistl.R
 import io.github.werlang.whistl.data.FolderResolution
 import io.github.werlang.whistl.data.MachineAgent
 import io.github.werlang.whistl.data.MachineSpaces
@@ -7,6 +8,7 @@ import io.github.werlang.whistl.data.SpaceRecord
 import io.github.werlang.whistl.data.SpaceResult
 import io.github.werlang.whistl.data.UnresolvableReason
 import io.github.werlang.whistl.domain.Agent
+import io.github.werlang.whistl.ui.machines.MachineAddress
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.Terminal
 import io.github.werlang.whistl.domain.TerminalState
@@ -143,7 +145,7 @@ class SpacesViewModelTest {
 
         val group = vm.state.value.groups.single()
         assertEquals("build", group.name)
-        assertEquals("ci@build.lan", group.address)
+        assertEquals(MachineAddress("ci", "build.lan", 22), group.address)
         assertFalse(group.offline)
     }
 
@@ -204,6 +206,24 @@ class SpacesViewModelTest {
         assertEquals(FolderState.Unavailable(UnresolvableReason.NotFound), rows.getValue("alpha").folderState)
         assertEquals(FolderState.Resolved, rows.getValue("beta").folderState)
         assertEquals(FolderState.NotChecked, rows.getValue("gamma").folderState)
+    }
+
+    /**
+     * A folder with a line break or a NUL is [UnresolvableReason.Invalid]: its row shows that reason, and the reason has its own
+     * text (phase 6 P0-9).
+     */
+    @Test
+    fun anInvalidFolderRowShowsItsReason() {
+        val resolutions = mapOf("a" to FolderResolution.Unresolvable(UnresolvableReason.Invalid))
+        val vm = SpacesViewModel(
+            StaticSpaces(listOf(group(listOf(space("a", "alpha")), resolutions = resolutions))),
+            StaticAgents(),
+            machines(),
+        )
+
+        val row = vm.state.value.groups.single().rows.single()
+        assertEquals(FolderState.Unavailable(UnresolvableReason.Invalid), row.folderState)
+        assertEquals(R.string.space_unresolved_invalid, unresolvedTextRes(UnresolvableReason.Invalid))
     }
 
     /**

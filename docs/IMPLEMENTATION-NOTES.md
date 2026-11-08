@@ -21,15 +21,21 @@ asserts the API-26 registration path.
 
 ## `terminal.interrupt` fixture
 
-`docs/protocol-fixtures/` holds responses recorded from herdr-core 0.1.18, except
-`interrupt_synthetic.json`: `hc` does not expose the raw JSON-RPC response for `terminal.interrupt`
-in a way that can be captured from the CLI, so that fixture was written from the method's shape and
-its test is named `…Synthetic…`. Re-record it before trusting it as protocol truth:
+`docs/protocol-fixtures/interrupt.json` is **recorded** from hc 0.1.18 (herdr-core), not hand-written. The
+supervisor recorded it from the live core before phase 4 round 1 and re-recorded it on 2026-11-08 with an
+identical result: `{"key":"ctrl+c","outcome":"exited"}`. Its test is the conformance row
+`terminal.interrupt | interrupt.json` in `ConformanceCases.kt`, which `ConformanceTest` runs.
 
-1. Start a terminal through the app (or `hc run --bg --name probe sleep 300`).
-2. Call `terminal.interrupt` over the app's own connection with the JSON-RPC logging wrapper on.
-3. Save the exact response line as `docs/protocol-fixtures/interrupt.json`, delete the synthetic
-   file, and rename the test.
+To re-record it:
+
+1. Start a probe terminal: `hc run --bg --name probe sleep 300`.
+2. Call `terminal.interrupt` on it through the app's connection, with the JSON-RPC logging wrapper on.
+3. Save the exact response line over `docs/protocol-fixtures/interrupt.json`, then run
+   `scripts/gradle testDebugUnitTest`; the `terminal.interrupt | interrupt.json` row must still pass.
+
+The one synthetic fixture is `event_missed_synthetic.json`: hc 0.1.18 could not be made to emit `missed` on
+demand, so both shapes SPEC §5 allows are written by hand. The other event fixtures are recorded. See
+`docs/event-shapes.md`.
 
 ## Screenshot goldens are macOS-recorded
 

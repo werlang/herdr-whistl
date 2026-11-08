@@ -81,4 +81,19 @@ class SpacesDocumentTest {
 
         assertEquals(true, error.message.orEmpty().contains("pinned"))
     }
+
+    /**
+     * A `spaces` that is an object or a string, not an array, is a [MalformedDocument] (phase 6 P0-14). Reading it through
+     * `jsonArray` threw IllegalArgumentException, which the document reader does not catch.
+     */
+    @Test
+    fun spacesOfTheWrongJsonTypeIsAMalformedDocument() {
+        for (wrong in listOf("""{"v":1,"spaces":{}}""", """{"v":1,"spaces":"x"}""")) {
+            val error = assertThrows(MalformedDocument::class.java) {
+                SpacesDocument.fromJson(Json.parseToJsonElement(wrong))
+            }
+
+            assertEquals(true, error.message.orEmpty().contains("spaces array"))
+        }
+    }
 }

@@ -4,14 +4,17 @@ import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.CoreMachine
 import io.github.werlang.whistl.domain.HelloResult
 import io.github.werlang.whistl.domain.Terminal
+import java.util.Base64
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
-import java.util.Base64
 
 /** Opens a new line pipe for the events channel. Each call is a separate `hc connect` exec. */
 typealias OpenEventsPipe = suspend () -> LinePipe
@@ -106,18 +109,34 @@ data class DocValue(
 )
 
 /**
- * An open events subscription (SPEC §5).
+ * An open events subscription (SPEC §5). It owns the connection it reads: [close] ends it, and hc stops feeding it.
  *
  * @property seq the sequence number of the snapshot.
  * @property terminals the snapshot's terminals.
  * @property events the notifications after the snapshot, in arrival order. The flow fails with
- *   [TransportLost] when hc goes silent for 40 s or the channel closes.
+ *   [TransportLost] when hc goes silent for 40 s or the channel closes. A line that does not decode is dropped and counted.
+ * @param connection the events connection; [close] closes it.
+ * @param dropped how many lines were dropped because they did not decode (counted, never logged with content).
  */
-data class EventSubscription(
+class EventSubscription internal constructor(
     val seq: Long,
     val terminals: List<Terminal>,
     val events: Flow<HcEvent>,
-)
+    private val connection: JsonRpcConnection,
+    private val dropped: () -> Long,
+) {
+    /** Lines dropped so far because they were not event objects. */
+    val droppedLines: Long
+        get() = dropped()
+
+    /**
+     * Closes the events connection. Pending reads end with [TransportLost], and hc stops sending on that channel. Safe to call
+     * more than once.
+     */
+    suspend fun close() {
+        connection.close()
+    }
+}
 
 /**
  * The typed client for herdr-core's methods (SPEC §5).
@@ -363,17 +382,34 @@ class HcClient(
             scope = scope,
             idleTimeoutMillis = EVENTS_IDLE_TIMEOUT_MS,
         )
-        val snapshot = events.typed<EventsSubscribeParams, SubscribeWire>(
-            "events.subscribe",
-            EventsSubscribeParams(labels = labels),
-        )
+        val snapshot = try {
+            events.typed<EventsSubscribeParams, SubscribeWire>(
+                "events.subscribe",
+                EventsSubscribeParams(labels = labels),
+            )
+        } catch (e: Throwable) {
+            // A subscribe that fails or times out must not leave its connection open: hc keeps feeding a channel nobody reads
+            // (phase 6 P0-6). Whatever ended the call, the connection is closed before the error goes on.
+            withContext(NonCancellable) { events.close() }
+            throw e
+        }
+        val dropped = AtomicLong(0L)
+        // The events channel carries `event`, the top-level `heartbeat` and the top-level `missed` (phase 6 P0-5). Anything
+        // else on it is not an event and is ignored without being counted.
         val stream: Flow<HcEvent> = events.notifications
-            .filter { it.method == EVENT_METHOD }
-            .map { HcEvent.fromParams(it.params) }
+            .filter { it.method in EVENT_METHODS }
+            .mapNotNull { notification ->
+                HcEvent.fromNotificationOrNull(notification.method, notification.params) ?: run {
+                    dropped.incrementAndGet()
+                    null
+                }
+            }
         return EventSubscription(
             seq = snapshot.seq,
             terminals = snapshot.terminals.map { it.toDomain() },
             events = stream,
+            connection = events,
+            dropped = dropped::get,
         )
     }
 
@@ -381,8 +417,8 @@ class HcClient(
         /** The only protocol generation this client speaks (SPEC §5). */
         const val SUPPORTED_GENERATION = 1
 
-        /** The notification name hc uses for events (SPEC §5). */
-        const val EVENT_METHOD = "event"
+        /** The notifications of the events channel that are events (SPEC §5, `docs/event-shapes.md`). */
+        val EVENT_METHODS: Set<String> = setOf(HcEvent.EVENT_METHOD, HcEvent.HEARTBEAT_METHOD, HcEvent.MISSED_METHOD)
     }
 }
 

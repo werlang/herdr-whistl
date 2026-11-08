@@ -1,5 +1,8 @@
 package io.github.werlang.whistl.ui.machines
 
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import io.github.werlang.whistl.R
 import io.github.werlang.whistl.domain.HostAddress
 import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.domain.Rejection
@@ -201,16 +204,33 @@ fun checkPortValue(text: String): Pair<Int?, FieldProblem?> {
 }
 
 /**
- * The address a machine is shown with, in the form `user@host[:port]` (SPEC §2.1): the port only when it is not 22, and an
- * IPv6 host in brackets.
+ * A machine's address as the app shows it: `user@host[:port]` (SPEC §2.1), the port only when it is not 22, and an IPv6 host in
+ * brackets. The view models hold these parts; the screen turns them into text with [text], from string resources, so no
+ * visible text is joined in code (phase 6 P0-11).
  *
- * @param machine the machine.
- * @return the address.
+ * @property user the login name.
+ * @property host the host name or address.
+ * @property port the SSH port.
  */
-fun machineAddress(machine: Machine): String {
-    val host = if (machine.host.contains(':')) "[${machine.host}]" else machine.host
-    val port = if (machine.port == DEFAULT_SSH_PORT) "" else ":${machine.port}"
-    return "${machine.user}@$host$port"
+data class MachineAddress(val user: String, val host: String, val port: Int)
+
+/**
+ * The address a machine is shown with.
+ *
+ * @return the machine's user, host and port.
+ */
+fun Machine.address(): MachineAddress = MachineAddress(user = user, host = host, port = port)
+
+/**
+ * The address as text, formatted from the string resources.
+ *
+ * @return `user@host[:port]`, in the form the app shows.
+ */
+@Composable
+fun MachineAddress.text(): String {
+    val shownHost = if (host.contains(':')) stringResource(R.string.address_host_ipv6, host) else host
+    val withPort = if (port == DEFAULT_SSH_PORT) shownHost else stringResource(R.string.address_host_port, shownHost, port)
+    return stringResource(R.string.address_user_host, user, withPort)
 }
 
 /**

@@ -1,18 +1,26 @@
 package io.github.werlang.whistl.ui.machines
 
+import io.github.werlang.whistl.KeyPublicKey
+import io.github.werlang.whistl.core.secure.KeystoreSecretStore
+import io.github.werlang.whistl.core.ssh.KeyManager
 import io.github.werlang.whistl.data.AddResult
 import io.github.werlang.whistl.data.ConnectionState
 import io.github.werlang.whistl.data.ErrorKind
 import io.github.werlang.whistl.data.MachineField
 import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.domain.Rejection
+import io.github.werlang.whistl.support.FakeWrappingCipher
 import io.github.werlang.whistl.support.FixedClientKey
+import io.github.werlang.whistl.support.MapBlobStore
 import io.github.werlang.whistl.support.MainDispatcherRule
 import io.github.werlang.whistl.support.RecordingClipboard
 import io.github.werlang.whistl.support.ScriptedMachines
 import io.github.werlang.whistl.support.testHello
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import java.security.UnrecoverableKeyException
+import java.util.Base64
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -47,6 +55,23 @@ class AddMachineViewModelTest {
     private fun fill(vm: AddMachineViewModel, host: String = "build.lan", user: String = "ci") {
         vm.onHost(host)
         vm.onUser(user)
+    }
+
+    /**
+     * The sheet opens with a public key when the stored SSH key was lost: its blob cannot be opened, the store forgets it and the key
+     * manager makes a new one, so the sheet shows a key (phase 6 P0-4).
+     */
+    @Test
+    fun theSheetOpensWithAFreshPublicKeyAfterTheStoredKeyWasLost() {
+        val blobs = MapBlobStore()
+        blobs.write(KeyManager.PRIVATE_KEY_ALIAS, Base64.getEncoder().encodeToString(ByteArray(40)))
+        val cipher = FakeWrappingCipher(openFailure = UnrecoverableKeyException("key gone"))
+        val keys = KeyManager(KeystoreSecretStore(blobs, cipher))
+
+        val sheet = AddMachineViewModel(machines, KeyPublicKey(keys), clipboard)
+
+        assertTrue(sheet.uiState.value.publicKey.startsWith("ssh-ed25519 "))
+        assertEquals(1, cipher.discards)
     }
 
     /** Connect is off while the host or the user is empty, and on once both are filled. */
@@ -380,5 +405,66 @@ class AddMachineViewModelTest {
         assertTrue(vm.uiState.value.closed)
         assertTrue(machines.removed.isEmpty())
         assertNull(machines.removed.firstOrNull())
+    }
+
+    /**
+     * Phase 6 P0-2, call site `observe` in the Add machine view model: a machine the add returned but that is not stored shows the
+     * sheet's Missing stage, and nothing crashes.
+     */
+    @Test
+    fun followingAMachineThatIsNotThereShowsMissing() = runTest {
+        machines.addAnswer = { draft -> AddResult.Added(Machine("ghost", draft.name, draft.host, draft.port, draft.user)) }
+        val vm = vm()
+        fill(vm)
+
+        vm.connect(null)
+
+        assertEquals(AddStage.Missing, vm.uiState.value.stage)
+    }
+
+    /**
+     * Phase 6 P0-2, call site `reconnect` in the Add machine view model: Retry after the machine was removed shows the Missing
+     * stage.
+     */
+    @Test
+    fun retryAfterTheMachineWasRemovedShowsMissing() = runTest {
+        machines.addAnswer = { draft ->
+            val machine = Machine("s-gone-later", draft.name, draft.host, draft.port, draft.user)
+            machines.put(machine, ConnectionState.Error(ErrorKind.AuthFailed))
+            AddResult.Added(machine)
+        }
+        val vm = vm()
+        fill(vm, host = "auth.demo")
+        vm.connect(null)
+        assertEquals(AddStage.LoginRefused, vm.uiState.value.stage)
+        machines.remove("s-gone-later")
+
+        vm.retry()
+        runCurrent()
+
+        assertEquals(AddStage.Missing, vm.uiState.value.stage)
+    }
+
+    /**
+     * Phase 6 P0-2, call site `confirmHostKey` in the Add machine view model: Trust after the machine was removed shows the Missing
+     * stage.
+     */
+    @Test
+    fun trustAfterTheMachineWasRemovedShowsMissing() = runTest {
+        machines.addAnswer = { draft ->
+            val machine = Machine("s-key-gone", draft.name, draft.host, draft.port, draft.user)
+            machines.put(machine, ConnectionState.HostKeyUnknown("ssh-ed25519", "SHA256:new"))
+            AddResult.Added(machine)
+        }
+        val vm = vm()
+        fill(vm, host = "unknown.demo")
+        vm.connect(null)
+        assertEquals(AddStage.HostKeyUnknown, vm.uiState.value.stage)
+        machines.remove("s-key-gone")
+
+        vm.trust()
+        runCurrent()
+
+        assertEquals(AddStage.Missing, vm.uiState.value.stage)
     }
 }

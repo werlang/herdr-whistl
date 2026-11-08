@@ -7,7 +7,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
 
@@ -147,7 +146,8 @@ data class SpacesDocument(
                 ?: throw MalformedDocument("the document has no version")
             val version = versionElement.longOrNull ?: throw MalformedDocument("the version is not a number")
             if (version != VERSION.toLong()) throw UnsupportedDocumentVersion(version)
-            val spacesArray = obj["spaces"]?.jsonArray
+            // A cast, not `jsonArray`: that accessor throws IllegalArgumentException for an object or a string (phase 6 P0-14).
+            val spacesArray = obj["spaces"] as? JsonArray
                 ?: throw MalformedDocument("the document has no spaces array")
             return SpacesDocument(
                 spaces = spacesArray.map { SpaceRecord.fromJson(it) },

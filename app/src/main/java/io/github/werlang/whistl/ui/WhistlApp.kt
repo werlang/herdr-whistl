@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.ui
 
+import android.net.Uri
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -70,6 +71,9 @@ object Routes {
     /** Settings. */
     const val SETTINGS = "settings"
 
+    // Each argument is encoded with Uri.encode when a route is built (phase 6 P0-8), so a `/`, `%` or `#` in an address stays one
+    // path segment. Navigation decodes path arguments itself: a second decode would turn an address holding `%41` into `A`
+    // (NavigationEncodingTest).
     /** The Agent screen's route pattern: the machine and the terminal address. */
     const val AGENT_PATTERN = "agent/{machineId}/{address}"
 
@@ -83,7 +87,8 @@ object Routes {
      * @param address the terminal address.
      * @return the route.
      */
-    fun agent(machineId: String, address: String): String = "agent/$machineId/$address"
+    fun agent(machineId: String, address: String): String =
+        "agent/${Uri.encode(machineId)}/${Uri.encode(address)}" // i18n-ok: navigation route, never shown
 
     /**
      * The route to one space's detail.
@@ -92,7 +97,8 @@ object Routes {
      * @param spaceId the space.
      * @return the route.
      */
-    fun space(machineId: String, spaceId: String): String = "space/$machineId/$spaceId"
+    fun space(machineId: String, spaceId: String): String =
+        "space/${Uri.encode(machineId)}/${Uri.encode(spaceId)}" // i18n-ok: navigation route, never shown
 }
 
 /**

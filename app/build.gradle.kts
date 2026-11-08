@@ -71,10 +71,25 @@ roborazzi {
     outputDir.set(file("src/test/screenshots"))
 }
 
+// Screenshot gate (phase 6 r1, P0-1). Roborazzi 1.40.1 reads roborazzi.test.{record,compare,verify} each time captureRoboImage
+// runs (RoborazziPropertiesKt.roborazziSystemPropertyTaskType); with none set it does nothing, so a plain test run compared
+// nothing. Now every test run verifies against the committed goldens, and a golden that differs fails the run.
+// `recordRoborazziDebug` is the only way to rewrite them: record together with verify resolves to VerifyAndRecord
+// (RoborazziTaskType.Companion.of), so verify is left off for a recording run.
+// `-Pwhistl.screenshots=skip` (the Linux CI job) leaves the screenshot classes out: Robolectric rasterises fonts per platform,
+// so the comparison runs on macOS only (.github/workflows/ci.yml, job `screenshots`).
+val recordingScreenshots = gradle.startParameter.taskNames.any { it.contains("recordRoborazzi", ignoreCase = true) }
+val skipScreenshots = providers.gradleProperty("whistl.screenshots").orNull == "skip"
+
 tasks.withType<Test>().configureEach {
     // Screenshot file names are relative to roborazzi.outputDir above, not to the module folder (Roborazzi 1.40 asks for
     // this setting in gradle.properties; it is set here so the build file holds the whole screenshot setup).
     systemProperty("roborazzi.record.filePathStrategy", "relativePathFromRoborazziContextOutputDirectory")
+    // The goldens a verify run compares against live in the same folder the record task writes to. Without this property the
+    // test JVM looks in the default build/outputs/roborazzi, where no golden is.
+    systemProperty("roborazzi.output.dir", file("src/test/screenshots").absolutePath)
+    if (!recordingScreenshots) systemProperty("roborazzi.test.verify", "true")
+    if (skipScreenshots) exclude("**/*ScreenshotTest*")
 }
 
 dependencies {

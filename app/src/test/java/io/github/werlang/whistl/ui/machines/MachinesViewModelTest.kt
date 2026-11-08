@@ -91,7 +91,6 @@ class MachinesViewModelTest {
             ConnectionState.Connecting to (MachineStatus.Connecting to null),
             ConnectionState.Offline to (MachineStatus.Offline to null),
             ConnectionState.Error(ErrorKind.AuthFailed) to (MachineStatus.Error to MachineIssue.LoginRefused),
-            ConnectionState.Error(ErrorKind.Unreachable) to (MachineStatus.Error to MachineIssue.Unreachable),
             ConnectionState.Error(ErrorKind.UnsupportedGeneration) to (MachineStatus.Error to MachineIssue.UnsupportedCore),
             ConnectionState.HostKeyUnknown("ssh-ed25519", "SHA256:new") to (MachineStatus.Error to MachineIssue.HostKeyToConfirm),
             ConnectionState.HostKeyChanged("ssh-ed25519", "SHA256:old", "SHA256:new") to
@@ -125,7 +124,7 @@ class MachinesViewModelTest {
 
     /** The address shows the port only when it is not 22, and an IPv6 host in brackets. */
     @Test
-    fun theAddressShowsThePortOnlyWhenItIsNotTwentyTwo() {
+    fun theAddressCarriesItsPortAndHostAndTheTextFormatsThem() {
         val machines = ScriptedMachines()
         machines.put(machine("std", host = "build.lan", port = 22, user = "ci"), ConnectionState.Offline)
         machines.put(machine("alt", host = "build.lan", port = 2222, user = "ci"), ConnectionState.Offline)
@@ -133,9 +132,9 @@ class MachinesViewModelTest {
 
         val cards = model(machines).state.value.cards.associateBy { it.id }
 
-        assertEquals("ci@build.lan", cards.getValue("std").address)
-        assertEquals("ci@build.lan:2222", cards.getValue("alt").address)
-        assertEquals("ci@[fe80::1]", cards.getValue("v6").address)
+        assertEquals(MachineAddress("ci", "build.lan", 22), cards.getValue("std").address)
+        assertEquals(MachineAddress("ci", "build.lan", 2222), cards.getValue("alt").address)
+        assertEquals(MachineAddress("ci", "fe80::1", 22), cards.getValue("v6").address)
     }
 
     /** The card menu opens for its machine, and Reconnect is off while the machine is connecting. */
@@ -332,5 +331,33 @@ class MachinesViewModelTest {
         runCurrent()
 
         assertEquals(before, vm.state.value.cards)
+    }
+
+    /**
+     * Phase 6 P0-2, call site `observe` in the Machines view model's trust: a machine that is no longer added shows the problem
+     * on the screen, and nothing crashes.
+     */
+    @Test
+    fun trustOfAMachineThatIsNotThereShowsMissing() = runTest {
+        val vm = model(ScriptedMachines())
+
+        vm.trust("no-such-machine")
+        runCurrent()
+
+        assertEquals(MachinesProblem.MachineMissing, vm.state.value.problem)
+    }
+
+    /**
+     * Phase 6 P0-2, call site `reconnect` in the Machines view model: a reconnect for a machine that is no longer added shows the
+     * problem on the screen, and nothing crashes.
+     */
+    @Test
+    fun reconnectOfAMachineThatIsNotThereShowsMissing() = runTest {
+        val vm = model(ScriptedMachines())
+
+        vm.reconnect("no-such-machine")
+        runCurrent()
+
+        assertEquals(MachinesProblem.MachineMissing, vm.state.value.problem)
     }
 }

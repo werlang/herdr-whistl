@@ -2,6 +2,7 @@ package io.github.werlang.whistl.data
 
 import io.github.werlang.whistl.core.rpc.HcEvent
 import io.github.werlang.whistl.core.rpc.ResponseJson
+import io.github.werlang.whistl.core.rpc.SubscribeWire
 import io.github.werlang.whistl.core.rpc.TerminalEventKind
 import io.github.werlang.whistl.core.rpc.TerminalWire
 import io.github.werlang.whistl.core.rpc.toDomain
@@ -10,7 +11,6 @@ import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.Terminal
 import io.github.werlang.whistl.domain.TerminalState
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -41,9 +41,8 @@ data class MachineAgent(
 /**
  * Applies one events-channel event to the terminals of one machine (SPEC §5, round p3r2).
  *
- * The reducer is pure: it returns a new map and never changes its input. Each rule is marked **observed** when the shape
- * was recorded from hc 0.1.18 (see `event-shapes.md`), or **assumed** when it was not observed and the shape is a
- * documented guess.
+ * The reducer is pure: it returns a new map and never changes its input. Each rule carries the status of its shape in
+ * `docs/event-shapes.md`: observed, recorded, synthetic or assumed. The statuses here match that file.
  *
  * - created (observed): the full terminal object is added under its address, unless it is a folder probe ([isProbe]).
  * - labels (observed): the full label map replaces the old one. A terminal that now carries the probe label leaves the map.
@@ -56,8 +55,10 @@ data class MachineAgent(
  * - removed (observed): the terminal leaves the map.
  * - lost (assumed): state finished with reason `lost`. The shape carries no fields, so this is the documented choice.
  * - restarted (assumed): state live again; exit code, finish time and reason cleared.
- * - missed (assumed): when `data.terminals` is present, it replaces the whole map, without any probe. Without it, nothing changes.
- * - heartbeat, doc, and unknown types: no change. A `foreground` event (not in SPEC §5) parses as unknown and is ignored.
+ * - missed (synthetic): when `data.terminals` is an array, it replaces the whole map with the snapshot, decoded by the subscribe
+ *   result's wire type, without any probe. Without it, nothing changes.
+ * - heartbeat (recorded): no change; its line resets the watchdog. doc (recorded): no change here; the repository re-reads the
+ *   document. Unknown types: no change. A `foreground` event (not in SPEC §5) parses as unknown and is ignored.
  *
  * An event for an address not in the map changes nothing, and malformed data never throws.
  */
@@ -130,11 +131,15 @@ object AgentEventReducer {
         null
     }
 
-    /** The terminals of a `missed` snapshot, keyed by address, or `null` when the event carries no snapshot. */
+    /**
+     * The terminals of a `missed` snapshot, keyed by address, decoded with the subscribe result's wire type (phase 6 P0-5). `null`
+     * when the event carries no `terminals` array, or it does not decode: then nothing changes.
+     */
     private fun snapshotOf(data: JsonObject): Map<String, Terminal>? {
-        val array = data["terminals"] as? JsonArray ?: return null
+        if (data["terminals"] !is JsonArray) return null
         return try {
-            ResponseJson.decodeFromJsonElement(ListSerializer(TerminalWire.serializer()), array)
+            ResponseJson.decodeFromJsonElement(SubscribeWire.serializer(), data)
+                .terminals
                 .map { it.toDomain() }
                 .associateBy { it.address }
         } catch (e: SerializationException) {

@@ -9,7 +9,7 @@ change the spec in the same pull request.
 ```sh
 scripts/gradle check assembleDebug        # unit tests + lint + debug APK
 scripts/gradle check --rerun-tasks        # same, with the build cache out of the way
-scripts/gradle recordRoborazziDebug       # re-record screenshot goldens
+scripts/gradle recordRoborazziDebug       # re-record screenshot goldens (the only writer of them)
 scripts/gradle assembleRelease            # R8 + resource shrinking
 ```
 
@@ -33,7 +33,16 @@ pinned container otherwise. CI runs unit tests, lint and both assemblies on Linu
 Goldens are committed under `app/src/test/screenshots/` as
 `<screen>_<theme>_<locale>[_fs13].png`, and the matrix is per screen **and** per state that matters
 (empty, offline, host-key unknown/changed, blocked agents…). Record them on macOS — Robolectric
-rasterises differently on Linux, so a Linux CI comparison would fail on identical code. Adding or
+rasterises differently on Linux.
+
+Every test run **compares** against the goldens: `testDebugUnitTest` and `check` set
+`roborazzi.test.verify` (app/build.gradle.kts), so a golden that differs fails the run and nothing is
+rewritten. Only `recordRoborazziDebug` writes goldens. Each screenshot test also checks that its
+frame shows the screen's own text and is not a flat tint (at least 64 distinct colours and a
+luminance spread of 5).
+
+CI skips the screenshot classes on Linux (`-Pwhistl.screenshots=skip`, comment in
+`.github/workflows/ci.yml`); the macOS `screenshots` job runs `verifyRoborazziDebug`. Adding or
 changing a screen means re-recording and committing the goldens in the same pull request.
 
 ## Commits and pull requests

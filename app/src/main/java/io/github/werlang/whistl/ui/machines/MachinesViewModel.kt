@@ -39,9 +39,6 @@ enum class MachineIssue {
     /** The login was refused. */
     LoginRefused,
 
-    /** The machine could not be reached. */
-    Unreachable,
-
     /** The machine runs an hc protocol generation this app does not speak. */
     UnsupportedCore,
 
@@ -57,7 +54,7 @@ enum class MachineIssue {
  *
  * @property id the machine id.
  * @property name the display name.
- * @property address `user@host[:port]`, the port shown only when it is not 22.
+ * @property address the machine's address, shown as `user@host[:port]`.
  * @property status the status pill.
  * @property issue the reason, for an error.
  * @property agentCount the agents on the machine, or `null` when it is not connected.
@@ -68,7 +65,7 @@ enum class MachineIssue {
 data class MachineCard(
     val id: String,
     val name: String,
-    val address: String,
+    val address: MachineAddress,
     val status: MachineStatus,
     val issue: MachineIssue?,
     val agentCount: Int?,
@@ -82,13 +79,13 @@ data class MachineCard(
  *
  * @property id the machine id.
  * @property name the display name.
- * @property address `user@host[:port]`.
+ * @property address the machine's address.
  * @property reconnectEnabled whether Reconnect can be tapped.
  */
 data class MachineMenu(
     val id: String,
     val name: String,
-    val address: String,
+    val address: MachineAddress,
     val reconnectEnabled: Boolean,
 )
 
@@ -103,7 +100,7 @@ sealed interface HostKeyPrompt {
     val name: String
 
     /** The machine's address. */
-    val address: String
+    val address: MachineAddress
 
     /** The connection state the prompt is for; dismissing stores it, so the same state does not reopen the sheet. */
     val connection: ConnectionState
@@ -117,7 +114,7 @@ sealed interface HostKeyPrompt {
     data class Unknown(
         override val machineId: String,
         override val name: String,
-        override val address: String,
+        override val address: MachineAddress,
         override val connection: ConnectionState,
         val algorithm: String,
         val fingerprint: String,
@@ -133,12 +130,20 @@ sealed interface HostKeyPrompt {
     data class Changed(
         override val machineId: String,
         override val name: String,
-        override val address: String,
+        override val address: MachineAddress,
         override val connection: ConnectionState,
         val algorithm: String,
         val expected: String,
         val actual: String,
     ) : HostKeyPrompt
+}
+
+/**
+ * A problem the Machines screen reports instead of failing (phase 6 P0-2): the machine a request named is no longer added.
+ */
+enum class MachinesProblem {
+    /** The machine is no longer added: the action could not be done. */
+    MachineMissing,
 }
 
 /**
@@ -149,6 +154,7 @@ sealed interface HostKeyPrompt {
  * @property confirmRemove the machine whose removal is being confirmed, or `null`.
  * @property hostKey the host-key sheet to show, or `null`.
  * @property addSession the Add machine sheet's session, or `null` when it is closed. A new session is a new form.
+ * @property problem the problem the last action reported, or `null`.
  */
 data class MachinesUiState(
     val cards: List<MachineCard>,
@@ -156,6 +162,7 @@ data class MachinesUiState(
     val confirmRemove: MachineMenu?,
     val hostKey: HostKeyPrompt?,
     val addSession: Int?,
+    val problem: MachinesProblem? = null,
 )
 
 /** The sheets the Machines screen can have open, and what the user dismissed. */
@@ -164,6 +171,7 @@ private data class Sheets(
     val removeFor: String? = null,
     val addSession: Int? = null,
     val dismissed: Map<String, ConnectionState> = emptyMap(),
+    val problem: MachinesProblem? = null,
 )
 
 /**
@@ -207,7 +215,7 @@ class MachinesViewModel(
             MachineCard(
                 id = machine.id,
                 name = machine.name,
-                address = machineAddress(machine),
+                address = machine.address(),
                 status = status,
                 issue = issue,
                 agentCount = (state as? ConnectionState.Connected)?.let { _ -> agentList.count { it.machineId == machine.id } },
@@ -222,7 +230,7 @@ class MachinesViewModel(
             list.firstNotNullOfOrNull { machine ->
                 val state = connection[machine.id]
                 // Identity, not equality: a new attempt that reaches the same host-key state is a new event and reopens the sheet.
-                if (state == null || open.dismissed[machine.id] === state) null else hostKeyPromptFor(machine.id, machine.name, machineAddress(machine), state)
+                if (state == null || open.dismissed[machine.id] === state) null else hostKeyPromptFor(machine.id, machine.name, machine.address(), state)
             }
         }
         MachinesUiState(
@@ -231,6 +239,7 @@ class MachinesViewModel(
             confirmRemove = open.removeFor?.let { id -> list.firstOrNull { it.id == id }?.let { menuOf(it, connection[it.id]) } },
             hostKey = hostKeyPrompt,
             addSession = open.addSession,
+            problem = open.problem,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, MachinesUiState(emptyList(), null, null, null, null))
 
@@ -240,7 +249,7 @@ class MachinesViewModel(
      * @param id the machine.
      */
     fun openMenu(id: String) {
-        sheets.value = sheets.value.copy(menuFor = id)
+        sheets.value = sheets.value.copy(menuFor = id, problem = null)
     }
 
     /** Closes the card menu. */
@@ -254,8 +263,14 @@ class MachinesViewModel(
      * @param id the machine.
      */
     fun reconnect(id: String) {
-        sheets.value = sheets.value.copy(menuFor = null)
-        viewModelScope.launch { machines.reconnect(id) }
+        sheets.value = sheets.value.copy(menuFor = null, problem = null)
+        viewModelScope.launch {
+            try {
+                machines.reconnect(id)
+            } catch (e: NoSuchElementException) {
+                reportMissing()
+            }
+        }
     }
 
     /**
@@ -289,8 +304,19 @@ class MachinesViewModel(
      * @param id the machine.
      */
     fun trust(id: String) {
-        if (machines.observe(id).value !is ConnectionState.HostKeyUnknown) return
-        viewModelScope.launch { machines.confirmHostKey(id) }
+        val state = connectionOf(id)
+        if (state == null) {
+            reportMissing()
+            return
+        }
+        if (state !is ConnectionState.HostKeyUnknown) return
+        viewModelScope.launch {
+            try {
+                machines.confirmHostKey(id)
+            } catch (e: NoSuchElementException) {
+                reportMissing()
+            }
+        }
     }
 
     /**
@@ -304,7 +330,7 @@ class MachinesViewModel(
 
     /** Opens the Add machine sheet with a new, empty form. */
     fun openAdd() {
-        sheets.value = sheets.value.copy(addSession = nextSession++)
+        sheets.value = sheets.value.copy(addSession = nextSession++, problem = null)
     }
 
     /** Closes the Add machine sheet. */
@@ -312,14 +338,25 @@ class MachinesViewModel(
         sheets.value = sheets.value.copy(addSession = null)
     }
 
+    /** The machine's connection state, or `null` when the machine is no longer added. */
+    private fun connectionOf(id: String): ConnectionState? = try {
+        machines.observe(id).value
+    } catch (e: NoSuchElementException) {
+        null
+    }
+
+    private fun reportMissing() {
+        sheets.value = sheets.value.copy(problem = MachinesProblem.MachineMissing)
+    }
+
     private fun menuOf(machine: io.github.werlang.whistl.domain.Machine, state: ConnectionState?): MachineMenu = MachineMenu(
         id = machine.id,
         name = machine.name,
-        address = machineAddress(machine),
+        address = machine.address(),
         reconnectEnabled = state !is ConnectionState.Connecting,
     )
 
-    private fun hostKeyPromptFor(id: String, name: String, address: String, state: ConnectionState): HostKeyPrompt? = when (state) {
+    private fun hostKeyPromptFor(id: String, name: String, address: MachineAddress, state: ConnectionState): HostKeyPrompt? = when (state) {
         is ConnectionState.HostKeyUnknown -> HostKeyPrompt.Unknown(id, name, address, state, state.algorithm, state.fingerprint)
         is ConnectionState.HostKeyChanged -> HostKeyPrompt.Changed(id, name, address, state, state.algorithm, state.expected, state.actual)
         else -> null
@@ -338,7 +375,6 @@ internal fun classify(state: ConnectionState): Pair<MachineStatus, MachineIssue?
     ConnectionState.Offline -> MachineStatus.Offline to null
     is ConnectionState.Error -> MachineStatus.Error to when (state.kind) {
         ErrorKind.AuthFailed -> MachineIssue.LoginRefused
-        ErrorKind.Unreachable -> MachineIssue.Unreachable
         ErrorKind.UnsupportedGeneration -> MachineIssue.UnsupportedCore
     }
     is ConnectionState.HostKeyUnknown -> MachineStatus.Error to MachineIssue.HostKeyToConfirm

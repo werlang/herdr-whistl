@@ -108,6 +108,31 @@ class SpaceFolderResolutionTest {
         assertEquals(emptyList<String>(), h.core.methods)
     }
 
+    /**
+     * A folder from the document that holds a line break or a NUL is never probed: no `terminal.run` reaches the core for it, and
+     * its row is [UnresolvableReason.Invalid]. A `~` folder with a break is refused before the home directory is read (phase 6 P0-9).
+     */
+    @Test
+    fun aDocumentFolderWithALineBreakOrNulIsInvalidAndNeverProbed() = runTest {
+        val (h, _) = connectedWith(
+            spacesDocJson(
+                listOf(
+                    spaceJson("sp_break", "break", "/srv/app\n/evil"),
+                    spaceJson("sp_nul", "nul", "/srv/\u0000app"),
+                    spaceJson("sp_tilde", "tilde", "~/code\rweb"),
+                    spaceJson("sp_ok", "ok", "/srv/app"),
+                ),
+            ),
+        )
+
+        assertEquals(listOf("/srv/app"), h.core.probeFolders)
+        val resolutions = h.spaces.groups().value.single().resolutions
+        assertEquals(FolderResolution.Unresolvable(UnresolvableReason.Invalid), resolutions["sp_break"])
+        assertEquals(FolderResolution.Unresolvable(UnresolvableReason.Invalid), resolutions["sp_nul"])
+        assertEquals(FolderResolution.Unresolvable(UnresolvableReason.Invalid), resolutions["sp_tilde"])
+        assertEquals(FolderResolution.Resolved("/srv/app"), resolutions["sp_ok"])
+    }
+
     /** A new space's folder resolves right after the create, on the same connection, without any `doc` event (F4). */
     @Test
     fun aNewSpaceResolvesRightAwayWithoutADocEvent() = runTest {

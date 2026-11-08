@@ -75,7 +75,7 @@ class JsonRpcConnection(
      *
      * @param method the RPC method name.
      * @param params the params object, already encoded.
-     * @param timeoutMillis how long to wait for the reply, in virtual or real time.
+     * @param timeoutMillis how long the write and the wait for the reply may take together, in virtual or real time.
      * @return the response's `result` element.
      * @throws HcException the mapped error from hc, [TransportLost], or [Timeout] when no reply arrives in time.
      */
@@ -95,8 +95,12 @@ class JsonRpcConnection(
                 RpcRequest.serializer(),
                 RpcRequest(id = id, method = method, params = params),
             )
-            writeLock.withLock { pipe.writeLine(line) }
-            return withTimeout(timeoutMillis) { reply.await() }
+            // The write and the wait share one window. A write that never completes must not hold the call, or the write
+            // lock that every other call on this connection waits for (phase 6 P0-7).
+            return withTimeout(timeoutMillis) {
+                writeLock.withLock { pipe.writeLine(line) }
+                reply.await()
+            }
         } catch (e: TimeoutCancellationException) {
             throw Timeout(method, timeoutMillis)
         } finally {

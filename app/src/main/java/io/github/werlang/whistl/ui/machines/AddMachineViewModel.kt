@@ -48,6 +48,9 @@ enum class AddStage {
 
     /** The machine is connected: the sheet closes. */
     Connected,
+
+    /** The machine is no longer added (removed elsewhere, or never stored): nothing can be done with it. Close shows (phase 6 P0-2). */
+    Missing,
 }
 
 /**
@@ -70,7 +73,7 @@ enum class AddStage {
  * @property presentedFingerprint the presented key's fingerprint, in the changed stage.
  * @property machineId the id of the machine once it was added.
  * @property machineName the name of the machine once it was added.
- * @property machineAddress the address of the machine once it was added.
+ * @property machineAddress the address of the machine once it was added, or `null` before that.
  * @property publicKey this device's public key line, for key mode.
  * @property publicKeyCopied whether the key was copied since the sheet opened.
  * @property canConnect whether Connect can be tapped: the form is open and host and user are filled.
@@ -91,7 +94,7 @@ data class AddMachineUiState(
     val presentedFingerprint: String?,
     val machineId: String?,
     val machineName: String?,
-    val machineAddress: String?,
+    val machineAddress: MachineAddress?,
     val publicKey: String,
     val publicKeyCopied: Boolean,
     val canConnect: Boolean,
@@ -199,7 +202,7 @@ class AddMachineViewModel(
                             state.value = state.value.copy(
                                 machineId = result.machine.id,
                                 machineName = result.machine.name,
-                                machineAddress = "${result.machine.user}@${result.machine.host}",
+                                machineAddress = result.machine.address(),
                             )
                             follow(result.machine.id)
                         }
@@ -221,13 +224,25 @@ class AddMachineViewModel(
     fun trust() {
         if (state.value.stage != AddStage.HostKeyUnknown) return
         val id = state.value.machineId ?: return
-        viewModelScope.launch { machines.confirmHostKey(id) }
+        viewModelScope.launch {
+            try {
+                machines.confirmHostKey(id)
+            } catch (e: NoSuchElementException) {
+                missing()
+            }
+        }
     }
 
     /** Retry: tries the connection once more after a refused login or an unreachable machine. */
     fun retry() {
         val id = state.value.machineId ?: return
-        viewModelScope.launch { machines.reconnect(id) }
+        viewModelScope.launch {
+            try {
+                machines.reconnect(id)
+            } catch (e: NoSuchElementException) {
+                missing()
+            }
+        }
     }
 
     /** Remove machine: forgets the machine that was added, from the changed-key stage. The sheet closes. */
@@ -259,9 +274,22 @@ class AddMachineViewModel(
     /** Follows the new machine's connection state until the sheet closes. */
     private fun follow(id: String) {
         observer?.cancel()
-        observer = viewModelScope.launch {
-            machines.observe(id).collect { connection -> apply(connection) }
+        // observe() throws for a machine that is no longer added: the sheet says so rather than failing (phase 6 P0-2).
+        val connection = try {
+            machines.observe(id)
+        } catch (e: NoSuchElementException) {
+            missing()
+            return
         }
+        observer = viewModelScope.launch {
+            connection.collect { state -> apply(state) }
+        }
+    }
+
+    /** The machine is no longer added: the sheet shows that, and stops following it. */
+    private fun missing() {
+        observer?.cancel()
+        state.value = state.value.copy(stage = AddStage.Missing)
     }
 
     /** Maps a connection state to the sheet's stage. */
@@ -291,7 +319,6 @@ class AddMachineViewModel(
             is ConnectionState.Error -> current.copy(
                 stage = when (connection.kind) {
                     ErrorKind.AuthFailed -> AddStage.LoginRefused
-                    ErrorKind.Unreachable -> AddStage.Unreachable
                     ErrorKind.UnsupportedGeneration -> AddStage.UnsupportedCore
                 },
             )

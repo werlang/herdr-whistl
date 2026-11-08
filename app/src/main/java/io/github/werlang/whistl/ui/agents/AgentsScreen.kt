@@ -103,7 +103,7 @@ fun AgentsScreen(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(state.rows, key = { it.machineId + "/" + it.address }) { row ->
+                items(state.rows, key = { it.machineId + "/" + it.address }) { row -> // i18n-ok: lazy-list key, never shown
                     AgentCard(row = row, onClick = { onOpen(row) })
                 }
             }
@@ -124,7 +124,7 @@ private fun AgentCard(row: AgentRow, onClick: () -> Unit) {
     val place = listOf(
         row.machineName,
         row.spaceName ?: stringResource(R.string.common_no_space),
-    ).joinToString(" · ")
+    ).joinToString(stringResource(R.string.separator_place))
     val status = agentLabelRes(live = row.live, waiting = row.waiting, status = row.status)
     Surface(
         modifier = Modifier

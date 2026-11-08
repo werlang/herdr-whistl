@@ -81,7 +81,7 @@ private fun AddMachineRoute(
     onClosed: () -> Unit,
 ) {
     val add: AddMachineViewModel = viewModel(
-        key = "add-machine-$session",
+        key = "add-machine-$session", // i18n-ok: ViewModel store key, never shown
         factory = viewModelFactory { initializer { AddMachineViewModel(machines, clientKey, clipboard) } },
     )
     val state by add.uiState.collectAsState()

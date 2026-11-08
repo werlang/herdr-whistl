@@ -31,6 +31,8 @@ import io.github.werlang.whistl.platform.SharedPreferencesMachineStore
 import io.github.werlang.whistl.platform.SharedPreferencesResolvedFolderCache
 import io.github.werlang.whistl.platform.SharedPreferencesSettingsStore
 import io.github.werlang.whistl.platform.SharedPreferencesSpacesCache
+import io.github.werlang.whistl.core.log.Log
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -52,7 +54,7 @@ class AppContainer(
     demoMode: Boolean = false,
     demoCore: DemoCore? = null,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + appExceptionHandler())
     private val demo: DemoCore? = demoCore ?: if (demoMode) DemoCores.fake() else null
     private val live: LiveCore by lazy { LiveCore(context.applicationContext, scope) }
 
@@ -84,7 +86,7 @@ class AppContainer(
  *
  * @param keys the app's client key.
  */
-private class KeyPublicKey(private val keys: KeyManager) : ClientPublicKey {
+internal class KeyPublicKey(private val keys: KeyManager) : ClientPublicKey {
     override fun publicKeyLine(): String {
         keys.ensureKey()
         return keys.publicKeyLine(COMMENT)
@@ -148,3 +150,14 @@ private class LiveCore(context: Context, scope: CoroutineScope) {
 
     val clientKey: ClientPublicKey = KeyPublicKey(keys)
 }
+
+/**
+ * The last line of defence for the app's long-lived scope (phase 6 P0-2). A failure that nothing else caught ends only its own
+ * coroutine, and is reported by its class name alone: one bad message from a core cannot end the process, and no message text
+ * reaches the log.
+ *
+ * @param report receives the failure's class name. The default writes it to [Log].
+ * @return the handler to install in the scope.
+ */
+internal fun appExceptionHandler(report: (String) -> Unit = { Log.w("AppScope", "uncaught $it") }): CoroutineExceptionHandler =
+    CoroutineExceptionHandler { _, error -> report(error::class.java.simpleName) }
