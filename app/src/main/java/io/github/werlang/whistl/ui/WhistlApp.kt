@@ -1,11 +1,7 @@
 package io.github.werlang.whistl.ui
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -17,7 +13,6 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -26,16 +21,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
@@ -49,15 +40,21 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.werlang.whistl.BuildConfig
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.platform.AndroidDemoControl
+import io.github.werlang.whistl.platform.AndroidClipboardWriter
 import io.github.werlang.whistl.platform.AppCompatLanguageApplier
 import io.github.werlang.whistl.ui.agent.AgentScreen
 import io.github.werlang.whistl.ui.agent.AgentViewModel
 import io.github.werlang.whistl.ui.agents.AgentRow
 import io.github.werlang.whistl.ui.agents.AgentsScreen
 import io.github.werlang.whistl.ui.agents.AgentsViewModel
+import io.github.werlang.whistl.ui.machines.MachinesRoute
+import io.github.werlang.whistl.ui.space.SpaceDetailRoute
+import io.github.werlang.whistl.ui.space.SpaceDetailViewModel
+import io.github.werlang.whistl.ui.spaces.SpacesRoute
+import io.github.werlang.whistl.ui.spaces.SpacesViewModel
+import io.github.werlang.whistl.ui.machines.MachinesViewModel
 import io.github.werlang.whistl.ui.settings.SettingsScreen
 import io.github.werlang.whistl.ui.settings.SettingsViewModel
-import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 
 /** The navigation routes of the app. */
 object Routes {
@@ -76,6 +73,9 @@ object Routes {
     /** The Agent screen's route pattern: the machine and the terminal address. */
     const val AGENT_PATTERN = "agent/{machineId}/{address}"
 
+    /** The Space detail's route pattern: the machine and the space (phase 4b r2). */
+    const val SPACE_PATTERN = "space/{machineId}/{spaceId}"
+
     /**
      * The route to one agent's screen.
      *
@@ -84,6 +84,15 @@ object Routes {
      * @return the route.
      */
     fun agent(machineId: String, address: String): String = "agent/$machineId/$address"
+
+    /**
+     * The route to one space's detail.
+     *
+     * @param machineId the machine the space lives on.
+     * @param spaceId the space.
+     * @return the route.
+     */
+    fun space(machineId: String, spaceId: String): String = "space/$machineId/$spaceId"
 }
 
 /**
@@ -123,6 +132,17 @@ fun WhistlApp(startRoute: String = Routes.MACHINES) {
     val entry by navController.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     val showBar = Destination.entries.any { it.route == route }
+    val container = LocalAppContainer.current
+    val machinesModel: MachinesViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer { MachinesViewModel(container.machines, container.agents, container.installed) }
+        },
+    )
+    val spacesModel: SpacesViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer { SpacesViewModel(container.spaces, container.agents, container.machines) }
+        },
+    )
 
     Scaffold(
         bottomBar = {
@@ -141,10 +161,17 @@ fun WhistlApp(startRoute: String = Routes.MACHINES) {
         },
         floatingActionButton = {
             if (route == Routes.MACHINES) {
-                FloatingActionButton(onClick = {}) {
+                FloatingActionButton(onClick = machinesModel::openAdd) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = stringResource(R.string.machines_add_content_description),
+                    )
+                }
+            } else if (route == Routes.SPACES) {
+                FloatingActionButton(onClick = spacesModel::openNewSpace) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = stringResource(R.string.spaces_new_content_description),
                     )
                 }
             }
@@ -156,15 +183,49 @@ fun WhistlApp(startRoute: String = Routes.MACHINES) {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(Routes.MACHINES) {
-                MachinesScreen(Modifier.fillMaxSize())
+                val context = LocalContext.current
+                val clipboard = remember(context) { AndroidClipboardWriter(context) }
+                MachinesRoute(
+                    model = machinesModel,
+                    machines = container.machines,
+                    clientKey = container.clientKey,
+                    clipboard = clipboard,
+                    modifier = Modifier.fillMaxSize(),
+                )
                 // Opens the requested start route once the graph exists; the app starts on Machines, so this is a no-op there.
                 LaunchedEffect(startRoute) {
                     if (startRoute != Routes.MACHINES) navController.navigate(startRoute)
                 }
             }
-            composable(Routes.SPACES) { PlaceholderScreen(R.string.spaces_placeholder, Modifier.fillMaxSize()) }
+            composable(Routes.SPACES) {
+                SpacesRoute(
+                    model = spacesModel,
+                    onOpenSpace = { machineId, spaceId -> navController.navigate(Routes.space(machineId, spaceId)) },
+                    onAddMachine = { navigateTo(navController, Routes.MACHINES) },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             composable(Routes.AGENTS) {
                 AgentsRoute(onOpen = { row -> navController.navigate(Routes.agent(row.machineId, row.address)) })
+            }
+            composable(
+                route = Routes.SPACE_PATTERN,
+                arguments = listOf(
+                    navArgument("machineId") { type = NavType.StringType },
+                    navArgument("spaceId") { type = NavType.StringType },
+                ),
+            ) { backStack ->
+                SpaceDetailRoute(
+                    model = spaceDetailModel(
+                        machineId = backStack.arguments?.getString("machineId").orEmpty(),
+                        spaceId = backStack.arguments?.getString("spaceId").orEmpty(),
+                    ),
+                    onOpenAgent = { address ->
+                        navController.navigate(Routes.agent(backStack.arguments?.getString("machineId").orEmpty(), address))
+                    },
+                    onBack = { navController.popBackStack() },
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
             composable(Routes.SETTINGS) { SettingsRoute() }
             composable(
@@ -239,6 +300,33 @@ private fun AgentRoute(machineId: String, address: String, onBack: () -> Unit) {
     AgentScreen(viewModel = model, onBack = onBack, modifier = Modifier.fillMaxSize())
 }
 
+/**
+ * The Space detail's view model for one space, built from the app's container and keyed by the space, so each space keeps its own.
+ *
+ * @param machineId the machine the space lives on.
+ * @param spaceId the space.
+ * @return the view model.
+ */
+@Composable
+private fun spaceDetailModel(machineId: String, spaceId: String): SpaceDetailViewModel {
+    val container = LocalAppContainer.current
+    return viewModel(
+        key = Routes.space(machineId, spaceId),
+        factory = viewModelFactory {
+            initializer {
+                SpaceDetailViewModel(
+                    machineId = machineId,
+                    spaceId = spaceId,
+                    spaces = container.spaces,
+                    agents = container.agents,
+                    machines = container.machines,
+                    installed = container.installed,
+                )
+            }
+        },
+    )
+}
+
 /** Settings, with its view model built from the app's container and this build's switches. */
 @Composable
 private fun SettingsRoute() {
@@ -259,47 +347,3 @@ private fun SettingsRoute() {
     SettingsScreen(viewModel = model, modifier = Modifier.fillMaxSize())
 }
 
-/** The Machines placeholder: its title and the empty-state text (the screen comes in round 3). */
-@Composable
-private fun MachinesScreen(modifier: Modifier) {
-    Column(
-        modifier = modifier.padding(horizontal = 16.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text(
-            text = stringResource(R.string.machines_title),
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.semantics { heading() },
-        )
-        Box(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = stringResource(R.string.machines_empty),
-                style = MaterialTheme.typography.bodyLarge,
-                color = LocalWhistlTokens.current.muted,
-                textAlign = TextAlign.Center,
-            )
-        }
-    }
-}
-
-/**
- * A destination that has no screen yet.
- *
- * @param text the string shown, centred.
- * @param modifier the modifier for the screen.
- */
-@Composable
-private fun PlaceholderScreen(@StringRes text: Int, modifier: Modifier) {
-    Box(modifier = modifier.padding(16.dp), contentAlignment = Alignment.Center) {
-        Text(
-            text = stringResource(text),
-            style = MaterialTheme.typography.bodyLarge,
-            color = LocalWhistlTokens.current.muted,
-            textAlign = TextAlign.Center,
-        )
-    }
-}

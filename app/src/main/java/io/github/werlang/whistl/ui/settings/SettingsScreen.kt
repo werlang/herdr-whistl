@@ -62,6 +62,9 @@ import io.github.werlang.whistl.ui.theme.WhistlMono
 /** The test tag of the Add key sheet's content, so a test can find and capture it. */
 const val ADD_KEY_SHEET_TAG: String = "add-key-sheet"
 
+/** The test tag of the open-source licences sheet. */
+const val LICENSES_SHEET_TAG: String = "licenses-sheet"
+
 /**
  * The Settings screen (SPEC §2.6): General (language, terminal font, theme), the shortcut keys in bar order with the Add key
  * sheet, About with the open-source licenses, and, in debug builds only, the demo switch.
@@ -105,7 +108,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, modifier: Modifier = Modifier) 
         }
     }
     if (state.licensesOpen) {
-        ModalBottomSheet(onDismissRequest = viewModel::closeLicenses) {
+        ModalBottomSheet(onDismissRequest = viewModel::closeLicenses, modifier = Modifier.testTag(LICENSES_SHEET_TAG)) {
             LicensesSheet()
         }
     }

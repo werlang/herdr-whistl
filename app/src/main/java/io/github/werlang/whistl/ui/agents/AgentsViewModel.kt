@@ -8,6 +8,7 @@ import io.github.werlang.whistl.data.MachinesRepository
 import io.github.werlang.whistl.data.isWaitingForUser
 import io.github.werlang.whistl.data.sortForAgentsScreen
 import io.github.werlang.whistl.domain.AgentStatus
+import io.github.werlang.whistl.domain.TerminalState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -48,6 +49,7 @@ data class AgentRow(
     val name: String,
     val status: AgentStatus?,
     val waiting: Boolean,
+    val live: Boolean,
     val machineName: String,
     val spaceName: String?,
 )
@@ -131,6 +133,7 @@ class AgentsViewModel(
             name = displayName(terminal.name, terminal.argv, terminal.address),
             status = terminal.status,
             waiting = terminal.isWaitingForUser(),
+            live = terminal.state == TerminalState.Live,
             machineName = machineList.firstOrNull { it.id == machineId }?.name ?: machineId,
             spaceName = space?.name,
         )

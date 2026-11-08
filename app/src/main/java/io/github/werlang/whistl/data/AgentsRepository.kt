@@ -3,8 +3,10 @@ package io.github.werlang.whistl.data
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.HcEvent
 import io.github.werlang.whistl.core.rpc.HcException
+import io.github.werlang.whistl.core.rpc.SpawnFailed
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.domain.Agent
+import io.github.werlang.whistl.domain.KnownAgent
 import io.github.werlang.whistl.domain.Terminal
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -22,6 +24,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
 import java.util.concurrent.ConcurrentHashMap
 
+/** The shell a machine gets when its `SHELL` is empty or not absolute (phase 4b r2, SPEC §2.3). */
+const val DEFAULT_SHELL: String = "/bin/sh"
+
 /** The agents on connected machines and the Agents badge count (SPEC §1, §2). */
 interface AgentsRepository {
     /** Every agent on a connected machine, each with its machine and its matched space, in machine order. */
@@ -32,6 +37,58 @@ interface AgentsRepository {
      * This is the Agents badge (SPEC §2); zero hides the badge.
      */
     val blockedCount: StateFlow<Int>
+
+    /**
+     * Starts an agent, or the machine's login shell, in a space's folder, labelled as belonging to the space (phase 4b r2,
+     * SPEC §2.3). The program is run as an argv list on the machine's live connection; nothing is typed into a shell.
+     *
+     * @param machineId the machine the space lives on.
+     * @param spaceId the space the agent joins.
+     * @param choice the known agent to run, or the machine's shell.
+     * @return the new terminal's address, or why it did not start.
+     */
+    suspend fun start(machineId: String, spaceId: String, choice: StartChoice): StartResult
+}
+
+/**
+ * What a new agent starts with (phase 4b r2, SPEC §2.3): a known agent, run as its own argv, or the machine's login shell.
+ */
+sealed interface StartChoice {
+    /**
+     * A known agent from the detection table.
+     *
+     * @property agent the agent; its argv is run as it is.
+     */
+    data class Known(val agent: KnownAgent) : StartChoice
+
+    /** The machine's login shell, read from its `SHELL` (SPEC §5). */
+    data object Terminal : StartChoice
+}
+
+/** The outcome of [AgentsRepository.start]. Every failure is a value, not an exception. */
+sealed interface StartResult {
+    /**
+     * The agent started.
+     *
+     * @property address the new terminal's address.
+     */
+    data class Started(val address: String) : StartResult
+
+    /**
+     * The space's folder is not resolved on this connection, so nothing was started.
+     *
+     * @property reason why the folder is unavailable, or `null` when it has not been checked on this device yet.
+     */
+    data class FolderUnavailable(val reason: UnresolvableReason?) : StartResult
+
+    /** No space with that id is on the machine. */
+    data object UnknownSpace : StartResult
+
+    /** The machine could not start the program (hc `spawn_failed`, or another refusal). */
+    data object CouldNotStart : StartResult
+
+    /** The machine is not connected, or the connection dropped while starting. */
+    data object Offline : StartResult
 }
 
 /**
@@ -87,6 +144,65 @@ class DefaultAgentsRepository(
     }
 
     /** Starts a watcher for each new machine and stops the watcher of each removed one. */
+    /** The login shell read for each machine, with the connection it was read on: a new connection reads it again. */
+    private val shells = ConcurrentHashMap<String, Pair<HcClient, String>>()
+
+    override suspend fun start(machineId: String, spaceId: String, choice: StartChoice): StartResult {
+        val group = spaces.groups().value.firstOrNull { it.machineId == machineId }
+        val space = group?.spaces?.firstOrNull { it.id == spaceId } ?: return StartResult.UnknownSpace
+        // The folder is checked before any command: an unresolved folder never reaches terminal.run.
+        val cwd = when (val resolution = group.resolutionOf(space)) {
+            is FolderResolution.Resolved -> resolution.path
+            is FolderResolution.Unresolvable -> return StartResult.FolderUnavailable(resolution.reason)
+            null -> return StartResult.FolderUnavailable(null)
+        }
+        val lease = try {
+            machines.acquire(machineId)
+        } catch (e: NoSuchElementException) {
+            return StartResult.Offline
+        }
+        try {
+            val client = lease.client() ?: return StartResult.Offline
+            val argv = when (choice) {
+                is StartChoice.Known -> choice.agent.argv
+                StartChoice.Terminal -> listOf(shellOf(machineId, client), "-l")
+            }
+            val terminal = client.terminalRun(argv, cwd, mapOf(Agent.SPACE_LABEL to spaceId))
+            return StartResult.Started(terminal.address)
+        } catch (e: SpawnFailed) {
+            return StartResult.CouldNotStart
+        } catch (e: TransportLost) {
+            return StartResult.Offline
+        } catch (e: HcException) {
+            return StartResult.CouldNotStart
+        } finally {
+            withContext(NonCancellable) { lease.release() }
+        }
+    }
+
+    /**
+     * The machine's login shell for a connection: read once per connection with `printenv SHELL` (a constant argv), and kept
+     * for that connection only. An empty or relative answer, or a failed read, gives `/bin/sh`. A lost connection is rethrown.
+     *
+     * @param machineId the machine.
+     * @param client the live connection the shell is read on.
+     * @return an absolute path to a shell.
+     */
+    private suspend fun shellOf(machineId: String, client: HcClient): String {
+        shells[machineId]?.let { (cached, shell) -> if (cached === client) return shell }
+        val read = try {
+            client.machineExec(listOf("printenv", "SHELL"))
+        } catch (e: TransportLost) {
+            throw e
+        } catch (e: HcException) {
+            null
+        }
+        val answer = read?.takeIf { it.code == 0 }?.stdout?.trim().orEmpty()
+        val shell = answer.takeIf { it.startsWith('/') && it.none(Char::isWhitespace) } ?: DEFAULT_SHELL
+        shells[machineId] = client to shell
+        return shell
+    }
+
     private suspend fun reconcile(ids: Set<String>) {
         for (id in watchers.keys.toList()) {
             if (id !in ids) watchers.remove(id)?.cancelAndJoin()

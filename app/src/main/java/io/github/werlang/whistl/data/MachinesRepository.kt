@@ -225,4 +225,14 @@ interface MachinesRepository {
      *   [ConfirmResult.Blocked] when the key changed.
      */
     suspend fun confirmHostKey(id: String): ConfirmResult
+
+    /**
+     * Restarts the connection attempt of a machine that is not connected and not waiting for a host-key decision: it stops
+     * any scheduled retry and tries now. A machine that is connecting, connected, or waiting for a host-key decision is left
+     * as it is.
+     *
+     * @param id the machine id.
+     * @throws NoSuchElementException when no machine has that id.
+     */
+    suspend fun reconnect(id: String)
 }

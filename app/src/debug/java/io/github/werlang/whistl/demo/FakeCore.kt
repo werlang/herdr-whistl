@@ -3,6 +3,11 @@ package io.github.werlang.whistl.demo
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.data.AddResult
+import io.github.werlang.whistl.data.ClientPublicKey
+import io.github.werlang.whistl.data.InstalledAgentsRepository
+import io.github.werlang.whistl.data.ErrorKind
+import io.github.werlang.whistl.domain.KnownAgent
+import io.github.werlang.whistl.domain.KnownAgents
 import io.github.werlang.whistl.data.AgentsRepository
 import io.github.werlang.whistl.data.ConfirmResult
 import io.github.werlang.whistl.data.ConnectionState
@@ -19,6 +24,10 @@ import io.github.werlang.whistl.data.SpaceRecord
 import io.github.werlang.whistl.data.SpaceResult
 import io.github.werlang.whistl.data.SpacesDocument
 import io.github.werlang.whistl.data.SpacesRepository
+import io.github.werlang.whistl.data.FolderResolution
+import io.github.werlang.whistl.data.StartChoice
+import io.github.werlang.whistl.data.StartResult
+import io.github.werlang.whistl.data.UnresolvableReason
 import io.github.werlang.whistl.data.defaultSpaceName
 import io.github.werlang.whistl.data.hasSpace
 import io.github.werlang.whistl.data.isWaitingForUser
@@ -40,9 +49,14 @@ import io.github.werlang.whistl.data.TerminalHandle
 import io.github.werlang.whistl.data.TerminalReach
 import io.github.werlang.whistl.data.TerminalRepository
 import io.github.werlang.whistl.data.TerminalScreen
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import io.github.werlang.whistl.domain.Validation
 import io.github.werlang.whistl.domain.validateFolder
 import io.github.werlang.whistl.domain.validateHost
@@ -62,6 +76,32 @@ import io.github.werlang.whistl.domain.validateUser
 class FakeCore : DemoCore {
     private val state = FakeState()
 
+    override val installed: InstalledAgentsRepository = FakeInstalled(state)
+
+    override val clientKey: ClientPublicKey = FakeClientKey
+
+    /**
+     * Puts a machine into a connection state, as if its connection had reached it. The screenshot tests use it to show the
+     * Machines states; the app never calls it.
+     *
+     * @param machineId the machine.
+     * @param connection the state to show.
+     * @throws NoSuchElementException when no machine has that id.
+     */
+    fun setConnection(machineId: String, connection: ConnectionState) {
+        state.setConnection(machineId, connection)
+    }
+
+    /**
+     * Adds a machine to the demo, in the given state, as a test needs it. The app adds machines through the form.
+     *
+     * @param machine the machine.
+     * @param connection its state.
+     */
+    fun addMachine(machine: Machine, connection: ConnectionState) {
+        state.addMachine(machine, connection)
+    }
+
     override val machines: MachinesRepository = FakeMachines(state)
     override val agents: AgentsRepository = FakeAgents(state)
     override val spaces: SpacesRepository = FakeSpaces(state)
@@ -70,6 +110,42 @@ class FakeCore : DemoCore {
 
 private val MAC_MACHINE = Machine(id = "mac", name = "mac", host = "mac.local", port = 22, user = "demo")
 private val LAB_MACHINE = Machine(id = "lab", name = "lab", host = "lab.local", port = 22, user = "demo")
+private val BUILD_MACHINE = Machine(id = "build", name = "build", host = "build.lan", port = 22, user = "ci")
+private val PI_MACHINE = Machine(id = "pi", name = "pi", host = "pi.local", port = 22, user = "pi")
+
+/** The fixed demo key line the Add machine sheet shows (not a real key). */
+private const val DEMO_PUBLIC_KEY: String =
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHk2x9Qd7mJ4vR8pL0wN3cT5bYfU1sE6aK2hG9jZ whistl"
+
+/** The host-key fingerprints the demo presents for `unknown.demo` and `changed.demo`. */
+private const val DEMO_FINGERPRINT: String = "SHA256:q8V3mZp1kT0rN7wLx2cY4bH6sJ9dF5gA3eU8iO0pQ1w"
+private const val DEMO_OLD_FINGERPRINT: String = "SHA256:Tr4nsT0pK9xLm2Qz8wVb5cNe1fGh7jRy3uDa6oIs0kE"
+
+/**
+ * The state a newly added demo machine starts in, chosen by its host name so screenshots and manual checks can reach each
+ * state. Names with `.demo` are the demo's own; any other host connects.
+ *
+ * @param host the validated host text.
+ * @return the connection state.
+ */
+private fun scriptedConnection(host: String): ConnectionState = when (host) {
+    "unknown.demo" -> ConnectionState.HostKeyUnknown("ssh-ed25519", DEMO_FINGERPRINT)
+    "changed.demo" -> ConnectionState.HostKeyChanged("ssh-ed25519", DEMO_OLD_FINGERPRINT, DEMO_FINGERPRINT)
+    "auth.demo" -> ConnectionState.Error(ErrorKind.AuthFailed)
+    "unreach.demo" -> ConnectionState.Offline
+    "slow.demo" -> ConnectionState.Connecting
+    else -> ConnectionState.Connected(DEMO_HELLO)
+}
+
+/** The demo's public key, the same line for every visit. */
+private object FakeClientKey : ClientPublicKey {
+    override fun publicKeyLine(): String = DEMO_PUBLIC_KEY
+}
+
+/** The installed agents of the demo machines. */
+private class FakeInstalled(state: FakeState) : InstalledAgentsRepository {
+    override val installed: StateFlow<Map<String, List<KnownAgent>>> = state.installedFlow.asStateFlow()
+}
 
 private val DEMO_HELLO = HelloResult(
     coreId = "demo",
@@ -103,6 +179,11 @@ private class FakeState {
     private val outputs = LinkedHashMap<String, MutableList<String>>()
     private var machineCounter = 0
     private var spaceCounter = 0L
+    private var startCounter = 0
+
+    /** The detected agents per machine: a connected machine's list, and an offline machine's last known list. */
+    private val installedByMachine = LinkedHashMap<String, List<KnownAgent>>()
+    val installedFlow = MutableStateFlow<Map<String, List<KnownAgent>>>(emptyMap())
 
     init {
         documents[MAC_MACHINE.id] = SpacesDocument(
@@ -149,6 +230,19 @@ private class FakeState {
         )
         addMachine(MAC_MACHINE, ConnectionState.Connected(DEMO_HELLO))
         addMachine(LAB_MACHINE, ConnectionState.Offline)
+        addMachine(BUILD_MACHINE, ConnectionState.Connecting)
+        addMachine(PI_MACHINE, ConnectionState.Error(ErrorKind.AuthFailed))
+        installedByMachine[MAC_MACHINE.id] = listOf(KnownAgents.table[0], KnownAgents.table[1], KnownAgents.table[3])
+        installedByMachine[LAB_MACHINE.id] = listOf(KnownAgents.table[0])
+        installedFlow.value = installedByMachine.toMap()
+    }
+
+    /** Replaces a machine's connection state and publishes. */
+    @Synchronized
+    fun setConnection(id: String, connection: ConnectionState) {
+        val flow = connections[id] ?: throw NoSuchElementException("no machine with id $id")
+        flow.value = connection
+        publish()
     }
 
     /** Adds a machine with the given connection state, and publishes. */
@@ -159,6 +253,20 @@ private class FakeState {
         publish()
     }
 
+    /**
+     * Sets a machine's state if the machine still exists: a background attempt may outlive a removed machine.
+     *
+     * @param id the machine.
+     * @param connection the state to show.
+     */
+    @Synchronized
+    fun setConnectionIfKnown(id: String, connection: ConnectionState) {
+        connections[id]?.let { flow ->
+            flow.value = connection
+            publish()
+        }
+    }
+
     /** Removes a machine with everything it held, and publishes. */
     @Synchronized
     fun removeMachine(id: String) {
@@ -166,6 +274,8 @@ private class FakeState {
         connections.remove(id)
         documents.remove(id)
         terminals.remove(id)
+        installedByMachine.remove(id)
+        installedFlow.value = installedByMachine.toMap()
         publish()
     }
 
@@ -187,6 +297,10 @@ private class FakeState {
     fun requireMachine(id: String) {
         if (id !in connections) throw NoSuchElementException("no machine with id $id")
     }
+
+    /** The host a machine was added with, for the demo's scripted outcomes. */
+    @Synchronized
+    fun hostOf(id: String): String = machineList.value.firstOrNull { it.id == id }?.host.orEmpty()
 
     /** Whether the machine is connected: only a connected machine accepts writes and shows agents. */
     @Synchronized
@@ -224,6 +338,40 @@ private class FakeState {
         outputs.getOrPut(address) { mutableListOf() } += line
     }
 
+    /**
+     * Starts a demo terminal in a space: a known agent with its argv, or the demo machine's shell. Like a started agent on a
+     * real machine, it is labelled with the space and joins the agents. Nothing runs and nothing is sent anywhere.
+     *
+     * @param machineId the machine.
+     * @param spaceId the space.
+     * @param choice the agent or the shell.
+     * @return the start result.
+     */
+    @Synchronized
+    fun startTerminal(machineId: String, spaceId: String, choice: StartChoice): StartResult {
+        if (!isConnected(machineId)) return StartResult.Offline
+        val space = documents[machineId]?.spaces?.firstOrNull { it.id == spaceId } ?: return StartResult.UnknownSpace
+        val resolution = demoResolution(space.folder)
+        if (resolution is FolderResolution.Unresolvable) return StartResult.FolderUnavailable(resolution.reason)
+        val argv = when (choice) {
+            is StartChoice.Known -> choice.agent.argv
+            StartChoice.Terminal -> listOf("/bin/zsh", "-l")
+        }
+        val address = "t-new-${++startCounter}"
+        val known = choice as? StartChoice.Known
+        val started = demoTerminal(
+            address = address,
+            status = if (known != null) AgentStatus.Working else null,
+            cwd = space.folder,
+            labels = mapOf(Agent.SPACE_LABEL to spaceId),
+            name = known?.agent?.displayName ?: "shell",
+        ).copy(argv = argv)
+        terminals[machineId] = terminals[machineId].orEmpty() + started
+        outputs[address] = mutableListOf("demo: started ${argv.first()}")
+        publish()
+        return StartResult.Started(address)
+    }
+
     /** A new machine id, for a machine added in the demo. */
     @Synchronized
     fun nextMachineId(): String = "demo-${++machineCounter}"
@@ -235,10 +383,12 @@ private class FakeState {
     /** Recomputes the three flows from the held data. Called after every mutation. */
     private fun publish() {
         groupFlow.value = machineList.value.map { machine ->
+            val spaces = sortSpaces(documents[machine.id]?.spaces.orEmpty())
             MachineSpaces(
                 machineId = machine.id,
                 offline = !isConnected(machine.id),
-                spaces = sortSpaces(documents[machine.id]?.spaces.orEmpty()),
+                spaces = spaces,
+                resolutions = spaces.associate { it.id to demoResolution(it.folder) },
             )
         }
         val agents = machineList.value.filter { isConnected(it.id) }.flatMap { machine ->
@@ -279,14 +429,21 @@ private class FakeState {
     }
 }
 
+/** How long the demo's first attempt takes, so the Add sheet shows its connecting stage before the outcome. */
+private const val DEMO_ATTEMPT_MS: Long = 400L
+
 /** The machines of the demo. Adding one validates it the way the real repository does; no machine is contacted. */
 private class FakeMachines(private val state: FakeState) : MachinesRepository {
+    /** Runs the demo's first attempt of an added machine in the background, as the real connection does. */
+    private val attempts = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     override fun machines(): StateFlow<List<Machine>> = state.machineList.asStateFlow()
 
     override fun observe(id: String): StateFlow<ConnectionState> = state.connectionOf(id)
 
     override suspend fun add(draft: NewMachine, password: CharArray?): AddResult {
-        // The demo keeps no password: the parameter is accepted and dropped.
+        // The demo keeps no password: the parameter is accepted and dropped. The first state is Offline, as a new machine's
+        // is; the attempt then starts (Connecting) and ends in the scripted state, as the real connection does.
         val host = when (val r = validateHost(draft.host)) {
             is Validation.Valid -> r.value.text
             is Validation.Invalid -> return AddResult.Rejected(MachineField.Host, r.reason)
@@ -304,7 +461,12 @@ private class FakeMachines(private val state: FakeState) : MachinesRepository {
             is Validation.Invalid -> return AddResult.Rejected(MachineField.Name, r.reason)
         }
         val machine = Machine(id = state.nextMachineId(), name = name, host = host, port = port, user = user)
-        state.addMachine(machine)
+        state.addMachine(machine, ConnectionState.Offline)
+        attempts.launch {
+            state.setConnectionIfKnown(machine.id, ConnectionState.Connecting)
+            delay(DEMO_ATTEMPT_MS)
+            state.setConnectionIfKnown(machine.id, scriptedConnection(host))
+        }
         return AddResult.Added(machine)
     }
 
@@ -317,7 +479,22 @@ private class FakeMachines(private val state: FakeState) : MachinesRepository {
         return FakeLease(id)
     }
 
-    override suspend fun confirmHostKey(id: String): ConfirmResult = ConfirmResult.NothingPending
+    override suspend fun reconnect(id: String) {
+        val current = state.connectionOf(id).value
+        if (current !is ConnectionState.Offline && current !is ConnectionState.Error) return
+        state.setConnection(id, ConnectionState.Connecting)
+        state.setConnection(id, scriptedConnection(state.hostOf(id)))
+    }
+
+    override suspend fun confirmHostKey(id: String): ConfirmResult = when (state.connectionOf(id).value) {
+        is ConnectionState.HostKeyUnknown -> {
+            state.setConnection(id, ConnectionState.Connected(DEMO_HELLO))
+            ConfirmResult.Trusted
+        }
+
+        is ConnectionState.HostKeyChanged -> ConfirmResult.Blocked
+        else -> ConfirmResult.NothingPending
+    }
 }
 
 /** A lease that holds nothing: the demo has no live session to keep open. */
@@ -330,11 +507,27 @@ private class FakeLease(override val machineId: String) : MachineLease {
 }
 
 /** The agents of the demo: those on connected machines, with the space each one matches. */
-private class FakeAgents(state: FakeState) : AgentsRepository {
+private class FakeAgents(private val state: FakeState) : AgentsRepository {
     override val agents: StateFlow<List<MachineAgent>> = state.agentFlow.asStateFlow()
 
     override val blockedCount: StateFlow<Int> = state.blockedFlow.asStateFlow()
+
+    override suspend fun start(machineId: String, spaceId: String, choice: StartChoice): StartResult =
+        state.startTerminal(machineId, spaceId, choice)
 }
+
+/**
+ * The folder resolution the demo gives a space's folder. `/home/demo/docs` does not exist on the demo machine, so its row shows
+ * the typed reason; every other folder resolves to itself.
+ *
+ * @param folder the folder as stored.
+ * @return the resolution.
+ */
+private fun demoResolution(folder: String): FolderResolution =
+    if (folder == DEMO_MISSING_FOLDER) FolderResolution.Unresolvable(UnresolvableReason.NotFound) else FolderResolution.Resolved(folder)
+
+/** The folder of the demo's `docs` space, which the demo treats as missing on its machine. */
+private const val DEMO_MISSING_FOLDER: String = "/home/demo/docs"
 
 /**
  * The spaces of the demo. Edits follow the real repository's rules: an unknown space is reported first, then a write to an

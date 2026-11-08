@@ -8,6 +8,9 @@ import io.github.werlang.whistl.core.ssh.JavaSecurityRegistry
 import io.github.werlang.whistl.core.ssh.KeyManager
 import io.github.werlang.whistl.core.ssh.SshMachineConnector
 import io.github.werlang.whistl.data.AgentsRepository
+import io.github.werlang.whistl.data.ClientPublicKey
+import io.github.werlang.whistl.data.DefaultInstalledAgentsRepository
+import io.github.werlang.whistl.data.InstalledAgentsRepository
 import io.github.werlang.whistl.data.DefaultAgentsRepository
 import io.github.werlang.whistl.data.DefaultMachinesRepository
 import io.github.werlang.whistl.data.DefaultSettingsRepository
@@ -44,9 +47,13 @@ import java.security.SecureRandom
  * @param context any context; the application context is kept.
  * @param demoMode `true` to run on the demo data when this build has it.
  */
-class AppContainer(context: Context, demoMode: Boolean = false) {
+class AppContainer(
+    context: Context,
+    demoMode: Boolean = false,
+    demoCore: DemoCore? = null,
+) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val demo: DemoCore? = if (demoMode) DemoCores.fake() else null
+    private val demo: DemoCore? = demoCore ?: if (demoMode) DemoCores.fake() else null
     private val live: LiveCore by lazy { LiveCore(context.applicationContext, scope) }
 
     /** The machines the user added, and their connections. */
@@ -64,8 +71,29 @@ class AppContainer(context: Context, demoMode: Boolean = false) {
     /** The app settings: language, font size, theme and the shortcut bar. */
     val settings: SettingsRepository = DefaultSettingsRepository(SharedPreferencesSettingsStore(context.applicationContext))
 
-    /** The known agents installed on a machine, cached for one minute per machine. */
-    val installedAgents: InstalledAgentsDetector = InstalledAgentsDetector(AndroidClock)
+    /** The installed agents of each machine, from the detection that runs when a machine connects. */
+    val installed: InstalledAgentsRepository = demo?.installed ?: live.installed
+
+    /** This device's public key line, for the Add machine sheet. */
+    val clientKey: ClientPublicKey = demo?.clientKey ?: live.clientKey
+}
+
+/**
+ * The client key's public line, from the Keystore-held key. The key is generated on first use, so the line exists before any
+ * connection (SPEC §6).
+ *
+ * @param keys the app's client key.
+ */
+private class KeyPublicKey(private val keys: KeyManager) : ClientPublicKey {
+    override fun publicKeyLine(): String {
+        keys.ensureKey()
+        return keys.publicKeyLine(COMMENT)
+    }
+
+    private companion object {
+        /** The comment at the end of the public line. */
+        const val COMMENT = "whistl"
+    }
 }
 
 /**
@@ -111,4 +139,12 @@ private class LiveCore(context: Context, scope: CoroutineScope) {
     )
 
     val terminals: TerminalRepository = DefaultTerminalRepository(scope = scope, machines = machines)
+
+    val installed: InstalledAgentsRepository = DefaultInstalledAgentsRepository(
+        scope = scope,
+        machines = machines,
+        detector = InstalledAgentsDetector(AndroidClock),
+    )
+
+    val clientKey: ClientPublicKey = KeyPublicKey(keys)
 }

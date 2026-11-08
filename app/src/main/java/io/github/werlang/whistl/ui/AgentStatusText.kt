@@ -25,14 +25,33 @@ fun statusLabelRes(status: AgentStatus?): Int = when (status) {
 }
 
 /**
- * The colour of a status dot (SPEC §3). A plain program uses the muted colour.
+ * The label of an agent (V3, phase 4b). A terminal that is not live is "finished" whatever its last status was; a live terminal
+ * that is waiting for the user is "needs you" (the same rule as the badge, `isWaitingForUser`); otherwise its status.
+ *
+ * @param live whether the terminal is live.
+ * @param waiting whether the terminal is live and blocked (`isWaitingForUser()`).
+ * @param status the agent's last status, or `null` for a plain program.
+ * @return the string resource.
+ */
+@StringRes
+fun agentLabelRes(live: Boolean, waiting: Boolean, status: AgentStatus?): Int = when {
+    !live -> R.string.status_finished
+    waiting -> R.string.status_needs_you
+    else -> statusLabelRes(status)
+}
+
+/**
+ * The colour of a status dot (SPEC §3). A plain program uses the muted colour; a terminal that is not live uses the idle
+ * colour, whatever its last status.
  *
  * @param status the agent's status, or `null` for a plain program.
+ * @param live whether the terminal is live.
  * @return the colour from the theme.
  */
 @Composable
-fun statusColor(status: AgentStatus?): Color {
+fun statusColor(status: AgentStatus?, live: Boolean = true): Color {
     val tokens = LocalWhistlTokens.current
+    if (!live) return tokens.idle
     return when (status) {
         AgentStatus.Working -> tokens.working
         AgentStatus.Blocked -> tokens.blocked
