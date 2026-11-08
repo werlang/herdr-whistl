@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark window from the first frame, so there is no white flash before Compose draws. -->
+    <style name="Theme.Whistl" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/whistl_window_background</item>
+        <item name="android:colorBackground">@color/whistl_window_background</item>
+        <item name="android:statusBarColor">@color/whistl_window_background</item>
+        <item name="android:navigationBarColor">@color/whistl_window_background</item>
+    </style>
+</resources>
