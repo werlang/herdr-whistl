@@ -19,6 +19,7 @@ import java.io.IOException
 import java.net.ConnectException
 import java.net.UnknownHostException
 import java.security.NoSuchAlgorithmException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -666,5 +667,71 @@ class MachinesRepositoryTest {
 
         h.repo.edit(id, NewMachine("", "homelab.example", 22, "root"), AuthMethod.Key, null)
         assertNull(h.secrets.get(DefaultMachinesRepository.passwordAlias(id)))
+    }
+
+    /**
+     * P2 follow-up: an attempt to the old host is in flight (held inside connect, before its host key is checked) when an edit
+     * changes the host. The old attempt then completes with a refusal carrying the old host's key. That refusal must not reach
+     * the slot: the state never shows the old key, and confirming the new host pins the new key, never the old one.
+     */
+    @Test
+    fun aStaleRefusalFromTheOldHostCannotLeakItsKeyIntoTheNewHost() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab(pinned = false)
+        val oldKey = SshWire.ed25519Blob(ByteArray(32) { 7 })
+        val newKey = SshWire.ed25519Blob(ByteArray(32) { 9 })
+        val release = CompletableDeferred<Unit>()
+        h.connector.script(
+            FakeMachineConnector.Attempt.Suspended(release, FakeMachineConnector.Attempt.PresentKey(oldKey), beforeHostKey = true),
+            FakeMachineConnector.Attempt.PresentKey(newKey),
+        )
+        val seen = h.record(id)
+        h.repo.acquire(id)
+        runCurrent()
+
+        h.repo.edit(id, NewMachine("", "new.example", 22, "root"), AuthMethod.Key)
+        runCurrent()
+        assertEquals(SshFingerprint.of(newKey), (h.repo.observe(id).value as ConnectionState.HostKeyUnknown).fingerprint)
+
+        release.complete(Unit)
+        runCurrent()
+
+        val oldFingerprint = SshFingerprint.of(oldKey)
+        assertTrue("the old key was shown: ${seen.kinds()}", seen.none { it is ConnectionState.HostKeyUnknown && it.fingerprint == oldFingerprint })
+        assertEquals(SshFingerprint.of(newKey), (h.repo.observe(id).value as ConnectionState.HostKeyUnknown).fingerprint)
+        h.connector.script(FakeMachineConnector.Attempt.PresentKey(newKey))
+        assertEquals(ConfirmResult.Trusted, h.repo.confirmHostKey(id))
+        runCurrent()
+        assertTrue(h.hostKeys.pinned(id)!!.blob.contentEquals(newKey))
+    }
+
+    /**
+     * P2 follow-up, the late success: an attempt to the old host passes its host-key check against the old pin, is held before its
+     * session opens, and the edit then changes the host. When the old attempt completes, its session must be closed, not adopted:
+     * the slot stays on the new host's state, and no session stays open.
+     */
+    @Test
+    fun aLateSuccessOfTheOldHostIsClosedNotAdopted() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab(pinned = true)
+        val newKey = SshWire.ed25519Blob(ByteArray(32) { 9 })
+        val release = CompletableDeferred<Unit>()
+        h.connector.script(
+            FakeMachineConnector.Attempt.Suspended(release, FakeMachineConnector.Attempt.Healthy, beforeHostKey = false),
+            FakeMachineConnector.Attempt.PresentKey(newKey),
+        )
+        h.repo.acquire(id)
+        runCurrent()
+
+        h.repo.edit(id, NewMachine("", "new.example", 22, "root"), AuthMethod.Key)
+        runCurrent()
+        assertTrue(h.repo.observe(id).value is ConnectionState.HostKeyUnknown)
+
+        release.complete(Unit)
+        runCurrent()
+
+        assertTrue("the old session was adopted: ${h.repo.observe(id).value}", h.repo.observe(id).value is ConnectionState.HostKeyUnknown)
+        assertEquals(0, h.openSessions())
+        assertNull(h.hostKeys.pinned(id))
     }
 }

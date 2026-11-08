@@ -116,8 +116,7 @@ class DefaultMachinesRepository(
     override suspend fun remove(id: String) {
         lock.withLock {
             val slot = slots.remove(id) ?: return
-            slot.job?.cancel()
-            slot.job = null
+            cancelAttempt(slot)
             slot.holders = 0
             val dying = slot.session
             slot.session = null
@@ -144,8 +143,7 @@ class DefaultMachinesRepository(
         lock.withLock {
             val slot = slotFor(id)
             if (slot.holders == 0 || !canConnect(slot.state.value)) return
-            slot.job?.cancel()
-            slot.job = null
+            cancelAttempt(slot)
             slot.attempt = 0
             startAttempt(slot, delayMillis = 0L)
         }
@@ -262,8 +260,7 @@ class DefaultMachinesRepository(
             val slot = slots[id] ?: return
             if (slot.holders > 0) slot.holders--
             if (slot.holders > 0) return
-            slot.job?.cancel()
-            slot.job = null
+            cancelAttempt(slot)
             slot.attempt = 0
             val dying = slot.session
             slot.session = null
@@ -275,37 +272,49 @@ class DefaultMachinesRepository(
         }
     }
 
-    /** One connection attempt, from start to a stable state. Runs in a job owned by the slot. */
-    private suspend fun attempt(slot: Slot) {
-        lock.withLock { slot.state.value = ConnectionState.Connecting }
+    /**
+     * One connection attempt, from start to a stable state. Runs in a job owned by the slot, and writes to the slot only while
+     * [generation] is still the slot's: an attempt that was superseded (a host change, a release, a removal) may still finish
+     * its blocking connect, but it cannot change the state or keep its session (phase 7 P2 follow-up).
+     *
+     * @param slot the machine's slot.
+     * @param generation the slot's generation when the attempt was started.
+     */
+    private suspend fun attempt(slot: Slot, generation: Long) {
+        lock.withLock { if (slot.generation == generation) slot.state.value = ConnectionState.Connecting }
         val gate = HostKeyGate(policy, slot.machine.id)
         val session = try {
             connector.connect(slot.machine, resolveAuth(slot.stored), gate)
         } catch (e: CancellationException) {
             throw e
         } catch (e: HostKeyRefused) {
-            onHostKeyRefused(slot, e)
+            onHostKeyRefused(slot, generation, e)
             return
         } catch (e: AuthFailed) {
-            finish(slot, ConnectionState.Error(ErrorKind.AuthFailed))
+            finish(slot, generation, ConnectionState.Error(ErrorKind.AuthFailed))
             return
         } catch (e: UnsupportedGeneration) {
-            finish(slot, ConnectionState.Error(ErrorKind.UnsupportedGeneration))
+            finish(slot, generation, ConnectionState.Error(ErrorKind.UnsupportedGeneration))
             return
         } catch (e: Throwable) {
             // Only a network failure retries on its own. A refused port or a failure inside the app is an error the user
             // acts on (phase 7 r1c): retrying would repeat it, and the app's own failure must not read as "unreachable".
             when (failureStage(e, errnoOf)) {
-                FailureStage.Unreachable -> onOffline(slot)
-                FailureStage.Refused -> finish(slot, ConnectionState.Error(ErrorKind.ConnectionRefused))
+                FailureStage.Unreachable -> onOffline(slot, generation)
+                FailureStage.Refused -> finish(slot, generation, ConnectionState.Error(ErrorKind.ConnectionRefused))
                 FailureStage.Internal -> {
                     reportInternal("connection failed inside the app: ${classChain(e)}")
-                    finish(slot, ConnectionState.Error(ErrorKind.Internal))
+                    finish(slot, generation, ConnectionState.Error(ErrorKind.Internal))
                 }
             }
             return
         }
         lock.withLock {
+            if (slot.generation != generation) {
+                // Superseded while its connect was blocked: the session it opened belongs to the old settings, so it is closed.
+                session.close()
+                return
+            }
             slot.job = null
             if (slot.holders == 0) {
                 // Released while connecting: nothing may stay open.
@@ -320,8 +329,10 @@ class DefaultMachinesRepository(
         }
     }
 
-    private suspend fun onHostKeyRefused(slot: Slot, refused: HostKeyRefused) {
+    private suspend fun onHostKeyRefused(slot: Slot, generation: Long, refused: HostKeyRefused) {
         lock.withLock {
+            // A refusal from a superseded attempt is about the old host: it must not reach the slot or its pending key.
+            if (slot.generation != generation) return
             slot.job = null
             when (val decision = refused.decision) {
                 is HostKeyDecision.Unknown -> {
@@ -347,15 +358,17 @@ class DefaultMachinesRepository(
         }
     }
 
-    private suspend fun finish(slot: Slot, state: ConnectionState) {
+    private suspend fun finish(slot: Slot, generation: Long, state: ConnectionState) {
         lock.withLock {
+            if (slot.generation != generation) return
             slot.job = null
             slot.state.value = state
         }
     }
 
-    private suspend fun onOffline(slot: Slot) {
+    private suspend fun onOffline(slot: Slot, generation: Long) {
         lock.withLock {
+            if (slot.generation != generation) return
             slot.job = null
             slot.state.value = ConnectionState.Offline
             scheduleRetry(slot)
@@ -384,10 +397,21 @@ class DefaultMachinesRepository(
 
     /** Starts the slot's attempt after [delayMillis], unless a lease is no longer held. Call with the lock held. */
     private fun startAttempt(slot: Slot, delayMillis: Long) {
+        val generation = slot.generation
         slot.job = scope.launch {
             if (delayMillis > 0L) delay(delayMillis)
-            attempt(slot)
+            attempt(slot, generation)
         }
+    }
+
+    /**
+     * Supersedes the slot's attempt: its generation moves on, so whatever the attempt still returns is ignored, and its job is
+     * cancelled. Call with the lock held.
+     */
+    private fun cancelAttempt(slot: Slot) {
+        slot.generation++
+        slot.job?.cancel()
+        slot.job = null
     }
 
     /** Schedules the next retry with backoff while any lease is held. Call with the lock held. */
@@ -430,8 +454,7 @@ class DefaultMachinesRepository(
      * a stale connected or connecting state does not stay on screen. Call with the lock held.
      */
     private suspend fun restartConnection(slot: Slot) {
-        slot.job?.cancel()
-        slot.job = null
+        cancelAttempt(slot)
         slot.attempt = 0
         val dying = slot.session
         slot.session = null
@@ -476,6 +499,12 @@ class DefaultMachinesRepository(
         var job: Job? = null
         var attempt: Int = 0
         var pendingKey: PresentedHostKey? = null
+
+        /**
+         * Counts the slot's superseded attempts. An attempt writes only while its generation is the current one, so a result that
+         * arrives after a host change, a release or a removal is ignored (phase 7 P2 follow-up).
+         */
+        var generation: Long = 0L
     }
 
     companion object {

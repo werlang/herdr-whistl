@@ -15,6 +15,8 @@ import io.github.werlang.whistl.domain.Machine
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -55,6 +57,22 @@ class FakeMachineConnector(private val scope: CoroutineScope) : MachineConnector
          * @property error the failure to throw.
          */
         class Fails(val error: Throwable) : Attempt
+
+        /**
+         * The attempt is held inside `connect` until [release] completes, then runs [then]. The hold is not cancellable, as a
+         * blocking socket call is not: cancelling the attempt does not end the hold, so the call returns later, as it does in
+         * production.
+         *
+         * @property release completed by the test to let the attempt go on.
+         * @property then the attempt the connection runs after the hold.
+         * @property beforeHostKey `true` to hold before the host key is checked (the key exchange is still running), `false`
+         *   to hold after it (the key was checked against the pin at that time, and the session has not been opened yet).
+         */
+        class Suspended(
+            val release: CompletableDeferred<Unit>,
+            val then: Attempt,
+            val beforeHostKey: Boolean,
+        ) : Attempt
 
         /**
          * A different host key is presented. For an unpinned machine this is an unknown key; for a pinned one, a changed key.
@@ -113,9 +131,21 @@ class FakeMachineConnector(private val scope: CoroutineScope) : MachineConnector
         queued.addAll(attempts.toList())
     }
 
+    /**
+     * Holds a suspended attempt until the test releases it. Not cancellable: see [Attempt.Suspended].
+     *
+     * @param held the held attempt.
+     */
+    private suspend fun holdUntilReleased(held: Attempt.Suspended) {
+        withContext(NonCancellable) { held.release.await() }
+    }
+
     override suspend fun connect(machine: Machine, auth: SshAuth, gate: HostKeyGate): MachineSession {
         connectCalls++
-        val attempt = queued.removeFirstOrNull() ?: Attempt.Healthy
+        val scripted = queued.removeFirstOrNull() ?: Attempt.Healthy
+        val held = scripted as? Attempt.Suspended
+        val attempt = held?.then ?: scripted
+        if (held != null && held.beforeHostKey) holdUntilReleased(held)
         if (attempt is Attempt.Unreachable) throw TransportLost("open failed")
         if (attempt is Attempt.Fails) throw attempt.error
         if (attempt is Attempt.AuthRefused) throw AuthFailed()
@@ -123,6 +153,7 @@ class FakeMachineConnector(private val scope: CoroutineScope) : MachineConnector
         if (!gate.admit(SshWire.ED25519, presented)) {
             throw HostKeyRefused(gate.lastDecision!!, gate.lastPresented)
         }
+        if (held != null && !held.beforeHostKey) holdUntilReleased(held)
         val fixture = Fixtures.load("hello.json")
         val response = if (attempt is Attempt.GenerationTwo) fixture.response.withGeneration(2) else fixture.response
         val pipe: LinePipe = FakeLinePipe { line ->
@@ -146,7 +177,9 @@ class FakeMachineConnector(private val scope: CoroutineScope) : MachineConnector
             scope,
         )
         helloCalls++
-        val hello = client.hello()
+        // A held attempt that was cancelled while held still finishes its open, as a blocking call does: the session it makes is
+        // returned to the caller, which must then close it.
+        val hello = if (held != null && !held.beforeHostKey) withContext(NonCancellable) { client.hello() } else client.hello()
         sessionsOpened++
         return FakeSession(client, hello, sessionEventsPipes).also { lastSession = it }
     }
