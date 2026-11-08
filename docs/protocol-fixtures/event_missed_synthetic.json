@@ -1,0 +1,25 @@
+{
+  "synthetic": "hc 0.1.18 could not be made to emit missed on demand; these are the two shapes SPEC §5 allows. Re-record when observed.",
+  "notifications": [
+    {
+      "jsonrpc": "2.0",
+      "method": "missed",
+      "params": {
+        "seq": 10700,
+        "terminals": []
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "event",
+      "params": {
+        "type": "missed",
+        "seq": 10700,
+        "data": {
+          "seq": 10700,
+          "terminals": []
+        }
+      }
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.core.rpc
 
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -135,6 +136,21 @@ sealed class HcEvent {
                 wire.type == "missed" -> Missed(wire.seq, data)
                 else -> Unknown(wire.seq, wire.type, terminal, data)
             }
+        }
+
+        /**
+         * Like [fromParams], but returns `null` for params that are not an event object: a `null`, an array, a wrong field type.
+         * The events pipeline uses this, so one bad line from the core drops that line and nothing else (phase 6 P0-2).
+         *
+         * @param params the raw `params` element.
+         * @return the parsed event, or `null` when the params do not decode.
+         */
+        fun fromParamsOrNull(params: JsonElement): HcEvent? = try {
+            fromParams(params)
+        } catch (e: SerializationException) {
+            null
+        } catch (e: IllegalArgumentException) {
+            null
         }
 
         /** Reads `data.labels` as a string map. Non-string values are skipped. */

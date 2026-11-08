@@ -7,6 +7,7 @@ import io.github.werlang.whistl.support.assertThrowsSuspend
 import io.github.werlang.whistl.support.requestIdOf
 import io.github.werlang.whistl.support.withId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -155,6 +156,46 @@ class JsonRpcConnectionTest {
         assertTrue(events[1] is HcEvent.LabelsChanged)
         assertTrue(events[2] is HcEvent.TerminalChanged)
         assertTrue(pipe.written.isEmpty())
+    }
+
+    /**
+     * P0-7: a write that never completes fails the call at its window. Before, the write sat outside the timeout, so the call
+     * (and the write lock) waited forever. The window is virtual time, so the test is exact.
+     */
+    @Test
+    fun aWriteThatNeverCompletesFailsTheCallAtItsTimeout() = runTest {
+        val connection = JsonRpcConnection(FakeLinePipe { awaitCancellation() }, backgroundScope)
+        val started = testScheduler.currentTime
+        var failure: HcException? = null
+
+        try {
+            connection.call("terminal.list", JsonObject(emptyMap()), timeoutMillis = 5_000L)
+        } catch (e: HcException) {
+            failure = e
+        }
+
+        assertTrue("the call failed with a timeout", failure is Timeout)
+        assertEquals("it failed at its window", 5_000L, testScheduler.currentTime - started)
+    }
+
+    /**
+     * P0-7: a stuck write on one connection does not stall another connection. Each connection has its own write lock and
+     * reader, so the other call completes while the first one is still waiting.
+     */
+    @Test
+    fun aStuckWriteOnOneConnectionDoesNotStallAnother() = runTest {
+        val stuck = JsonRpcConnection(FakeLinePipe { awaitCancellation() }, backgroundScope)
+        val answering = JsonRpcConnection(
+            FakeLinePipe { line -> push(withId(emptyResult(), requestIdOf(line))) },
+            backgroundScope,
+        )
+        val stuckCall = launch { runCatching { stuck.call("terminal.list", JsonObject(emptyMap()), timeoutMillis = 5_000L) } }
+        runCurrent()
+
+        answering.call("terminal.list", JsonObject(emptyMap()), timeoutMillis = 5_000L)
+
+        assertTrue("the other connection answered while the stuck call was still waiting", stuckCall.isActive)
+        stuckCall.join()
     }
 
     private fun emptyResult(): JsonObject =

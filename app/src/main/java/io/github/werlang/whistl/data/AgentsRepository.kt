@@ -2,6 +2,7 @@ package io.github.werlang.whistl.data
 
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.HcEvent
+import io.github.werlang.whistl.core.rpc.EventSubscription
 import io.github.werlang.whistl.core.rpc.HcException
 import io.github.werlang.whistl.core.rpc.SpawnFailed
 import io.github.werlang.whistl.core.rpc.TransportLost
@@ -246,8 +247,10 @@ class DefaultAgentsRepository(
         endSubscription(id)
         check(subscriptions[id] == null) { "one events subscription per machine at a time" }
         val job = scope.launch {
+            var open: EventSubscription? = null
             try {
                 val subscription = client.eventsSubscribe(null)
+                open = subscription
                 // Folder probes are not agents: the snapshot drops them as the events reducer does.
                 val agentsOnly = subscription.terminals.filterNot { it.isProbe() }
                 terminals.update { all -> all + (id to agentsOnly.associateBy { it.address }) }
@@ -258,6 +261,9 @@ class DefaultAgentsRepository(
                 // The subscribe failed, or the channel reported an error: the session cannot serve events.
                 lease.reportLost(client, TransportLost("events channel failed: ${e::class.java.simpleName}"))
             } finally {
+                // Cancelling this job (a new subscription, or the machine leaving Connected) must still close the connection
+                // before anything else opens one: the events channel is one per machine (phase 6 P0-6).
+                withContext(NonCancellable) { open?.close() }
                 terminals.update { it - id }
             }
         }
