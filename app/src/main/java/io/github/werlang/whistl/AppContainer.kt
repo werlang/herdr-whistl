@@ -86,7 +86,7 @@ class AppContainer(
  *
  * @param keys the app's client key.
  */
-private class KeyPublicKey(private val keys: KeyManager) : ClientPublicKey {
+internal class KeyPublicKey(private val keys: KeyManager) : ClientPublicKey {
     override fun publicKeyLine(): String {
         keys.ensureKey()
         return keys.publicKeyLine(COMMENT)
