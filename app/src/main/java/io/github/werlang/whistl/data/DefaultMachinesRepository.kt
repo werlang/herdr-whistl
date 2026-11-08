@@ -2,6 +2,7 @@ package io.github.werlang.whistl.data
 
 import io.github.werlang.whistl.core.rpc.AuthFailed
 import io.github.werlang.whistl.core.rpc.HcClient
+import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.core.rpc.UnsupportedGeneration
 import io.github.werlang.whistl.core.secure.SecretStore
 import io.github.werlang.whistl.core.ssh.HostKeyDecision
@@ -190,6 +191,11 @@ class DefaultMachinesRepository(
 
         override suspend fun release() {
             if (released.compareAndSet(false, true)) releaseSlot(machineId)
+        }
+
+        override fun reportLost(client: HcClient, cause: TransportLost) {
+            val session = slots[machineId]?.session ?: return
+            if (session.client === client) session.reportLost(cause)
         }
     }
 

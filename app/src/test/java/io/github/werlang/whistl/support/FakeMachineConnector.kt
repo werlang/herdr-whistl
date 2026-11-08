@@ -15,10 +15,12 @@ import io.github.werlang.whistl.domain.Machine
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import io.github.werlang.whistl.core.rpc.LinePipe
 
 /**
@@ -80,6 +82,21 @@ class FakeMachineConnector(private val scope: CoroutineScope) : MachineConnector
     val defaultKey: ByteArray = SshWire.ed25519Blob(ByteArray(32) { 1 })
 
     /**
+     * Builds the events channel each `eventsSubscribe` opens. The default is an empty pipe, as in the lifecycle tests.
+     * Agent tests replace it with a pipe that answers `events.subscribe` with a snapshot.
+     */
+    var eventsPipeFactory: () -> FakeLinePipe = { FakeLinePipe() }
+
+    /** Every events channel opened on any session, in order. */
+    val eventsPipes: MutableList<FakeLinePipe> = mutableListOf()
+
+    /**
+     * Answers command-channel requests other than `hello`. The request is passed without its `id`; the reply is sent
+     * with the client's id. Returning `null` stays silent, so the request times out.
+     */
+    var commandReply: (JsonObject) -> JsonObject? = { null }
+
+    /**
      * Queues attempts, consumed in order by later `connect` calls.
      *
      * @param attempts the attempts to queue.
@@ -99,12 +116,30 @@ class FakeMachineConnector(private val scope: CoroutineScope) : MachineConnector
         }
         val fixture = Fixtures.load("hello.json")
         val response = if (attempt is Attempt.GenerationTwo) fixture.response.withGeneration(2) else fixture.response
-        val pipe: LinePipe = FakeLinePipe.replaying(fixture, response)
-        val client = HcClient(JsonRpcConnection(pipe, scope), { FakeLinePipe() }, scope)
+        val pipe: LinePipe = FakeLinePipe { line ->
+            val request = Json.parseToJsonElement(line).jsonObject
+            if (request["method"]?.jsonPrimitive?.content == "hello") {
+                assertRequestMatches(fixture.request, line, fixture.name)
+                push(withId(response, requestIdOf(line)))
+            } else {
+                commandReply(request.withoutId())?.let { push(withId(it, requestIdOf(line))) }
+            }
+        }
+        val sessionEventsPipes = mutableListOf<FakeLinePipe>()
+        val client = HcClient(
+            JsonRpcConnection(pipe, scope),
+            {
+                eventsPipeFactory().also {
+                    sessionEventsPipes += it
+                    eventsPipes += it
+                }
+            },
+            scope,
+        )
         helloCalls++
         val hello = client.hello()
         sessionsOpened++
-        return FakeSession(client, hello).also { lastSession = it }
+        return FakeSession(client, hello, sessionEventsPipes).also { lastSession = it }
     }
 
     /**
@@ -116,13 +151,19 @@ class FakeMachineConnector(private val scope: CoroutineScope) : MachineConnector
     inner class FakeSession(
         override val client: HcClient,
         override val hello: HelloResult,
+        private val eventsChannels: List<FakeLinePipe>,
     ) : MachineSession {
         private val signal = CompletableDeferred<TransportLost>()
         private var closed = false
 
+        /** How many times the lifecycle reported this session lost through [reportLost]. */
+        var reportedLosses: Int = 0
+            private set
+
         override val lost: Deferred<TransportLost> = signal
 
         override fun reportLost(cause: TransportLost) {
+            reportedLosses++
             signal.complete(cause)
         }
 
@@ -130,6 +171,7 @@ class FakeMachineConnector(private val scope: CoroutineScope) : MachineConnector
             if (!closed) {
                 closed = true
                 sessionsClosed++
+                eventsChannels.forEach { it.close() }
             }
             signal.complete(TransportLost("session closed by the app"))
         }

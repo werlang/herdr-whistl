@@ -1,6 +1,7 @@
 package io.github.werlang.whistl.data
 
 import io.github.werlang.whistl.core.rpc.HcClient
+import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.domain.HelloResult
 import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.domain.Rejection
@@ -157,6 +158,16 @@ interface MachineLease {
 
     /** Gives this lease back. Releasing a second time does nothing. */
     suspend fun release()
+
+    /**
+     * Reports that the session behind [client] was lost, seen on its events channel (the 40 s watchdog). The
+     * machine goes offline and retries. A report for a client that is no longer the machine's current session does
+     * nothing, so a stale subscription cannot take down a newer session.
+     *
+     * @param client the client whose events channel failed.
+     * @param cause the failure.
+     */
+    fun reportLost(client: HcClient, cause: TransportLost)
 }
 
 /**

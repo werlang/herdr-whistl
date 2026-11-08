@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.support
 
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -33,6 +34,25 @@ fun scriptedPipe(vararg exchanges: Exchange): FakeLinePipe {
         next++
         assertRequestMatches(exchange.request, line, exchange.label)
         push(withId(exchange.response, requestIdOf(line)))
+    }
+}
+
+/**
+ * A command-channel reply function that expects exactly [exchanges], in order, like [scriptedPipe] but for
+ * [FakeMachineConnector.commandReply]. Each request (without its id) must equal the next exchange's request; the reply
+ * is that exchange's response.
+ *
+ * @param exchanges the exchanges in the order the client must make them.
+ * @return the reply function.
+ */
+fun scriptedCommands(vararg exchanges: Exchange): (JsonObject) -> JsonObject? {
+    var next = 0
+    return { request ->
+        check(next < exchanges.size) { "unexpected command: the script had ${exchanges.size} exchanges" }
+        val exchange = exchanges[next]
+        next++
+        assertRequestMatches(exchange.request, Json.encodeToString(JsonObject.serializer(), request), exchange.label)
+        exchange.response
     }
 }
 
