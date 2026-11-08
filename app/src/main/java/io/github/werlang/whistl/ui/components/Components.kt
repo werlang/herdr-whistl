@@ -108,9 +108,3 @@ fun CountChip(label: String, count: Int, selected: Boolean, onClick: () -> Unit)
     )
 }
 
-/**
- * Padding that keeps a control's text clear of the screen edge (16 dp gutter, SPEC §3).
- *
- * @return the modifier.
- */
-fun Modifier.screenGutter(): Modifier = this.padding(horizontal = 16.dp)
