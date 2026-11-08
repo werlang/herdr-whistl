@@ -34,7 +34,7 @@ import io.github.werlang.whistl.ui.components.CountChip
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.StatusLabel
 import io.github.werlang.whistl.ui.statusColor
-import io.github.werlang.whistl.ui.statusLabelRes
+import io.github.werlang.whistl.ui.agentLabelRes
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
 
@@ -125,7 +125,7 @@ private fun AgentCard(row: AgentRow, onClick: () -> Unit) {
         row.machineName,
         row.spaceName ?: stringResource(R.string.common_no_space),
     ).joinToString(" · ")
-    val status = statusLabelRes(row.status)
+    val status = agentLabelRes(live = row.live, waiting = row.waiting, status = row.status)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -156,7 +156,7 @@ private fun AgentCard(row: AgentRow, onClick: () -> Unit) {
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                StatusLabel(label = stringResource(status), color = statusColor(row.status))
+                StatusLabel(label = stringResource(status), color = statusColor(row.status, row.live))
                 Spacer(Modifier.width(10.dp))
                 Text(
                     text = place,
