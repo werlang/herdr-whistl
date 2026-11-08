@@ -10,7 +10,8 @@ Always build through `scripts/gradle`:
 
 ```sh
 scripts/gradle check assembleDebug     # unit tests + lint + debug APK
-scripts/gradle recordRoborazziDebug    # screenshot tests -> app/build/outputs/roborazzi/
+scripts/gradle verifyRoborazziDebug     # compares screenshot goldens in app/src/test/screenshots/ (check does the same)
+scripts/gradle recordRoborazziDebug     # rewrites those goldens; run it on macOS only
 ```
 
 It uses a native JDK 17 + Android SDK when it finds one (Homebrew:
