@@ -140,10 +140,26 @@ class DefaultMachinesRepository(
         return Lease(id)
     }
 
+    /**
+     * Reconnect (SPEC §2). A connected session is closed and connected again: the user taps it because the session feels
+     * stale, so it is never a silent no-op (phase 7 r5 amendment U2). Otherwise one immediate attempt starts, when the state
+     * allows one. Connecting and the host-key states are left alone.
+     */
     override suspend fun reconnect(id: String) {
         lock.withLock {
             val slot = slotFor(id)
-            if (slot.holders == 0 || !canConnect(slot.state.value)) return
+            if (slot.holders == 0) return
+            if (slot.state.value is ConnectionState.Connected) {
+                cancelAttempt(slot)
+                slot.attempt = 0
+                val dying = slot.session
+                slot.session = null
+                dying?.close()
+                slot.state.value = ConnectionState.Connecting
+                startAttempt(slot, delayMillis = 0L)
+                return
+            }
+            if (!canConnect(slot.state.value)) return
             cancelAttempt(slot)
             slot.attempt = 0
             startAttempt(slot, delayMillis = 0L)

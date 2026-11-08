@@ -34,6 +34,9 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    host-key confirmation (algorithm + SHA256 fingerprint) → Trust and connect →
    detection of installed agents. Card menu: Edit machine, Reconnect, Remove
    (confirm; spaces of that machine leave the app, agents keep running there).
+   Reconnect restarts the session: a connected machine's session is closed and
+   connected again (connecting → connected); an offline machine makes one
+   immediate attempt (phase 7 r5).
    **Edit machine** (phase 7 P2) opens the Add machine sheet prefilled with the
    stored name, host, user, port and login method, titled "Edit machine", with
    Save in place of Connect. The saved password is never shown: a blank password

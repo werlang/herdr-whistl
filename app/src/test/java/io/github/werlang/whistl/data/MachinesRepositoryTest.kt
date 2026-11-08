@@ -755,4 +755,49 @@ class MachinesRepositoryTest {
         assertEquals(0, h.openSessions())
         assertNull(h.hostKeys.pinned(id))
     }
+
+    /**
+     * Reconnect on a connected machine restarts the session (phase 7 r5 amendment U2): the old session closes, the state goes
+     * Connecting and then Connected again, and one new connection is made. Before the fix Reconnect was a no-op here.
+     */
+    @Test
+    fun reconnectWhileConnectedClosesTheSessionAndConnectsAgain() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        val lease = h.repo.acquire(id)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+        val seen = h.record(id)
+
+        h.repo.reconnect(id)
+        runCurrent()
+
+        assertEquals(2, h.connector.connectCalls)
+        assertEquals(1, h.connector.sessionsClosed)
+        assertEquals(1, h.openSessions())
+        assertEquals(listOf("Connected", "Connecting", "Connected"), seen.kinds())
+        assertNotNull(lease.client())
+    }
+
+    /**
+     * Reconnect while offline makes one immediate attempt, not a wait for the next backoff (phase 7 r5 amendment U2): the
+     * scheduled retry is replaced, and the attempt runs without advancing virtual time.
+     */
+    @Test
+    fun reconnectWhileOfflineMakesOneImmediateAttempt() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.connector.script(FakeMachineConnector.Attempt.Unreachable)
+        val lease = h.repo.acquire(id)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+        val seen = h.record(id)
+
+        h.repo.reconnect(id)
+        runCurrent()
+
+        assertEquals(2, h.connector.connectCalls)
+        assertEquals(listOf("Offline", "Connecting", "Connected"), seen.kinds())
+        assertNotNull(lease.client())
+    }
 }
