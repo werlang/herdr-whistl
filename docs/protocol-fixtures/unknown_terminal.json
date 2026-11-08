@@ -1,0 +1,22 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 17,
+    "method": "terminal.read",
+    "params": {
+      "terminal": "t-does-not-exist"
+    }
+  },
+  "response": {
+    "error": {
+      "code": -32000,
+      "data": {
+        "hint": "see `hc ls --all`",
+        "kind": "not_found"
+      },
+      "message": "no terminal \"t-does-not-exist\""
+    },
+    "id": 17,
+    "jsonrpc": "2.0"
+  }
+}

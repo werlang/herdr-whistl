@@ -1,0 +1,27 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 14,
+    "method": "machine.list",
+    "params": {}
+  },
+  "response": {
+    "id": 14,
+    "jsonrpc": "2.0",
+    "result": {
+      "machines": [
+        {
+          "host": "homelab",
+          "id": "dfccaaad4e6f3a1973f27b54498b887f",
+          "name": "homelab",
+          "session": null,
+          "state": "connected",
+          "target": "root@homelab",
+          "temporary": false,
+          "version": "0.1.14",
+          "via": false
+        }
+      ]
+    }
+  }
+}

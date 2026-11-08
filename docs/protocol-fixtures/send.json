@@ -1,0 +1,20 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "terminal.send",
+    "params": {
+      "terminal": "t15s",
+      "text": "echo hello-from-whistl"
+    }
+  },
+  "response": {
+    "id": 4,
+    "jsonrpc": "2.0",
+    "result": {
+      "started": null,
+      "status": null,
+      "turn": 0
+    }
+  }
+}

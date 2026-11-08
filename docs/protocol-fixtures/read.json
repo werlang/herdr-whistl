@@ -1,0 +1,20 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 6,
+    "method": "terminal.read",
+    "params": {
+      "terminal": "t15s",
+      "lines": 20
+    }
+  },
+  "response": {
+    "id": 6,
+    "jsonrpc": "2.0",
+    "result": {
+      "complete": true,
+      "how": "history",
+      "text": "whistl-fixture ready\necho hello-from-whistl\n^C"
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 11,
+    "method": "doc.set",
+    "params": {
+      "name": "whistl-fixture",
+      "value": {
+        "v": 1,
+        "spaces": []
+      },
+      "version": 0
+    }
+  },
+  "response": {
+    "error": {
+      "code": -32000,
+      "data": {
+        "hint": "read doc.get and retry with its version",
+        "kind": "conflict"
+      },
+      "message": "document \"whistl-fixture\" is at version 1, not 0"
+    },
+    "id": 11,
+    "jsonrpc": "2.0"
+  }
+}

@@ -1,0 +1,42 @@
+[
+  {
+    "jsonrpc": "2.0",
+    "method": "event",
+    "params": {
+      "data": {
+        "exit_code": null,
+        "finished_ms": 1794006623711,
+        "reason": "exited",
+        "signal": 2
+      },
+      "seq": 9505,
+      "terminal": "t15s",
+      "type": "finished"
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "event",
+    "params": {
+      "data": {
+        "labels": {
+          "whistl.fixture": "1",
+          "whistl.space": "sp-other"
+        }
+      },
+      "seq": 9506,
+      "terminal": "t15s",
+      "type": "labels"
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "event",
+    "params": {
+      "data": {},
+      "seq": 9509,
+      "terminal": "t15s",
+      "type": "removed"
+    }
+  }
+]

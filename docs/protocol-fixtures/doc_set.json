@@ -1,0 +1,22 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 10,
+    "method": "doc.set",
+    "params": {
+      "name": "whistl-fixture",
+      "value": {
+        "v": 1,
+        "spaces": []
+      },
+      "version": 0
+    }
+  },
+  "response": {
+    "id": 10,
+    "jsonrpc": "2.0",
+    "result": {
+      "version": 1
+    }
+  }
+}

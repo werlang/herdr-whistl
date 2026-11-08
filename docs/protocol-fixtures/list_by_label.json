@@ -1,0 +1,80 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "terminal.list",
+    "params": {
+      "labels": {
+        "whistl.fixture": "1"
+      }
+    }
+  },
+  "response": {
+    "id": 3,
+    "jsonrpc": "2.0",
+    "result": {
+      "hidden_finished": 0,
+      "machines": [
+        {
+          "host": "homelab",
+          "id": "dfccaaad4e6f3a1973f27b54498b887f",
+          "name": "homelab",
+          "session": null,
+          "state": "connected",
+          "target": "root@homelab",
+          "temporary": false,
+          "version": "0.1.14",
+          "via": false
+        }
+      ],
+      "terminals": [
+        {
+          "address": "t15s",
+          "argv": [
+            "sh",
+            "-c",
+            "echo whistl-fixture ready; sleep 60"
+          ],
+          "cols": 200,
+          "created_ms": 1794006620358,
+          "cwd": "/tmp",
+          "die_with_parent": false,
+          "exit_code": null,
+          "finished_ms": null,
+          "foreground": {
+            "argv": [
+              "sh",
+              "-c",
+              "echo whistl-fixture ready; sleep 60"
+            ],
+            "cwd": "/private/tmp",
+            "name": "bash",
+            "pid": 4242
+          },
+          "identity": "ghostty",
+          "keep": false,
+          "labels": {
+            "whistl.fixture": "1",
+            "whistl.space": "sp-demo"
+          },
+          "name": "whistl-fixture",
+          "notify": false,
+          "parent": null,
+          "pid": 4242,
+          "reason": null,
+          "reported": false,
+          "rm": false,
+          "rows": 120,
+          "screen": "exact",
+          "signal": null,
+          "state": "live",
+          "status": null,
+          "status_ms": null,
+          "template": null,
+          "title": "",
+          "turn": 0
+        }
+      ]
+    }
+  }
+}

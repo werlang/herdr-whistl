@@ -1,0 +1,27 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 8,
+    "method": "machine.exec",
+    "params": {
+      "argv": [
+        "sh",
+        "-lc",
+        "for a in claude codex gemini opencode aider; do command -v \"$a\" >/dev/null 2>&1 && echo \"$a\"; done; exit 0"
+      ]
+    }
+  },
+  "response": {
+    "id": 8,
+    "jsonrpc": "2.0",
+    "result": {
+      "code": 0,
+      "ms": 40,
+      "signal": null,
+      "stderr": "",
+      "stdout": "Y2xhdWRlCm9wZW5jb2RlCg==",
+      "timed_out": false,
+      "truncated": false
+    }
+  }
+}

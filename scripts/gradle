@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Runs ./gradlew with a known toolchain.
+#
+# Usage: scripts/gradle <tasks...>      e.g. scripts/gradle check assembleDebug
+#
+# Native first: a JDK 17 plus an Android SDK on this machine (Homebrew paths
+# are detected: `brew install openjdk@17 && brew install --cask
+# android-commandlinetools`). Otherwise, or with WHISTL_DOCKER=1, it runs in
+# the pinned container from docker/android-build (needs ~4 GB free for
+# Docker). The project directory is the worktree this script lives in.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$root"
+
+find_java_home() {
+  if [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/java" ]; then echo "$JAVA_HOME"; return; fi
+  for candidate in /opt/homebrew/opt/openjdk@17 /usr/local/opt/openjdk@17; do
+    [ -x "$candidate/bin/java" ] && { echo "$candidate"; return; }
+  done
+  if [ -x /usr/libexec/java_home ]; then /usr/libexec/java_home -v 17 2> /dev/null && return; fi
+  return 1
+}
+
+find_android_home() {
+  for candidate in "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}" \
+    /opt/homebrew/share/android-commandlinetools /usr/local/share/android-commandlinetools \
+    "$HOME/Library/Android/sdk"; do
+    [ -n "$candidate" ] && [ -d "$candidate/platforms" ] && { echo "$candidate"; return; }
+  done
+  return 1
+}
+
+if [ "${WHISTL_DOCKER:-0}" != "1" ] && java_home="$(find_java_home)" && android_home="$(find_android_home)"; then
+  export JAVA_HOME="$java_home" ANDROID_HOME="$android_home" ANDROID_SDK_ROOT="$android_home"
+  exec ./gradlew --console=plain "$@"
+fi
+
+image="herdr-whistl-build:1"
+if ! docker image inspect "$image" > /dev/null 2>&1; then
+  docker build --platform linux/amd64 -t "$image" "$root/docker/android-build" >&2
+fi
+tty_flag=()
+[ -t 1 ] && tty_flag=(-t)
+exec docker run --rm "${tty_flag[@]}" --platform linux/amd64 \
+  -v "$root":/work \
+  -v herdr-whistl-gradle:/gradle \
+  -w /work \
+  "$image" ./gradlew --no-daemon --console=plain "$@"

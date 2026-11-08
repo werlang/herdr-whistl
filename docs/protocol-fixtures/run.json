@@ -1,0 +1,62 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "terminal.run",
+    "params": {
+      "argv": [
+        "sh",
+        "-c",
+        "echo whistl-fixture ready; sleep 60"
+      ],
+      "cwd": "/tmp",
+      "name": "whistl-fixture",
+      "labels": {
+        "whistl.fixture": "1",
+        "whistl.space": "sp-demo"
+      },
+      "no_parent": true,
+      "no_notify": true
+    }
+  },
+  "response": {
+    "id": 2,
+    "jsonrpc": "2.0",
+    "result": {
+      "address": "t15s",
+      "argv": [
+        "sh",
+        "-c",
+        "echo whistl-fixture ready; sleep 60"
+      ],
+      "cols": 200,
+      "created_ms": 1794006620358,
+      "cwd": "/tmp",
+      "die_with_parent": false,
+      "exit_code": null,
+      "finished_ms": null,
+      "identity": "ghostty",
+      "keep": false,
+      "labels": {
+        "whistl.fixture": "1",
+        "whistl.space": "sp-demo"
+      },
+      "name": "whistl-fixture",
+      "notify": false,
+      "parent": null,
+      "pid": 4242,
+      "reason": null,
+      "reported": false,
+      "rm": false,
+      "rows": 120,
+      "screen": "exact",
+      "signal": null,
+      "state": "live",
+      "status": null,
+      "status_ms": null,
+      "template": null,
+      "title": "",
+      "turn": 0
+    }
+  }
+}

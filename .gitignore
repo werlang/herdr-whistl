@@ -1,0 +1,22 @@
+# Gradle / Android
+.gradle/
+build/
+local.properties
+*.apk
+*.aab
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing material never enters the repo
+*.jks
+*.keystore
+keystore.properties
+
+# IDE / OS
+.idea/
+*.iml
+.DS_Store
+
+# Supervisor worktrees and status files
+.worktrees/
