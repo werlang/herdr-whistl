@@ -34,12 +34,32 @@ private const val MAX_ATTEMPTS: Int = 5
  * @property machineId the machine.
  * @property offline `true` when the machine is not connected: the spaces come from the cache.
  * @property spaces the spaces, sorted for display.
+ * @property resolutions each space's folder resolution, keyed by space id (phase 4 decision 1). A space with no entry has
+ *   not been resolved on this device yet: its machine has never connected with that folder. An [FolderResolution.Unresolvable]
+ *   entry is the typed error the space row shows.
  */
 data class MachineSpaces(
     val machineId: String,
     val offline: Boolean,
     val spaces: List<SpaceRecord>,
-)
+    val resolutions: Map<String, FolderResolution> = emptyMap(),
+) {
+    /**
+     * The resolution of a space's folder.
+     *
+     * @param space a space of this machine.
+     * @return the resolution, or `null` when the folder has not been resolved yet.
+     */
+    fun resolutionOf(space: SpaceRecord): FolderResolution? = resolutions[space.id]
+
+    /**
+     * The absolute path a space's folder resolved to. Agents are matched by cwd against this path.
+     *
+     * @param space a space of this machine.
+     * @return the resolved path, or `null` when it is unknown or unresolvable.
+     */
+    fun resolvedPathOf(space: SpaceRecord): String? = (resolutionOf(space) as? FolderResolution.Resolved)?.path
+}
 
 /** Which field of a space edit was rejected. */
 enum class SpaceField {
@@ -155,9 +175,14 @@ interface SpacesRepository {
  * `doc` change for it. The last copy is kept in [SpacesCache], so an offline machine still shows its spaces, flagged
  * offline. Writes run through [docReadModifyWrite] with the machine's live client.
  *
- * @param scope the scope for watchers.
+ * On each connection the folders of the spaces are resolved (see [FolderResolver]) in a job of their own, so a slow probe
+ * never holds up the connection state. A folder's verdict is kept for the life of the app; while none exists, a path
+ * resolved earlier and kept in [folderCache] is used. The resolved paths are never written to the document.
+ *
+ * @param scope the scope for watchers and resolution jobs.
  * @param machines the machines and their leases.
  * @param cache the cache of the last document per machine.
+ * @param folderCache the cache of resolved folder paths per machine, kept on this device only.
  * @param documentChanges where `doc` changes arrive.
  * @param ids the source of new space ids.
  */
@@ -165,6 +190,7 @@ class DefaultSpacesRepository(
     private val scope: CoroutineScope,
     private val machines: MachinesRepository,
     private val cache: SpacesCache,
+    private val folderCache: ResolvedFolderCache,
     private val documentChanges: DocumentChanges,
     private val ids: SpaceIdSource,
 ) : SpacesRepository {
@@ -173,6 +199,15 @@ class DefaultSpacesRepository(
     private val leases = ConcurrentHashMap<String, MachineLease>()
     private val watchers = ConcurrentHashMap<String, Job>()
     private val view = MutableStateFlow<List<MachineSpaces>>(emptyList())
+
+    /** The latest verdict per machine and folder, from the connection that produced it. */
+    private val verdicts = ConcurrentHashMap<String, ConcurrentHashMap<String, FolderResolution>>()
+
+    /** The folder resolver of each live connection, by machine. Removed when the machine goes offline. */
+    private val resolvers = ConcurrentHashMap<String, FolderResolver>()
+
+    /** The resolution job of each machine, cancelled when its connection ends or a newer one replaces it. */
+    private val resolving = ConcurrentHashMap<String, Job>()
 
     override fun groups(): StateFlow<List<MachineSpaces>> = view.asStateFlow()
 
@@ -198,7 +233,10 @@ class DefaultSpacesRepository(
         val written = write(machineId) { doc ->
             doc.withSpace(SpaceRecord(id = id, name = spaceName, folder = path, pinned = false, order = doc.nextOrder()))
         }
-        return if (written) SpaceResult.Done(id) else SpaceResult.MachineOffline
+        if (!written) return SpaceResult.MachineOffline
+        // The new folder is resolved now, on this connection, not when the core's doc event comes back (phase 4 r2, F4).
+        resolveFolders(machineId)
+        return SpaceResult.Done(id)
     }
 
     override suspend fun rename(machineId: String, spaceId: String, name: String): SpaceResult {
@@ -224,7 +262,8 @@ class DefaultSpacesRepository(
         val known = documents[machineId]?.spaces.orEmpty()
         try {
             for (terminal in client.terminalList().terminals) {
-                if (terminal.state == TerminalState.Live && matchSpace(terminal, known)?.id == spaceId) {
+                val match = matchSpace(terminal, known) { resolutionOf(machineId, it.folder).resolvedPath() }
+                if (terminal.state == TerminalState.Live && match?.id == spaceId) {
                     try {
                         client.terminalKill(terminal.address)
                     } catch (e: NotFound) {
@@ -266,6 +305,9 @@ class DefaultSpacesRepository(
                 watchers.remove(id)?.cancelAndJoin()
                 documents.remove(id)
                 online.remove(id)
+                verdicts.remove(id)
+                cache.remove(id)
+                folderCache.remove(id)
             }
         }
         for (id in current) {
@@ -289,6 +331,7 @@ class DefaultSpacesRepository(
             machines.observe(id).collect { state ->
                 val connected = state is ConnectionState.Connected
                 online[id] = connected
+                if (connected) startConnection(id) else endConnection(id)
                 publish()
                 if (connected) refresh(id)
             }
@@ -296,12 +339,25 @@ class DefaultSpacesRepository(
             return
         } finally {
             withContext(NonCancellable) {
+                endConnection(id)
                 leases.remove(id)
                 online.remove(id)
                 lease.release()
                 publish()
             }
         }
+    }
+
+    /** A connection has opened: its folder resolver, so each folder is probed once on this connection. */
+    private fun startConnection(id: String) {
+        val client = leases[id]?.client() ?: return
+        resolvers[id] = FolderResolver(id, client, folderCache)
+    }
+
+    /** The connection has ended: its resolution job stops, and its resolver is dropped. */
+    private fun endConnection(id: String) {
+        resolving.remove(id)?.cancel()
+        resolvers.remove(id)
     }
 
     /** Reads the document from the live client and keeps it. A read that fails keeps the copy already held. */
@@ -318,7 +374,43 @@ class DefaultSpacesRepository(
             return
         }
         remember(id, doc)
+        resolveFolders(id)
     }
+
+    /**
+     * Resolves the folders of the machine's spaces on its live connection, in a job of its own, so a slow probe never holds
+     * up the connection state. A newer call replaces the job still running. The resolver keeps each folder's result, so a
+     * folder is probed once per connection.
+     *
+     * @param id the machine.
+     */
+    private fun resolveFolders(id: String) {
+        val resolver = resolvers[id] ?: return
+        resolving.remove(id)?.cancel()
+        resolving[id] = scope.launch {
+            val folders = documents[id]?.spaces.orEmpty().map { it.folder }.distinct()
+            for (folder in folders) {
+                val verdict = try {
+                    resolver.resolve(folder)
+                } catch (e: TransportLost) {
+                    return@launch
+                }
+                verdicts.getOrPut(id) { ConcurrentHashMap() }[folder] = verdict
+                publish()
+            }
+        }
+    }
+
+    /**
+     * The resolution of a folder on a machine: the latest verdict from a connection, else the path kept on this device for
+     * it, else `null`.
+     *
+     * @param machineId the machine.
+     * @param folder the folder as typed.
+     * @return the resolution, or `null` when none is known.
+     */
+    private fun resolutionOf(machineId: String, folder: String): FolderResolution? =
+        verdicts[machineId]?.get(folder) ?: folderCache.get(machineId, folder)?.let { FolderResolution.Resolved(it) }
 
     private fun remember(id: String, doc: SpacesDocument) {
         documents[id] = doc
@@ -328,11 +420,22 @@ class DefaultSpacesRepository(
 
     private fun publish() {
         view.value = machines.machines().value.map { machine ->
+            val spaces = sortSpaces(documents[machine.id]?.spaces.orEmpty())
             MachineSpaces(
                 machineId = machine.id,
                 offline = online[machine.id] != true,
-                spaces = sortSpaces(documents[machine.id]?.spaces.orEmpty()),
+                spaces = spaces,
+                resolutions = spaces.mapNotNull { space ->
+                    resolutionOf(machine.id, space.folder)?.let { space.id to it }
+                }.toMap(),
             )
         }
     }
 }
+
+/**
+ * The resolved path inside a resolution, or `null` for no resolution or an unresolvable folder.
+ *
+ * @return the path, or `null`.
+ */
+private fun FolderResolution?.resolvedPath(): String? = (this as? FolderResolution.Resolved)?.path

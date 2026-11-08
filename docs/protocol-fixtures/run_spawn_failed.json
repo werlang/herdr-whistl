@@ -1,0 +1,30 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "terminal.run",
+    "params": {
+      "argv": [
+        "pwd"
+      ],
+      "cwd": "~/whistl-no-such-folder",
+      "labels": {
+        "whistl.fixture": "1"
+      },
+      "no_parent": true,
+      "no_notify": true
+    }
+  },
+  "response": {
+    "error": {
+      "code": -32000,
+      "data": {
+        "hint": "check the program name and cwd",
+        "kind": "spawn_failed"
+      },
+      "message": "cannot start \"pwd\": No such file or directory (os error 2)"
+    },
+    "id": 3,
+    "jsonrpc": "2.0"
+  }
+}

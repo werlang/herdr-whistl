@@ -45,8 +45,8 @@ data class MachineAgent(
  * was recorded from hc 0.1.18 (see `event-shapes.md`), or **assumed** when it was not observed and the shape is a
  * documented guess.
  *
- * - created (observed): the full terminal object is added under its address.
- * - labels (observed): the full label map replaces the old one.
+ * - created (observed): the full terminal object is added under its address, unless it is a folder probe ([isProbe]).
+ * - labels (observed): the full label map replaces the old one. A terminal that now carries the probe label leaves the map.
  * - keep (observed): `keep` changes.
  * - title (observed): `title` changes.
  * - status (assumed): `status` changes; an unknown or null value becomes null.
@@ -56,7 +56,7 @@ data class MachineAgent(
  * - removed (observed): the terminal leaves the map.
  * - lost (assumed): state finished with reason `lost`. The shape carries no fields, so this is the documented choice.
  * - restarted (assumed): state live again; exit code, finish time and reason cleared.
- * - missed (assumed): when `data.terminals` is present, it replaces the whole map. Without it, nothing changes.
+ * - missed (assumed): when `data.terminals` is present, it replaces the whole map, without any probe. Without it, nothing changes.
  * - heartbeat, doc, and unknown types: no change. A `foreground` event (not in SPEC §5) parses as unknown and is ignored.
  *
  * An event for an address not in the map changes nothing, and malformed data never throws.
@@ -71,11 +71,15 @@ object AgentEventReducer {
      */
     fun apply(terminals: Map<String, Terminal>, event: HcEvent): Map<String, Terminal> = when (event) {
         is HcEvent.TerminalChanged -> applyTerminal(terminals, event)
-        is HcEvent.LabelsChanged -> terminals[event.terminal]
-            ?.let { terminals + (event.terminal to it.copy(labels = event.labels)) }
-            ?: terminals
+        is HcEvent.LabelsChanged -> if (event.labels.containsKey(PROBE_LABEL)) {
+            terminals - event.terminal
+        } else {
+            terminals[event.terminal]
+                ?.let { terminals + (event.terminal to it.copy(labels = event.labels)) }
+                ?: terminals
+        }
 
-        is HcEvent.Missed -> snapshotOf(event.data) ?: terminals
+        is HcEvent.Missed -> snapshotOf(event.data)?.filterValues { !it.isProbe() } ?: terminals
         is HcEvent.DocChanged, is HcEvent.Heartbeat, is HcEvent.Unknown -> terminals
     }
 
@@ -84,6 +88,7 @@ object AgentEventReducer {
         val data = event.data
         when (event.kind) {
             TerminalEventKind.Created -> return createdTerminal(address, data)
+                ?.takeUnless { it.isProbe() }
                 ?.let { terminals + (address to it) }
                 ?: terminals
 

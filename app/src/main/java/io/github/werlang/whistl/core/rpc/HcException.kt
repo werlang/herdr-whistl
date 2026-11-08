@@ -21,6 +21,24 @@ class NotFound(message: String, hint: String?) : HcException(message, hint)
 class Conflict(message: String, hint: String?) : HcException(message, hint)
 
 /**
+ * `kind == "spawn_failed"`: hc could not start the program, usually because the `cwd` does not exist or the program
+ * name is not found (`run_spawn_failed.json`). Nothing was started.
+ */
+class SpawnFailed(message: String, hint: String?) : HcException(message, hint)
+
+/**
+ * `kind == "live"`: `terminal.rm` was refused because the terminal is still running (`rm_live.json`). The hint says to kill
+ * it first. Nothing was removed.
+ */
+class StillLive(message: String, hint: String?) : HcException(message, hint)
+
+/**
+ * `kind == "blocked"`: hc refused `terminal.send` because the program is waiting for input and the request did not say
+ * `force: true` (phase 4 r2, measured on hc 0.1.18). A blocked agent is waiting for the user, so the app forces only then.
+ */
+class Blocked(message: String, hint: String?) : HcException(message, hint)
+
+/**
  * `kind == "invalid_request"`, or the JSON-RPC standard code `-32600`: hc rejected the request's shape.
  *
  * The kind string is an assumption: no fixture records it, so the code is the fallback.

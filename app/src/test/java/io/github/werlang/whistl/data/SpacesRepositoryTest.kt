@@ -17,6 +17,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
@@ -26,6 +29,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Base64
 import kotlin.random.Random
 
 /**
@@ -290,11 +294,34 @@ class SpacesRepositoryTest {
                     .withParam("version", JsonPrimitive(2)),
                 versionReply(3),
             ),
+            // F4: after the write, every folder of the document not yet resolved on this connection is resolved, in document
+            // order: the concurrent writer's /other first, then the new ~/code/web-app (HOME first, then its probe).
+            *probeExchanges("/other", "tp1").toTypedArray(),
+            Exchange(
+                "derived in memory: machine.exec printenv HOME for ~ in ~/code/web-app",
+                rpc("machine.exec", "argv" to JsonArray(listOf(JsonPrimitive("printenv"), JsonPrimitive("HOME")))),
+                ok(
+                    JsonObject(
+                        mapOf(
+                            "code" to JsonPrimitive(0),
+                            "ms" to JsonPrimitive(1),
+                            "signal" to JsonNull,
+                            "stderr" to JsonPrimitive(""),
+                            "stdout" to JsonPrimitive(Base64.getEncoder().encodeToString("/home/u\n".toByteArray())),
+                            "timed_out" to JsonPrimitive(false),
+                            "truncated" to JsonPrimitive(false),
+                        ),
+                    ),
+                ),
+            ),
+            *probeExchanges("/home/u/code/web-app", "tp2").toTypedArray(),
         )
         val id = h.addMachine()
         runCurrent()
 
         val result = h.spaces.create(id, folder = "~/code/web-app")
+        // The new folder is resolved right after the write (phase 4 r2, F4): the probe conversation follows the write.
+        runCurrent()
 
         assertEquals(SpaceResult.Done(ourId), result)
         val group = h.spaces.groups().value.single()
@@ -302,4 +329,77 @@ class SpacesRepositoryTest {
         assertEquals(JsonPrimitive("other-app"), group.spaces.first().unknownFields.getValue("x_owner"))
         assertEquals(JsonPrimitive("keep-me"), h.cache.get(id)!!.unknownFields.getValue("future_top"))
     }
+
+    /**
+     * The four exchanges of one folder probe, derived in memory from the recorded `run.json`, `unknown_terminal.json` and
+     * `rm.json` shapes: `pwd` in [folder], the poll that finds it finished, its answer, and its removal.
+     *
+     * @param folder the folder the probe runs in.
+     * @param address the terminal address hc gives the probe.
+     * @return the exchanges, in order.
+     */
+    private fun probeExchanges(folder: String, address: String): List<Exchange> {
+        val probeLabels = JsonObject(mapOf("whistl.probe" to JsonPrimitive("1")))
+        return listOf(
+            Exchange(
+                "derived in memory: pwd probe in $folder",
+                rpc(
+                    "terminal.run",
+                    "argv" to JsonArray(listOf(JsonPrimitive("pwd"))),
+                    "cwd" to JsonPrimitive(folder),
+                    "labels" to probeLabels,
+                    "no_parent" to JsonPrimitive(true),
+                    "no_notify" to JsonPrimitive(true),
+                ),
+                ok(terminalJson(address, state = "live", labels = mapOf("whistl.probe" to "1"), cwd = folder)),
+            ),
+            Exchange(
+                "derived in memory: the probe is finished when listed",
+                rpc("terminal.list", "labels" to probeLabels, "all" to JsonPrimitive(true)),
+                ok(
+                    JsonObject(
+                        mapOf(
+                            "terminals" to JsonArray(
+                                listOf(terminalJson(address, state = "finished", labels = mapOf("whistl.probe" to "1"))),
+                            ),
+                            "machines" to JsonArray(emptyList()),
+                            "hidden_finished" to JsonPrimitive(0),
+                        ),
+                    ),
+                ),
+            ),
+            Exchange(
+                "derived in memory: the probe's answer",
+                rpc("terminal.read", "terminal" to JsonPrimitive(address)),
+                ok(
+                    JsonObject(
+                        mapOf(
+                            "text" to JsonPrimitive("$folder\n"),
+                            "complete" to JsonPrimitive(true),
+                            "how" to JsonPrimitive("history"),
+                        ),
+                    ),
+                ),
+            ),
+            Exchange(
+                "derived in memory: the probe is removed",
+                rpc("terminal.rm", "terminal" to JsonPrimitive(address)),
+                ok(JsonObject(mapOf("removed" to JsonPrimitive(address)))),
+            ),
+        )
+    }
+
+    /** A request object for [method] with the given params (no id; [Exchange] compares without it). */
+    private fun rpc(method: String, vararg params: Pair<String, JsonElement>): JsonObject = JsonObject(
+        mapOf(
+            "jsonrpc" to JsonPrimitive("2.0"),
+            "method" to JsonPrimitive(method),
+            "params" to JsonObject(mapOf(*params)),
+        ),
+    )
+
+    /** A success reply carrying [result]. */
+    private fun ok(result: JsonObject): JsonObject = JsonObject(
+        mapOf("jsonrpc" to JsonPrimitive("2.0"), "result" to result),
+    )
 }

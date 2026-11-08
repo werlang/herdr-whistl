@@ -67,6 +67,17 @@ data class KeysSent(
 )
 
 /**
+ * Result of `terminal.interrupt` (`interrupt.json`: `ctrl+c` was sent and the terminal exited).
+ *
+ * @property key the key hc sent, for example `ctrl+c`.
+ * @property outcome what hc reports happened, for example `exited`.
+ */
+data class InterruptResult(
+    val key: String,
+    val outcome: String,
+)
+
+/**
  * Result of `machine.exec`. Output is decoded from base64 to UTF-8 (SPEC §5).
  *
  * @property code the process exit code.
@@ -206,11 +217,13 @@ class HcClient(
      *
      * @param terminal the terminal address.
      * @param text the text to send.
+     * @param force `true` to send to a blocked program; omitted from the request when `null`.
+     * @throws Blocked when the program is blocked and [force] is not `true`.
      */
-    suspend fun terminalSend(terminal: String, text: String): TerminalSent {
+    suspend fun terminalSend(terminal: String, text: String, force: Boolean? = null): TerminalSent {
         val wire = command.typed<TerminalSendParams, TerminalSendWire>(
             "terminal.send",
-            TerminalSendParams(terminal = terminal, text = text),
+            TerminalSendParams(terminal = terminal, text = text, force = force),
         )
         return TerminalSent(started = wire.started, status = AgentStatus.fromWire(wire.status), turn = wire.turn)
     }
@@ -230,16 +243,17 @@ class HcClient(
     }
 
     /**
-     * Calls `terminal.interrupt`. **No fixture records this method**: the request shape is covered by a
-     * hand-written expectation, and the result is not parsed.
+     * Calls `terminal.interrupt`: sends Ctrl+C to the terminal (recorded in `interrupt.json`).
      *
      * @param terminal the terminal address.
+     * @return the key hc sent and the outcome it reports.
      */
-    suspend fun terminalInterrupt(terminal: String) {
-        command.typed<TerminalInterruptParams, JsonElement>(
+    suspend fun terminalInterrupt(terminal: String): InterruptResult {
+        val wire = command.typed<TerminalInterruptParams, TerminalInterruptWire>(
             "terminal.interrupt",
             TerminalInterruptParams(terminal = terminal),
         )
+        return InterruptResult(key = wire.key, outcome = wire.outcome)
     }
 
     /**

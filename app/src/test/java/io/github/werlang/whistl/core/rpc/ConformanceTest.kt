@@ -7,7 +7,7 @@ import org.junit.runners.Parameterized
 
 /**
  * Runs every row of [ConformanceCases.all] as its own test. Each row replays its recorded fixture through
- * [HcClient] and asserts on the parsed values. A row with no fixture (terminal.interrupt) is labelled NO FIXTURE.
+ * [HcClient] and asserts on the parsed values.
  */
 @RunWith(Parameterized::class)
 class ConformanceTest(private val case: ConformanceCase) {

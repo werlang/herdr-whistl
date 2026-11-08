@@ -4,16 +4,10 @@ import io.github.werlang.whistl.domain.KnownAgents
 import io.github.werlang.whistl.domain.TerminalState
 import io.github.werlang.whistl.support.FakeLinePipe
 import io.github.werlang.whistl.support.Fixtures
-import io.github.werlang.whistl.support.assertRequestMatches
 import io.github.werlang.whistl.support.assertThrowsSuspend
 import io.github.werlang.whistl.support.clientWith
-import io.github.werlang.whistl.support.requestIdOf
-import io.github.werlang.whistl.support.withId
 import kotlinx.coroutines.test.TestScope
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -24,13 +18,13 @@ import org.junit.Assert.assertTrue
  *
  * @property label the row name shown by the test runner.
  * @property method the hc method this row exercises.
- * @property fixture the fixture file, or `null` when no fixture records the method (the NO FIXTURE row).
+ * @property fixture the fixture file the row replays.
  * @property check runs the method through a fake pipe and asserts on parsed values.
  */
 class ConformanceCase(
     val label: String,
     val method: String,
-    val fixture: String?,
+    val fixture: String,
     val check: suspend TestScope.() -> Unit,
 ) {
     override fun toString(): String = label
@@ -110,25 +104,33 @@ object ConformanceCases {
             assertEquals(0L, keys.turn)
         },
 
-        // NO FIXTURE: no recorded fixture covers terminal.interrupt. This row checks only the request shape against
-        // a hand-written expectation, and is reported as a gap, not as a conformance pass.
-        ConformanceCase("terminal.interrupt | NO FIXTURE (hand-written request)", "terminal.interrupt", null) {
-            val expected = JsonObject(
-                mapOf<String, JsonElement>(
-                    "jsonrpc" to JsonPrimitive("2.0"),
-                    "method" to JsonPrimitive("terminal.interrupt"),
-                    "params" to JsonObject(mapOf<String, JsonElement>("terminal" to JsonPrimitive("t15s"))),
-                ),
-            )
-            val pipe = FakeLinePipe { line ->
-                assertRequestMatches(expected, line, "terminal.interrupt (NO FIXTURE)")
-                val reply = JsonObject(
-                    mapOf<String, JsonElement>("jsonrpc" to JsonPrimitive("2.0"), "result" to JsonObject(emptyMap())),
+        ConformanceCase("terminal.interrupt | interrupt.json", "terminal.interrupt", "interrupt.json") {
+            val sent = clientWith(command = FakeLinePipe.replaying(Fixtures.load("interrupt.json")))
+                .terminalInterrupt("t161")
+            assertEquals("ctrl+c", sent.key)
+            assertEquals("exited", sent.outcome)
+        },
+
+        ConformanceCase(
+            "terminal.run spawn_failed | run_spawn_failed.json",
+            "terminal.run",
+            "run_spawn_failed.json",
+        ) {
+            val error = assertThrowsSuspend(SpawnFailed::class.java) {
+                clientWith(command = FakeLinePipe.replaying(Fixtures.load("run_spawn_failed.json"))).terminalRun(
+                    argv = listOf("pwd"),
+                    cwd = "~/whistl-no-such-folder",
+                    labels = mapOf("whistl.fixture" to "1"),
                 )
-                push(withId(reply, requestIdOf(line)))
             }
-            clientWith(command = pipe).terminalInterrupt("t15s")
-            assertEquals(1, pipe.written.size)
+            assertEquals("check the program name and cwd", error.hint)
+        },
+
+        ConformanceCase("terminal.rm while running | rm_live.json", "terminal.rm", "rm_live.json") {
+            val error = assertThrowsSuspend(StillLive::class.java) {
+                clientWith(command = FakeLinePipe.replaying(Fixtures.load("rm_live.json"))).terminalRm("t16b")
+            }
+            assertEquals("kill it first: hc kill t16b", error.hint)
         },
 
         ConformanceCase("terminal.kill | kill.json", "terminal.kill", "kill.json") {

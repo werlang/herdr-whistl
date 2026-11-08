@@ -1,16 +1,23 @@
 package io.github.werlang.whistl.platform
 
 import android.content.Context
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import io.github.werlang.whistl.core.ssh.HostKeyStore
 import io.github.werlang.whistl.core.ssh.PinnedHostKey
+import io.github.werlang.whistl.data.AppLanguage
 import io.github.werlang.whistl.data.AuthMethod
 import io.github.werlang.whistl.data.MachineStore
+import io.github.werlang.whistl.data.ResolvedFolderCache
 import io.github.werlang.whistl.data.SettingsStore
 import io.github.werlang.whistl.data.SpacesCache
 import io.github.werlang.whistl.data.SpacesDocument
 import io.github.werlang.whistl.data.StoredMachine
 import io.github.werlang.whistl.domain.Clock
 import io.github.werlang.whistl.domain.Machine
+import io.github.werlang.whistl.demo.DemoSwitch
+import io.github.werlang.whistl.ui.settings.DemoControl
+import io.github.werlang.whistl.ui.settings.LanguageApplier
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -161,9 +168,88 @@ class SharedPreferencesSpacesCache(context: Context) : SpacesCache {
         prefs.edit().putString(key(machineId), text).apply()
     }
 
+    override fun remove(machineId: String) {
+        prefs.edit().remove(key(machineId)).apply()
+    }
+
     private fun key(machineId: String): String = "spaces.$machineId"
 
     private companion object {
         const val PREFS = "whistl.spaces"
+    }
+}
+
+/**
+ * The resolved folder paths per machine, as one JSON object per machine in private SharedPreferences: folder as typed to
+ * the absolute path the probe printed. They stay on this device and are not in the `whistl` document. A copy that no
+ * longer parses counts as absent.
+ *
+ * @param context any context; the application context is used.
+ */
+class SharedPreferencesResolvedFolderCache(context: Context) : ResolvedFolderCache {
+    private val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    override fun get(machineId: String, folder: String): String? = read(machineId)[folder]
+
+    override fun put(machineId: String, folder: String, path: String) {
+        val folders = read(machineId).toMutableMap()
+        folders[folder] = path
+        val obj = JsonObject(folders.mapValues { JsonPrimitive(it.value) })
+        prefs.edit().putString(key(machineId), Json.encodeToString(JsonObject.serializer(), obj)).apply()
+    }
+
+    private fun read(machineId: String): Map<String, String> {
+        val text = prefs.getString(key(machineId), null) ?: return emptyMap()
+        return try {
+            Json.parseToJsonElement(text).jsonObject.mapNotNull { (folder, value) ->
+                (value as? JsonPrimitive)?.takeIf { it.isString }?.let { folder to it.content }
+            }.toMap()
+        } catch (e: RuntimeException) {
+            emptyMap()
+        }
+    }
+
+    override fun remove(machineId: String) {
+        prefs.edit().remove(key(machineId)).apply()
+    }
+
+    private fun key(machineId: String): String = "resolved.$machineId"
+
+    private companion object {
+        const val PREFS = "whistl.folders"
+    }
+}
+
+/**
+ * Applies the app language with `AppCompatDelegate.setApplicationLocales` (SPEC §7). The system choice is the empty list, so
+ * the device language is used again. The activity must be an `AppCompatActivity`.
+ */
+object AppCompatLanguageApplier : LanguageApplier {
+    override fun apply(language: AppLanguage) {
+        val locales = when (language) {
+            AppLanguage.System -> LocaleListCompat.getEmptyLocaleList()
+            AppLanguage.English -> LocaleListCompat.forLanguageTags("en")
+            AppLanguage.Portuguese -> LocaleListCompat.forLanguageTags("pt-BR")
+        }
+        AppCompatDelegate.setApplicationLocales(locales)
+    }
+}
+
+/**
+ * The demo switch of this build, for the Settings screen (phase 4 F5). It is never on in a release build.
+ *
+ * @param context any context; the application context is used.
+ */
+class AndroidDemoControl(context: Context) : DemoControl {
+    private val appContext = context.applicationContext
+
+    override val available: Boolean
+        get() = DemoSwitch.available
+
+    override val enabled: Boolean
+        get() = DemoSwitch.isOn(appContext)
+
+    override fun setEnabled(on: Boolean) {
+        DemoSwitch.set(appContext, on)
     }
 }

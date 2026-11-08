@@ -10,7 +10,7 @@ import io.github.werlang.whistl.domain.Terminal
 
 /**
  * Removes a trailing `/` from a folder path before comparing, so `/home/u/web/` and `/home/u/web` are the same folder.
- * A lone `/` stays `/`. No `~` expansion happens in this phase: `~` compares as written.
+ * A lone `/` stays `/`. This function does not expand `~`: [FolderResolver] does, before a path is compared here.
  *
  * @param path the folder path as stored or as the core reports it.
  * @return the path with any trailing slash removed.
@@ -29,23 +29,30 @@ fun sortSpaces(spaces: List<SpaceRecord>): List<SpaceRecord> =
 
 /**
  * The space an agent belongs to (SPEC §1, precedence in this order):
- * 1. a `whistl.space` label that names a space on this machine;
- * 2. otherwise the first space whose folder equals the terminal's `cwd`, after [normalizeFolder];
+ * 1. a `whistl.space` label that names a space on this machine. The label does not depend on any folder resolution;
+ * 2. otherwise the first space whose resolved path equals the terminal's `cwd`, after [normalizeFolder] on both;
  * 3. otherwise `null`, shown as "No space".
  *
- * A label naming a space that does not exist falls through to the cwd rule.
+ * A label naming a space that does not exist falls through to the cwd rule. A space whose [resolvedPath] is `null`
+ * (not resolved yet, or unresolvable) never matches by cwd.
  *
  * @param terminal the agent's terminal.
  * @param spaces the machine's spaces, in display order.
+ * @param resolvedPath the absolute path each space's folder resolved to, or `null` when it did not. The default compares
+ *   the folder as stored, which is the rule for a folder that needs no resolution.
  * @return the matched space, or `null`.
  */
-fun matchSpace(terminal: Terminal, spaces: List<SpaceRecord>): SpaceRecord? {
+fun matchSpace(
+    terminal: Terminal,
+    spaces: List<SpaceRecord>,
+    resolvedPath: (SpaceRecord) -> String? = { it.folder },
+): SpaceRecord? {
     val label = terminal.labels[Agent.SPACE_LABEL]
     if (label != null) {
         spaces.firstOrNull { it.id == label }?.let { return it }
     }
     val cwd = terminal.cwd?.let(::normalizeFolder) ?: return null
-    return spaces.firstOrNull { normalizeFolder(it.folder) == cwd }
+    return spaces.firstOrNull { space -> resolvedPath(space)?.let(::normalizeFolder) == cwd }
 }
 
 /**

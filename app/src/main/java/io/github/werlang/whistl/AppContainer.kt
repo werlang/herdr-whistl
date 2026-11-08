@@ -1,7 +1,10 @@
 package io.github.werlang.whistl
 
 import android.content.Context
+import android.os.Build
 import io.github.werlang.whistl.core.secure.KeystoreSecretStore
+import io.github.werlang.whistl.core.ssh.CryptoProviders
+import io.github.werlang.whistl.core.ssh.JavaSecurityRegistry
 import io.github.werlang.whistl.core.ssh.KeyManager
 import io.github.werlang.whistl.core.ssh.SshMachineConnector
 import io.github.werlang.whistl.data.AgentsRepository
@@ -15,11 +18,14 @@ import io.github.werlang.whistl.data.InstalledAgentsDetector
 import io.github.werlang.whistl.data.MachinesRepository
 import io.github.werlang.whistl.data.SettingsRepository
 import io.github.werlang.whistl.data.SpacesRepository
+import io.github.werlang.whistl.data.TerminalRepository
+import io.github.werlang.whistl.data.DefaultTerminalRepository
 import io.github.werlang.whistl.data.spaceIdsFrom
 import io.github.werlang.whistl.demo.DemoCores
 import io.github.werlang.whistl.platform.AndroidClock
 import io.github.werlang.whistl.platform.SharedPreferencesHostKeyStore
 import io.github.werlang.whistl.platform.SharedPreferencesMachineStore
+import io.github.werlang.whistl.platform.SharedPreferencesResolvedFolderCache
 import io.github.werlang.whistl.platform.SharedPreferencesSettingsStore
 import io.github.werlang.whistl.platform.SharedPreferencesSpacesCache
 import kotlinx.coroutines.CoroutineScope
@@ -52,6 +58,9 @@ class AppContainer(context: Context, demoMode: Boolean = false) {
     /** The spaces on each machine, and the edits to them. */
     val spaces: SpacesRepository = demo?.spaces ?: live.spaces
 
+    /** The terminals the Agent screen reads and drives. */
+    val terminals: TerminalRepository = demo?.terminals ?: live.terminals
+
     /** The app settings: language, font size, theme and the shortcut bar. */
     val settings: SettingsRepository = DefaultSettingsRepository(SharedPreferencesSettingsStore(context.applicationContext))
 
@@ -66,6 +75,11 @@ class AppContainer(context: Context, demoMode: Boolean = false) {
  * @param scope the scope the repositories run in.
  */
 private class LiveCore(context: Context, scope: CoroutineScope) {
+    init {
+        // Before any SSH use: below API 33 sshj needs BouncyCastle as its provider (SPEC §6, phase 4 decision 2).
+        CryptoProviders.install(Build.VERSION.SDK_INT, JavaSecurityRegistry)
+    }
+
     private val secrets = KeystoreSecretStore(context)
     private val keys = KeyManager(secrets)
     private val documentChanges = DocumentChanges()
@@ -84,6 +98,7 @@ private class LiveCore(context: Context, scope: CoroutineScope) {
         scope = scope,
         machines = machines,
         cache = SharedPreferencesSpacesCache(context),
+        folderCache = SharedPreferencesResolvedFolderCache(context),
         documentChanges = documentChanges,
         ids = spaceIdsFrom { random.nextBytes(it) },
     )
@@ -94,4 +109,6 @@ private class LiveCore(context: Context, scope: CoroutineScope) {
         spaces = spaces,
         documentChanges = documentChanges,
     )
+
+    val terminals: TerminalRepository = DefaultTerminalRepository(scope = scope, machines = machines)
 }

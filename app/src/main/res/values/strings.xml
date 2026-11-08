@@ -2,16 +2,119 @@
 <resources>
     <string name="app_name">Herdr Whistl</string>
 
+    <!-- Navigation (SPEC §2). Product names and key glyphs are not translated. -->
     <string name="destination_machines">Machines</string>
     <string name="destination_spaces">Spaces</string>
     <string name="destination_agents">Agents</string>
     <string name="destination_settings">Settings</string>
+    <plurals name="agents_badge_needs_you">
+        <item quantity="one">%1$d agent needs you</item>
+        <item quantity="other">%1$d agents need you</item>
+    </plurals>
 
+    <!-- Machines and Spaces are placeholders in this round. -->
     <string name="machines_title">Machines</string>
     <string name="machines_empty">No machines yet. Add one to start coordinating agents.</string>
     <string name="machines_add_content_description">Add machine</string>
-
     <string name="spaces_placeholder">Spaces will appear here.</string>
-    <string name="agents_placeholder">Agents will appear here.</string>
-    <string name="settings_placeholder">Settings will appear here.</string>
+
+    <!-- Common -->
+    <string name="common_back">Back</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_no_space">No space</string>
+
+    <!-- Agents list (SPEC §2.4) -->
+    <string name="agents_title">Agents</string>
+    <string name="agents_filter_all">All</string>
+    <string name="agents_filter_needs_you">Needs you</string>
+    <string name="agents_filter_working">Working</string>
+    <string name="agents_filter_idle">Idle</string>
+    <string name="agents_filter_empty">No agents with this status.</string>
+
+    <!-- Status labels, always beside the dot (SPEC §3) -->
+    <string name="status_working">working</string>
+    <string name="status_needs_you">needs you</string>
+    <string name="status_done">done</string>
+    <string name="status_idle">idle</string>
+    <string name="status_error">error</string>
+    <string name="status_plain">terminal</string>
+    <string name="status_finished">finished</string>
+
+    <!-- Agent terminal (SPEC §2.5) -->
+    <string name="agent_options">Agent options</string>
+    <string name="agent_terminal_description">Agent terminal</string>
+    <string name="agent_bar_place">[%1$s] %2$s · %3$s</string>
+    <string name="agent_input_description">Text for the terminal</string>
+    <string name="agent_input_placeholder">type to %1$s</string>
+    <string name="agent_send">Send</string>
+    <string name="agent_ctrl_on">Ctrl on: the next key is sent with Ctrl</string>
+    <string name="agent_ctrl_armed_description">Control, armed</string>
+    <string name="agent_key_sent">sent: %1$s</string>
+    <string name="agent_hint_blocked">Waiting for you. Send goes in with force.</string>
+    <string name="agent_notice_offline">%1$s is offline. Reconnect it in Machines to keep reading and sending.</string>
+    <string name="agent_notice_gone">This terminal is no longer on the machine.</string>
+    <string name="agent_notice_finished">This program has finished. It is read-only.</string>
+    <string name="agent_notice_blocked">The program refused the text. Try again.</string>
+    <string name="agent_notice_refused">The machine did not accept that. Try again.</string>
+    <string name="agent_interrupt">Interrupt (Ctrl+C)</string>
+    <string name="agent_stop">Stop and remove</string>
+    <string name="agent_stop_title">Stop and remove %1$s?</string>
+    <string name="agent_stop_text">The program stops and its terminal is removed. This cannot be undone.</string>
+    <string name="agent_stop_confirm">Stop and remove</string>
+
+    <!-- Shortcut key names, for accessibility. The glyphs on the keys are not translated. -->
+    <string name="key_esc">Escape</string>
+    <string name="key_tab">Tab</string>
+    <string name="key_ctrl">Control (modifier)</string>
+    <string name="key_up">Up arrow</string>
+    <string name="key_down">Down arrow</string>
+    <string name="key_left">Left arrow</string>
+    <string name="key_right">Right arrow</string>
+    <string name="key_enter">Enter</string>
+    <string name="key_ctrl_c">Control C</string>
+    <string name="key_ctrl_d">Control D</string>
+    <string name="key_home">Home</string>
+    <string name="key_end">End</string>
+    <string name="key_pg_up">Page Up</string>
+    <string name="key_pg_dn">Page Down</string>
+    <string name="key_slash">Slash</string>
+    <string name="key_pipe">Pipe</string>
+    <string name="key_tilde">Tilde</string>
+    <string name="key_dash">Dash</string>
+
+    <!-- Settings (SPEC §2.6) -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_general">General</string>
+    <string name="settings_language">Language</string>
+    <string name="language_system">System</string>
+    <string name="language_english">English</string>
+    <string name="language_portuguese">Português</string>
+    <string name="settings_theme">Theme</string>
+    <string name="theme_system">System</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_light">Light</string>
+    <string name="settings_font">Terminal font</string>
+    <string name="font_small">Small</string>
+    <string name="font_medium">Medium</string>
+    <string name="font_large">Large</string>
+    <string name="settings_shortcuts">Shortcut keys</string>
+    <string name="settings_shortcuts_hint">Shown above the keyboard in the terminal, in this order.</string>
+    <string name="settings_add_key">Add key</string>
+    <string name="settings_restore_keys">Restore defaults</string>
+    <string name="settings_all_keys_added">Every key is already in the bar.</string>
+    <string name="settings_move_key_up">Move %1$s up</string>
+    <string name="settings_move_key_down">Move %1$s down</string>
+    <string name="settings_remove_key">Remove %1$s</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">version %1$s</string>
+    <string name="settings_about_text">Coordinates Herdr agents on your machines. Connects straight to each one’s herdr-core over ssh: no server, no account, no telemetry.</string>
+    <string name="settings_licenses">Open-source licenses</string>
+    <string name="licenses_title">Open-source licenses</string>
+    <string name="license_jetbrains_mono">JetBrains Mono: SIL Open Font License 1.1</string>
+    <string name="license_sshj">sshj: Apache License 2.0</string>
+    <string name="license_bouncy_castle">Bouncy Castle: MIT license</string>
+    <string name="license_androidx">AndroidX and Jetpack Compose: Apache License 2.0</string>
+    <string name="license_kotlinx">kotlinx libraries: Apache License 2.0</string>
+    <string name="settings_demo">Demo mode</string>
+    <string name="settings_demo_hint">Starts on sample data at the next start. Debug builds only.</string>
 </resources>

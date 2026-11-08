@@ -2,16 +2,120 @@
 <resources>
     <string name="app_name">Herdr Whistl</string>
 
+    <!-- Navegação (SPEC §2). Nomes de produto e glifos das teclas não são traduzidos. -->
     <string name="destination_machines">Máquinas</string>
-    <string name="destination_spaces">Espaços</string>
+    <string name="destination_spaces">Spaces</string>
     <string name="destination_agents">Agentes</string>
-    <string name="destination_settings">Configurações</string>
+    <string name="destination_settings">Ajustes</string>
+    <plurals name="agents_badge_needs_you">
+        <item quantity="one">%1$d agente esperando você</item>
+        <item quantity="many">%1$d agentes esperando você</item>
+        <item quantity="other">%1$d agentes esperando você</item>
+    </plurals>
 
+    <!-- Máquinas e Spaces são telas provisórias nesta etapa. -->
     <string name="machines_title">Máquinas</string>
     <string name="machines_empty">Nenhuma máquina ainda. Adicione uma para começar a coordenar agentes.</string>
     <string name="machines_add_content_description">Adicionar máquina</string>
+    <string name="spaces_placeholder">Os spaces aparecerão aqui.</string>
 
-    <string name="spaces_placeholder">Os espaços aparecerão aqui.</string>
-    <string name="agents_placeholder">Os agentes aparecerão aqui.</string>
-    <string name="settings_placeholder">As configurações aparecerão aqui.</string>
+    <!-- Comum -->
+    <string name="common_back">Voltar</string>
+    <string name="common_cancel">Cancelar</string>
+    <string name="common_no_space">Sem space</string>
+
+    <!-- Lista de agentes (SPEC §2.4) -->
+    <string name="agents_title">Agentes</string>
+    <string name="agents_filter_all">Todos</string>
+    <string name="agents_filter_needs_you">Esperando você</string>
+    <string name="agents_filter_working">Trabalhando</string>
+    <string name="agents_filter_idle">Parados</string>
+    <string name="agents_filter_empty">Nenhum agente com esse status.</string>
+
+    <!-- Rótulos de estado, sempre ao lado do ponto (SPEC §3) -->
+    <string name="status_working">trabalhando</string>
+    <string name="status_needs_you">esperando você</string>
+    <string name="status_done">pronto</string>
+    <string name="status_idle">parado</string>
+    <string name="status_error">erro</string>
+    <string name="status_plain">terminal</string>
+    <string name="status_finished">encerrado</string>
+
+    <!-- Terminal do agente (SPEC §2.5) -->
+    <string name="agent_options">Opções do agente</string>
+    <string name="agent_terminal_description">Terminal do agente</string>
+    <string name="agent_bar_place">[%1$s] %2$s · %3$s</string>
+    <string name="agent_input_description">Texto para o terminal</string>
+    <string name="agent_input_placeholder">digite para %1$s</string>
+    <string name="agent_send">Enviar</string>
+    <string name="agent_ctrl_on">Ctrl ativo: a próxima tecla vai com Ctrl</string>
+    <string name="agent_ctrl_armed_description">Control, ativo</string>
+    <string name="agent_key_sent">enviado: %1$s</string>
+    <string name="agent_hint_blocked">Esperando você. Enviar vai com força.</string>
+    <string name="agent_notice_offline">%1$s está offline. Reconecte em Máquinas para continuar lendo e enviando.</string>
+    <string name="agent_notice_gone">Este terminal não existe mais na máquina.</string>
+    <string name="agent_notice_finished">Este programa terminou. Ele é somente leitura.</string>
+    <string name="agent_notice_blocked">O programa recusou o texto. Tente de novo.</string>
+    <string name="agent_notice_refused">A máquina não aceitou. Tente de novo.</string>
+    <string name="agent_interrupt">Interromper (Ctrl+C)</string>
+    <string name="agent_stop">Encerrar e remover</string>
+    <string name="agent_stop_title">Encerrar e remover %1$s?</string>
+    <string name="agent_stop_text">O programa para e o terminal é removido. Isso não pode ser desfeito.</string>
+    <string name="agent_stop_confirm">Encerrar e remover</string>
+
+    <!-- Nomes das teclas de atalho, para acessibilidade. Os glifos nas teclas não são traduzidos. -->
+    <string name="key_esc">Escape</string>
+    <string name="key_tab">Tab</string>
+    <string name="key_ctrl">Control (modificador)</string>
+    <string name="key_up">Seta para cima</string>
+    <string name="key_down">Seta para baixo</string>
+    <string name="key_left">Seta para a esquerda</string>
+    <string name="key_right">Seta para a direita</string>
+    <string name="key_enter">Enter</string>
+    <string name="key_ctrl_c">Control C</string>
+    <string name="key_ctrl_d">Control D</string>
+    <string name="key_home">Home</string>
+    <string name="key_end">End</string>
+    <string name="key_pg_up">Page Up</string>
+    <string name="key_pg_dn">Page Down</string>
+    <string name="key_slash">Barra</string>
+    <string name="key_pipe">Barra vertical</string>
+    <string name="key_tilde">Til</string>
+    <string name="key_dash">Hífen</string>
+
+    <!-- Ajustes (SPEC §2.6) -->
+    <string name="settings_title">Ajustes</string>
+    <string name="settings_general">Geral</string>
+    <string name="settings_language">Idioma</string>
+    <string name="language_system">Sistema</string>
+    <string name="language_english">English</string>
+    <string name="language_portuguese">Português</string>
+    <string name="settings_theme">Tema</string>
+    <string name="theme_system">Sistema</string>
+    <string name="theme_dark">Escuro</string>
+    <string name="theme_light">Claro</string>
+    <string name="settings_font">Fonte do terminal</string>
+    <string name="font_small">Pequena</string>
+    <string name="font_medium">Média</string>
+    <string name="font_large">Grande</string>
+    <string name="settings_shortcuts">Teclas de atalho</string>
+    <string name="settings_shortcuts_hint">Ficam acima do teclado no terminal, nesta ordem.</string>
+    <string name="settings_add_key">Adicionar tecla</string>
+    <string name="settings_restore_keys">Restaurar padrão</string>
+    <string name="settings_all_keys_added">Todas as teclas já estão na barra.</string>
+    <string name="settings_move_key_up">Mover %1$s para cima</string>
+    <string name="settings_move_key_down">Mover %1$s para baixo</string>
+    <string name="settings_remove_key">Remover %1$s</string>
+    <string name="settings_about">Sobre</string>
+    <string name="settings_version">versão %1$s</string>
+    <string name="settings_about_text">Coordena agentes do Herdr nas suas máquinas. Conecta direto por ssh ao herdr-core de cada uma: sem servidor, sem conta, sem telemetria.</string>
+    <string name="settings_licenses">Licenças de código aberto</string>
+    <string name="licenses_title">Licenças de código aberto</string>
+    <string name="license_jetbrains_mono">JetBrains Mono: SIL Open Font License 1.1</string>
+    <string name="license_sshj">sshj: Apache License 2.0</string>
+    <string name="license_bouncy_castle">Bouncy Castle: licença MIT</string>
+    <string name="license_androidx">AndroidX e Jetpack Compose: Apache License 2.0</string>
+    <string name="license_kotlinx">bibliotecas kotlinx: Apache License 2.0</string>
+    <string name="settings_demo">Modo demo</string>
+    <string name="settings_demo_hint">Inicia com dados de exemplo na próxima abertura. Só nas versões de depuração.</string>
 </resources>
