@@ -200,8 +200,16 @@ class DefaultMachinesRepository(
                     restartConnection(slot)
                 }
 
-                machine.user != before.machine.user || machine.port != before.machine.port ||
-                    auth != before.auth || (auth == AuthMethod.Password && password != null) -> {
+                machine.port != before.machine.port -> {
+                    // Rule R2, port: the same host, so the pin stays. A host-key decision was made for the old port, though, so a
+                    // pending key is forgotten and the connection starts again: the new port presents its own key (a first
+                    // connection asks again), and a changed key is compared with the pin, never re-pinned (p7r8 item 1).
+                    slot.pendingKey = null
+                    restartConnection(slot)
+                }
+
+                machine.user != before.machine.user || auth != before.auth ||
+                    (auth == AuthMethod.Password && password != null) -> {
                     // Rule R2: the same host, so the pin stays. A machine that waits for a host-key decision keeps that state.
                     when (slot.state.value) {
                         is ConnectionState.HostKeyUnknown, is ConnectionState.HostKeyChanged -> Unit

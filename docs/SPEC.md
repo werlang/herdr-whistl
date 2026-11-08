@@ -48,7 +48,10 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    - **R2, user, port, login method or a new password:** the pinned host key is
      kept (same host, same key). The session closes and reconnects with the new
      settings when the machine is held. A machine waiting for a host-key decision,
-     or blocked by a changed key, keeps that state until the user decides.
+     or blocked by a changed key, keeps that state until the user decides. A port
+     change is the exception: the new port presents its own key, so the connection
+     starts again and that key is compared with the pin. A pending key is asked
+     again, a changed key is blocked again, and nothing is re-pinned (phase 7 r8).
    - **R3, host:** the pinned host key is forgotten and the session closes. The
      next connection goes through first-connection confirmation again, with the
      new host's fingerprint. The old host's fingerprint is never compared with, or

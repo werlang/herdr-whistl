@@ -11,6 +11,7 @@ import io.github.werlang.whistl.core.ssh.SshWire
 import io.github.werlang.whistl.domain.Rejection
 import io.github.werlang.whistl.support.FakeHostKeyStore
 import io.github.werlang.whistl.support.FakeMachineConnector
+import io.github.werlang.whistl.support.FakeMachineConnector.Attempt
 import io.github.werlang.whistl.support.FakeSecretStore
 import io.github.werlang.whistl.support.InMemoryMachineStore
 import io.github.werlang.whistl.support.assertThrowsSuspend
@@ -571,6 +572,113 @@ class MachinesRepositoryTest {
         assertEquals(2222, h.repo.machines().value.single().port)
         assertEquals("admin", h.repo.machines().value.single().user)
         assertTrue(h.repo.observe(id).value is ConnectionState.Connected)
+    }
+
+    /**
+     * P7R8 item 1: a key that is pending on the old port is forgotten when the port changes. The new port presents its own key,
+     * and that is the key the card offers and Trust pins.
+     */
+    @Test
+    fun aPendingKeyIsForgottenWhenThePortChanges() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab(pinned = false)
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(
+            ConnectionState.HostKeyUnknown(SshWire.ED25519, SshFingerprint.of(h.connector.defaultKey)),
+            h.repo.observe(id).value,
+        )
+
+        val newPortKey = SshWire.ed25519Blob(ByteArray(32) { 2 })
+        // The restart and the connection after Trust both present the new port's key.
+        h.connector.script(Attempt.PresentKey(newPortKey), Attempt.PresentKey(newPortKey))
+        h.repo.edit(id, NewMachine("", "homelab.example", 2222, "root"), AuthMethod.Key)
+        runCurrent()
+
+        assertEquals(
+            ConnectionState.HostKeyUnknown(SshWire.ED25519, SshFingerprint.of(newPortKey)),
+            h.repo.observe(id).value,
+        )
+        assertNull(h.hostKeys.pinned(id))
+        assertEquals(ConfirmResult.Trusted, h.repo.confirmHostKey(id))
+        runCurrent()
+        assertEquals(PinnedHostKey(SshWire.ED25519, newPortKey), h.hostKeys.pinned(id))
+        assertTrue(h.repo.observe(id).value is ConnectionState.Connected)
+    }
+
+    /**
+     * P7R8 item 1: a changed key stays blocked when the port changes. The restart compares the new port's key with the pin: a
+     * different key is blocked again, and nothing is re-pinned.
+     */
+    @Test
+    fun aChangedKeyStaysBlockedAfterAPortChangeAndIsNeverRepinned() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab(pinned = false)
+        val pinned = SshWire.ed25519Blob(ByteArray(32) { 9 })
+        h.hostKeys.pin(id, PinnedHostKey(SshWire.ED25519, pinned))
+        h.repo.acquire(id)
+        runCurrent()
+        assertTrue(h.repo.observe(id).value is ConnectionState.HostKeyChanged)
+        val connectsBefore = h.connector.connectCalls
+
+        h.repo.edit(id, NewMachine("", "homelab.example", 2222, "root"), AuthMethod.Key)
+        runCurrent()
+
+        assertEquals(connectsBefore + 1, h.connector.connectCalls)
+        assertEquals(
+            ConnectionState.HostKeyChanged(
+                SshWire.ED25519,
+                SshFingerprint.of(pinned),
+                SshFingerprint.of(h.connector.defaultKey),
+            ),
+            h.repo.observe(id).value,
+        )
+        assertEquals(0, h.connector.helloCalls)
+        assertEquals(PinnedHostKey(SshWire.ED25519, pinned), h.hostKeys.pinned(id))
+    }
+
+    /** P7R8 item 1: a changed key on the old port connects on the new port when the new port presents the pinned key. */
+    @Test
+    fun aChangedKeyClearsWhenTheNewPortPresentsThePinnedKey() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab(pinned = false)
+        val pinned = SshWire.ed25519Blob(ByteArray(32) { 9 })
+        h.hostKeys.pin(id, PinnedHostKey(SshWire.ED25519, pinned))
+        h.repo.acquire(id)
+        runCurrent()
+        assertTrue(h.repo.observe(id).value is ConnectionState.HostKeyChanged)
+
+        h.connector.script(Attempt.PresentKey(pinned))
+        h.repo.edit(id, NewMachine("", "homelab.example", 2222, "root"), AuthMethod.Key)
+        runCurrent()
+
+        assertTrue(h.repo.observe(id).value is ConnectionState.Connected)
+        assertEquals(PinnedHostKey(SshWire.ED25519, pinned), h.hostKeys.pinned(id))
+    }
+
+    /**
+     * P7R8 item 1: a pending key is kept when only the user changes. The same port presents the same key, so no restart runs
+     * and Trust still pins the key that was shown.
+     */
+    @Test
+    fun aPendingKeyStaysPendingWhenOnlyTheUserChanges() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab(pinned = false)
+        h.repo.acquire(id)
+        runCurrent()
+        val connectsBefore = h.connector.connectCalls
+
+        h.repo.edit(id, NewMachine("", "homelab.example", 22, "admin"), AuthMethod.Key)
+        runCurrent()
+
+        assertEquals(connectsBefore, h.connector.connectCalls)
+        assertEquals(
+            ConnectionState.HostKeyUnknown(SshWire.ED25519, SshFingerprint.of(h.connector.defaultKey)),
+            h.repo.observe(id).value,
+        )
+        assertEquals(ConfirmResult.Trusted, h.repo.confirmHostKey(id))
+        runCurrent()
+        assertEquals(PinnedHostKey(SshWire.ED25519, h.connector.defaultKey), h.hostKeys.pinned(id))
     }
 
     /** R2: a login-method change to password reconnects and keeps the pinned key; the saved password is stored. */
