@@ -156,6 +156,12 @@ backs Compose previews, screenshot tests and a debug-only "demo mode".
 - `terminal.run {argv, cwd, labels, keep?, no_parent:true, no_notify:true}` →
   Terminal (has `address`). The app always passes `no_parent` and `no_notify`.
 - `terminal.read {terminal, lines}` → `{text, complete, how}`.
+- `terminal.list` and `events.subscribe` decode each terminal entry on its own:
+  an entry that does not decode is skipped and counted (class name in the log),
+  the others are kept. `status` is a string, or for an agent the object
+  `{"app":"claude-code","state":"idle"}`; the app reads its `state` (phase 7
+  r5 U4). Fixtures: `events_snapshot_agent_status.json`,
+  `terminal_list_agent_status.json`.
 - `terminal.send {terminal, text}` pastes text and presses Enter.
 - `terminal.keys {terminal, keys:["ctrl+c","up","enter","esc","tab",…]}`.
 - `terminal.interrupt`, `terminal.kill`, `terminal.rm`, `terminal.label`.

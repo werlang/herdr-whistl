@@ -2,13 +2,16 @@ package io.github.werlang.whistl.data
 
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.TerminalState
+import io.github.werlang.whistl.support.FakeLinePipe
 import io.github.werlang.whistl.support.FakeMachineConnector
 import io.github.werlang.whistl.support.RepoStack
+import io.github.werlang.whistl.support.requestIdOf
 import io.github.werlang.whistl.support.dataOf
 import io.github.werlang.whistl.support.eventLine
 import io.github.werlang.whistl.support.eventsSnapshot
 import io.github.werlang.whistl.support.snapshotPipe
 import io.github.werlang.whistl.support.spaceJson
+import io.github.werlang.whistl.support.withId
 import io.github.werlang.whistl.support.spacesDocJson
 import io.github.werlang.whistl.support.terminalJson
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -495,5 +498,27 @@ class AgentsRepositoryTest {
 
         assertEquals(2, h.agents.agents.value.size)
         assertEquals(1, h.agents.blockedCount.value)
+    }
+
+    /**
+     * A subscription that fails with an unexpected error (here the answer to `events.subscribe` is a number, not a snapshot)
+     * keeps the machine connected and is retried on the same client, so the agents come back without a reconnect (phase 7 r5
+     * amendment U4). Before this, the failure emptied the list, and nothing resubscribed while the machine stayed connected.
+     */
+    @Test
+    fun aSubscriptionErrorIsRetriedWhileConnected() = runTest {
+        val h = RepoStack(this)
+        val answers = ArrayDeque(
+            listOf(FakeLinePipe { line -> push(withId(JsonObject(mapOf("jsonrpc" to JsonPrimitive("2.0"), "result" to JsonPrimitive(7))), requestIdOf(line))) }),
+        )
+        h.connector.eventsPipeFactory = { answers.removeFirstOrNull() ?: snapshotPipe(eventsSnapshot(2, listOf(terminalJson("t1")))) }
+        h.addMachine()
+        runCurrent()
+        assertEquals(emptyList<String>(), h.addresses())
+
+        advanceTimeBy(1_500)
+        runCurrent()
+
+        assertEquals(listOf("t1"), h.addresses())
     }
 }

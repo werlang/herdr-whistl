@@ -1,0 +1,110 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "terminal.list",
+    "params": {}
+  },
+  "response": {
+    "id": 3,
+    "jsonrpc": "2.0",
+    "result": {
+      "hidden_finished": 2,
+      "terminals": [
+        {
+          "address": "t3s",
+          "argv": [
+            "claude"
+          ],
+          "cols": 200,
+          "created_ms": 1794168278810,
+          "cwd": "/root",
+          "die_with_parent": false,
+          "exit_code": null,
+          "finished_ms": null,
+          "foreground": {
+            "argv": [
+              "claude"
+            ],
+            "cwd": "/root",
+            "name": "claude",
+            "pid": 2226972
+          },
+          "identity": "ghostty",
+          "keep": false,
+          "labels": {
+            "whistl.space": "sp_306e2132ff10df33"
+          },
+          "name": null,
+          "notify": false,
+          "parent": null,
+          "pid": 2226972,
+          "reason": null,
+          "reported": true,
+          "rm": false,
+          "rows": 120,
+          "screen": "exact",
+          "signal": null,
+          "state": "live",
+          "status": {
+            "app": "claude-code",
+            "state": "idle"
+          },
+          "status_ms": 1794168294547,
+          "template": null,
+          "title": "Claude Code",
+          "turn": 0
+        },
+        {
+          "address": "t40",
+          "argv": [
+            "env",
+            "-i",
+            "PATH=/usr/bin:/bin:/usr/local/bin",
+            "TERM=dumb",
+            "bash",
+            "--norc",
+            "--noprofile"
+          ],
+          "cols": 200,
+          "created_ms": 1794169230274,
+          "cwd": "/root",
+          "die_with_parent": false,
+          "exit_code": null,
+          "finished_ms": null,
+          "foreground": {
+            "argv": [
+              "bash",
+              "--norc",
+              "--noprofile"
+            ],
+            "cwd": "/root",
+            "name": "bash",
+            "pid": 2236537
+          },
+          "identity": "ghostty",
+          "keep": false,
+          "labels": {
+            "whistl.audit": "1"
+          },
+          "name": "aud-plain",
+          "notify": true,
+          "parent": null,
+          "pid": 2236537,
+          "reason": null,
+          "reported": false,
+          "rm": false,
+          "rows": 120,
+          "screen": "exact",
+          "signal": null,
+          "state": "live",
+          "status": null,
+          "status_ms": null,
+          "template": null,
+          "title": "",
+          "turn": 0
+        }
+      ]
+    }
+  }
+}

@@ -25,11 +25,13 @@ typealias OpenEventsPipe = suspend () -> LinePipe
  * @property terminals the terminals matching the request's filters.
  * @property machines the machines hc knows about.
  * @property hiddenFinished how many finished terminals hc did not list.
+ * @property skippedTerminals how many entries did not decode and were left out (the others are kept; see `decodeTerminals`).
  */
 data class TerminalList(
     val terminals: List<Terminal>,
     val machines: List<CoreMachine>,
     val hiddenFinished: Int,
+    val skippedTerminals: Int = 0,
 )
 
 /**
@@ -124,6 +126,8 @@ class EventSubscription internal constructor(
     val events: Flow<HcEvent>,
     private val connection: JsonRpcConnection,
     private val dropped: () -> Long,
+    /** How many snapshot entries did not decode and were left out (see `decodeTerminals`). */
+    val skippedTerminals: Int = 0,
 ) {
     /** Lines dropped so far because they were not event objects. */
     val droppedLines: Long
@@ -186,10 +190,12 @@ class HcClient(
             "terminal.list",
             TerminalListParams(labels = labels, all = all),
         )
+        val decoded = decodeTerminals(wire.terminals)
         return TerminalList(
-            terminals = wire.terminals.map { it.toDomain() },
+            terminals = decoded.terminals,
             machines = wire.machines.map { it.toDomain() },
             hiddenFinished = wire.hiddenFinished,
+            skippedTerminals = decoded.skipped,
         )
     }
 
@@ -404,12 +410,14 @@ class HcClient(
                     null
                 }
             }
+        val decoded = decodeTerminals(snapshot.terminals)
         return EventSubscription(
             seq = snapshot.seq,
-            terminals = snapshot.terminals.map { it.toDomain() },
+            terminals = decoded.terminals,
             events = stream,
             connection = events,
             dropped = dropped::get,
+            skippedTerminals = decoded.skipped,
         )
     }
 
