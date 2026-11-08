@@ -97,6 +97,48 @@ class IconButtonsHaveDescriptionsTest : ScreenHarness() {
     @Test
     fun removeMachineConfirmNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.RemoveMachineConfirm)
 
+    @Test
+    fun spacesNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.Spaces)
+
+    @Test
+    fun spacesEmptyNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.SpacesEmpty)
+
+    @Test
+    fun spacesLongNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.SpacesLong)
+
+    @Test
+    fun newSpaceNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.NewSpace)
+
+    @Test
+    fun newSpaceNoMachineNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.NewSpaceNoMachine)
+
+    @Test
+    fun spaceMenuNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.SpaceMenu)
+
+    @Test
+    fun renameSpaceNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.RenameSpace)
+
+    @Test
+    fun closeSpaceConfirmNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.CloseSpaceConfirm)
+
+    @Test
+    fun spaceDetailNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.SpaceDetail)
+
+    @Test
+    fun spaceDetailOfflineNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.SpaceDetailOffline)
+
+    @Test
+    fun newAgentPickerNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.NewAgentPicker)
+
+    @Test
+    fun agentMenuNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.AgentMenu)
+
+    @Test
+    fun licencesSheetNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.LicencesSheet)
+
+    @Test
+    fun machineHostKeySheetNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.MachineHostKeySheet)
+
     private companion object {
         /** The minimum touch target in dp (SPEC §3). */
         const val MIN_TARGET_DP: Float = 48f

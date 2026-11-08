@@ -16,7 +16,6 @@
     <!-- Máquinas e Spaces são telas provisórias nesta etapa. -->
     <string name="machines_title">Máquinas</string>
     <string name="machines_add_content_description">Adicionar máquina</string>
-    <string name="spaces_placeholder">Os spaces aparecerão aqui.</string>
 
     <!-- Comum -->
     <string name="common_back">Voltar</string>
@@ -189,4 +188,66 @@
     <string name="problem_name_empty">Digite um nome.</string>
     <string name="problem_name_too_long">Este nome é longo demais.</string>
     <string name="problem_password_empty">Digite a senha.</string>
+
+    <!-- Spaces, New space, Space detail and the picker (phase 4b r2). -->
+    <string name="spaces_new_content_description">Novo space</string>
+    <string name="spaces_empty_title">Nenhum space ainda</string>
+    <string name="spaces_empty_hint">Um space é uma pasta numa máquina, onde seus agentes trabalham.</string>
+    <string name="spaces_no_machine">Um space mora numa máquina. Adicione uma máquina antes.</string>
+    <string name="spaces_waiting_badge">esperando</string>
+    <string name="spaces_pinned">Fixado</string>
+    <string name="spaces_summary">%1$s · %2$s</string>
+    <string name="space_folder_not_checked">Pasta ainda não verificada</string>
+    <string name="space_unresolved_not_found">A pasta não existe na máquina.</string>
+    <string name="space_unresolved_unsupported_tilde">Aqui só se expande ~ e ~/…, não a home de outro usuário.</string>
+    <string name="space_unresolved_timeout">A máquina não respondeu à verificação da pasta a tempo.</string>
+    <string name="space_unresolved_bad_output">A resposta da máquina não é um caminho de pasta.</string>
+    <string name="space_unresolved_no_home">A máquina não tem pasta home para expandir ~.</string>
+    <string name="space_options">Opções do space</string>
+    <string name="space_menu_pin">Fixar no topo</string>
+    <string name="space_menu_unpin">Desafixar</string>
+    <string name="space_menu_move_up">Mover para cima</string>
+    <string name="space_menu_move_down">Mover para baixo</string>
+    <string name="space_menu_rename">Renomear</string>
+    <string name="space_menu_close">Fechar space</string>
+    <string name="space_menu_offline">Offline: estas ações precisam de conexão.</string>
+    <string name="space_new_title">Novo space</string>
+    <string name="space_field_machine">Máquina</string>
+    <string name="space_field_folder">Pasta</string>
+    <string name="space_folder_placeholder">~ (home da máquina)</string>
+    <string name="space_field_name">Nome</string>
+    <string name="space_create">Criar space</string>
+    <string name="space_machine_offline">Esta máquina está offline. Conecte-a em Máquinas primeiro.</string>
+    <string name="problem_space_folder_empty">Digite uma pasta, ou deixe para ~.</string>
+    <string name="problem_space_folder_bad">Uma pasta não pode ter quebra de linha.</string>
+    <string name="space_rename_title">Renomear space</string>
+    <string name="space_rename_save">Salvar</string>
+    <string name="space_close_title">Fechar %1$s?</string>
+    <string name="space_close_none">Está vazio; nada roda nele.</string>
+    <string name="space_detail_empty_title">Nenhum agente aqui ainda.</string>
+    <string name="space_detail_empty_hint">Toque em Novo agente para abrir um agente ou um terminal.</string>
+    <string name="space_detail_offline">%1$s está offline. Reconecte-a em Máquinas para ver e iniciar agentes aqui.</string>
+    <string name="space_detail_missing">Este space não está mais na máquina.</string>
+    <string name="space_detail_header">%1$s:%2$s</string>
+    <string name="new_agent">Novo agente</string>
+    <string name="new_agent_off_machine">Novo agente desligado: %1$s está offline.</string>
+    <string name="new_agent_off_folder">Novo agente desligado: a pasta não está disponível na máquina.</string>
+    <string name="new_agent_off_folder_unchecked">Novo agente desligado: a pasta ainda não foi verificada.</string>
+    <string name="picker_installed">Instalados em %1$s</string>
+    <string name="picker_terminal">Terminal</string>
+    <string name="picker_terminal_sub">O shell da máquina</string>
+    <string name="picker_starting">Iniciando…</string>
+    <string name="start_could_not">A máquina não conseguiu iniciar. Verifique se o programa está instalado nela.</string>
+    <string name="start_offline">A máquina está offline.</string>
+    <string name="start_unknown_space">Este space não está mais na máquina.</string>
+    <plurals name="space_agents_count">
+        <item quantity="one">%1$d agente</item>
+        <item quantity="many">%1$d agentes</item>
+        <item quantity="other">%1$d agentes</item>
+    </plurals>
+    <plurals name="space_close_agents">
+        <item quantity="one">%1$d agente será encerrado.</item>
+        <item quantity="many">%1$d agentes serão encerrados.</item>
+        <item quantity="other">%1$d agentes serão encerrados.</item>
+    </plurals>
 </resources>

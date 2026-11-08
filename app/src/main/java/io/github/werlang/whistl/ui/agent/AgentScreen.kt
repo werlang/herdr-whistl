@@ -42,6 +42,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -61,6 +62,12 @@ import io.github.werlang.whistl.ui.statusColor
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
 import io.github.werlang.whistl.ui.theme.WhistlTerminalText
+
+/** The test tag of the Agent screen, so a navigation test can see that it opened. */
+const val AGENT_SCREEN_TAG: String = "agent-screen"
+
+/** The test tag of the Agent screen's options sheet (Interrupt, Stop and remove). */
+const val AGENT_MENU_SHEET_TAG: String = "agent-menu-sheet"
 
 /**
  * The Agent screen (SPEC §2.5): a full-height terminal, the status bar, the shortcut keys in Settings order, the text field and
@@ -113,7 +120,7 @@ fun AgentContent(
     onConfirmStop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize().testTag(AGENT_SCREEN_TAG)) {
         AgentHeader(state = state, onBack = onBack, onOptions = onOpenMenu)
         TerminalOutput(state = state, modifier = Modifier.weight(1f))
         StatusBar(state = state)
@@ -132,7 +139,7 @@ fun AgentContent(
         }
     }
     if (state.menuOpen) {
-        ModalBottomSheet(onDismissRequest = onCloseMenu) {
+        ModalBottomSheet(onDismissRequest = onCloseMenu, modifier = Modifier.testTag(AGENT_MENU_SHEET_TAG)) {
             SheetAction(text = stringResource(R.string.agent_interrupt), onClick = onInterrupt)
             SheetAction(text = stringResource(R.string.agent_stop), danger = true, onClick = onAskStop)
             Spacer(Modifier.height(24.dp))

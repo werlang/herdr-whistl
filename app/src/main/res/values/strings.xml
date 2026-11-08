@@ -11,11 +11,8 @@
         <item quantity="one">%1$d agent needs you</item>
         <item quantity="other">%1$d agents need you</item>
     </plurals>
-
-    <!-- Machines and Spaces are placeholders in this round. -->
     <string name="machines_title">Machines</string>
     <string name="machines_add_content_description">Add machine</string>
-    <string name="spaces_placeholder">Spaces will appear here.</string>
 
     <!-- Common -->
     <string name="common_back">Back</string>
@@ -187,4 +184,64 @@
     <string name="problem_name_empty">Enter a name.</string>
     <string name="problem_name_too_long">This name is too long.</string>
     <string name="problem_password_empty">Enter the password.</string>
+
+    <!-- Spaces, New space, Space detail and the picker (phase 4b r2). -->
+    <string name="spaces_new_content_description">New space</string>
+    <string name="spaces_empty_title">No spaces yet</string>
+    <string name="spaces_empty_hint">A space is a folder on a machine where your agents work.</string>
+    <string name="spaces_no_machine">A space lives on a machine. Add a machine first.</string>
+    <string name="spaces_waiting_badge">waiting</string>
+    <string name="spaces_pinned">Pinned</string>
+    <string name="spaces_summary">%1$s · %2$s</string>
+    <string name="space_folder_not_checked">Folder not checked yet</string>
+    <string name="space_unresolved_not_found">The folder is not on the machine.</string>
+    <string name="space_unresolved_unsupported_tilde">Only ~ and ~/… are expanded here, not another user’s home.</string>
+    <string name="space_unresolved_timeout">The machine did not answer the folder check in time.</string>
+    <string name="space_unresolved_bad_output">The machine’s answer was not a folder path.</string>
+    <string name="space_unresolved_no_home">The machine has no home folder to expand ~ with.</string>
+    <string name="space_options">Space options</string>
+    <string name="space_menu_pin">Pin to top</string>
+    <string name="space_menu_unpin">Unpin</string>
+    <string name="space_menu_move_up">Move up</string>
+    <string name="space_menu_move_down">Move down</string>
+    <string name="space_menu_rename">Rename</string>
+    <string name="space_menu_close">Close space</string>
+    <string name="space_menu_offline">Offline: these actions need a connection.</string>
+    <string name="space_new_title">New space</string>
+    <string name="space_field_machine">Machine</string>
+    <string name="space_field_folder">Folder</string>
+    <string name="space_folder_placeholder">~ (machine home)</string>
+    <string name="space_field_name">Name</string>
+    <string name="space_create">Create space</string>
+    <string name="space_machine_offline">This machine is offline. Connect it in Machines first.</string>
+    <string name="problem_space_folder_empty">Enter a folder, or leave it for ~.</string>
+    <string name="problem_space_folder_bad">A folder cannot have a line break.</string>
+    <string name="space_rename_title">Rename space</string>
+    <string name="space_rename_save">Save</string>
+    <string name="space_close_title">Close %1$s?</string>
+    <string name="space_close_none">It is empty; nothing runs in it.</string>
+    <string name="space_detail_empty_title">No agents here yet.</string>
+    <string name="space_detail_empty_hint">Tap New agent to start an agent or a terminal.</string>
+    <string name="space_detail_offline">%1$s is offline. Reconnect it in Machines to see and start agents here.</string>
+    <string name="space_detail_missing">This space is no longer on its machine.</string>
+    <string name="space_detail_header">%1$s:%2$s</string>
+    <string name="new_agent">New agent</string>
+    <string name="new_agent_off_machine">New agent is off: %1$s is offline.</string>
+    <string name="new_agent_off_folder">New agent is off: the folder is not available on the machine.</string>
+    <string name="new_agent_off_folder_unchecked">New agent is off: the folder has not been checked yet.</string>
+    <string name="picker_installed">Installed on %1$s</string>
+    <string name="picker_terminal">Terminal</string>
+    <string name="picker_terminal_sub">The machine’s shell</string>
+    <string name="picker_starting">Starting…</string>
+    <string name="start_could_not">The machine could not start it. Check that the program is installed there.</string>
+    <string name="start_offline">The machine is offline.</string>
+    <string name="start_unknown_space">This space is no longer on the machine.</string>
+    <plurals name="space_agents_count">
+        <item quantity="one">%1$d agent</item>
+        <item quantity="other">%1$d agents</item>
+    </plurals>
+    <plurals name="space_close_agents">
+        <item quantity="one">Its %1$d agent will be stopped.</item>
+        <item quantity="other">Its %1$d agents will be stopped.</item>
+    </plurals>
 </resources>

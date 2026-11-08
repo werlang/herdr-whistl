@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -18,6 +19,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.Density
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -40,6 +42,18 @@ import io.github.werlang.whistl.ui.machines.MACHINE_MENU_SHEET_TAG
 import io.github.werlang.whistl.ui.machines.MENU_REMOVE_TAG
 import io.github.werlang.whistl.ui.machines.REMOVE_MACHINE_SHEET_TAG
 import io.github.werlang.whistl.ui.settings.ADD_KEY_SHEET_TAG
+import io.github.werlang.whistl.ui.agent.AGENT_MENU_SHEET_TAG
+import io.github.werlang.whistl.ui.machines.HOST_KEY_SHEET_TAG
+import io.github.werlang.whistl.ui.settings.LICENSES_SHEET_TAG
+import io.github.werlang.whistl.ui.space.NEW_AGENT_TAG
+import io.github.werlang.whistl.ui.space.PICKER_SHEET_TAG
+import io.github.werlang.whistl.ui.spaces.CLOSE_SPACE_SHEET_TAG
+import io.github.werlang.whistl.ui.spaces.MENU_SPACE_CLOSE_TAG
+import io.github.werlang.whistl.ui.spaces.MENU_SPACE_RENAME_TAG
+import io.github.werlang.whistl.ui.spaces.NEW_SPACE_FOLDER_TAG
+import io.github.werlang.whistl.ui.spaces.NEW_SPACE_SHEET_TAG
+import io.github.werlang.whistl.ui.spaces.RENAME_SPACE_SHEET_TAG
+import io.github.werlang.whistl.ui.spaces.SPACE_MENU_SHEET_TAG
 import io.github.werlang.whistl.ui.theme.WhistlTheme
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
@@ -95,6 +109,48 @@ enum class ShotScreen(val slug: String) {
 
     /** The confirmation before a machine is removed. */
     RemoveMachineConfirm("remove-machine-confirm"),
+
+    /** The Spaces list with the demo's spaces: pinned, a waiting badge, an offline group, an unresolved folder. */
+    Spaces("spaces"),
+
+    /** The Spaces list with no space on any machine: the empty state. */
+    SpacesEmpty("spaces-empty"),
+
+    /** The Spaces list with a long space name and a long folder, at 1.3× font scale. */
+    SpacesLong("spaces-long"),
+
+    /** The New space sheet, with a folder typed. */
+    NewSpace("new-space"),
+
+    /** The New space sheet with no machine added. */
+    NewSpaceNoMachine("new-space-no-machine"),
+
+    /** A space's row menu. */
+    SpaceMenu("space-menu"),
+
+    /** The rename sheet for a space. */
+    RenameSpace("rename-space"),
+
+    /** The close confirmation for a space with live agents. */
+    CloseSpaceConfirm("close-space-confirm"),
+
+    /** The Space detail of a connected space with a blocked agent. */
+    SpaceDetail("space-detail"),
+
+    /** The Space detail of a space on an offline machine: New agent is off. */
+    SpaceDetailOffline("space-detail-offline"),
+
+    /** The New agent picker, open over the Space detail. */
+    NewAgentPicker("new-agent-picker"),
+
+    /** The Agent screen's options sheet (Interrupt, Stop and remove), open over a working agent. */
+    AgentMenu("agent-menu"),
+
+    /** The open-source licences sheet, open over Settings. */
+    LicencesSheet("licences-sheet"),
+
+    /** A machine's host key nobody has confirmed, shown as the card's sheet on the Machines list. */
+    MachineHostKeySheet("host-key-card-unknown"),
 }
 
 /**
@@ -145,6 +201,14 @@ fun ShotScreen.route(): String = when (this) {
     ShotScreen.AddMachinePassword, ShotScreen.HostKeyUnknown, ShotScreen.HostKeyChanged, ShotScreen.MachineMenu,
     ShotScreen.RemoveMachineConfirm,
     -> Routes.MACHINES
+    ShotScreen.SpaceDetail, ShotScreen.NewAgentPicker -> Routes.space("mac", "sp_web")
+    ShotScreen.SpaceDetailOffline -> Routes.space("lab", "sp_lab")
+    ShotScreen.AgentMenu -> Routes.agent("mac", "t-working")
+    ShotScreen.LicencesSheet -> Routes.SETTINGS
+    ShotScreen.MachineHostKeySheet -> Routes.MACHINES
+    ShotScreen.Spaces, ShotScreen.SpacesEmpty, ShotScreen.SpacesLong, ShotScreen.NewSpace, ShotScreen.NewSpaceNoMachine,
+    ShotScreen.SpaceMenu, ShotScreen.RenameSpace, ShotScreen.CloseSpaceConfirm,
+    -> Routes.SPACES
 }
 
 /**
@@ -160,6 +224,14 @@ fun ShotScreen.sheetTag(): String? = when (this) {
 
     ShotScreen.MachineMenu -> MACHINE_MENU_SHEET_TAG
     ShotScreen.RemoveMachineConfirm -> REMOVE_MACHINE_SHEET_TAG
+    ShotScreen.NewSpace, ShotScreen.NewSpaceNoMachine -> NEW_SPACE_SHEET_TAG
+    ShotScreen.SpaceMenu -> SPACE_MENU_SHEET_TAG
+    ShotScreen.RenameSpace -> RENAME_SPACE_SHEET_TAG
+    ShotScreen.CloseSpaceConfirm -> CLOSE_SPACE_SHEET_TAG
+    ShotScreen.NewAgentPicker -> PICKER_SHEET_TAG
+    ShotScreen.AgentMenu -> AGENT_MENU_SHEET_TAG
+    ShotScreen.LicencesSheet -> LICENSES_SHEET_TAG
+    ShotScreen.MachineHostKeySheet -> HOST_KEY_SHEET_TAG
     else -> null
 }
 
@@ -177,9 +249,31 @@ private fun ShotScreen.seed(core: FakeCore, container: AppContainer) {
             core.addMachine(LONG_MACHINE, ConnectionState.Connected(SHOT_HELLO))
         }
 
+        ShotScreen.SpacesEmpty -> runBlocking {
+            // Only mac stays, with none of its spaces: the list has machines and no space.
+            container.machines.machines().value.map { it.id }.filter { it != "mac" }.forEach { container.machines.remove(it) }
+            container.spaces.groups().value.flatMap { group -> group.spaces.map { group.machineId to it.id } }
+                .forEach { (machineId, spaceId) -> container.spaces.close(machineId, spaceId) }
+        }
+
+        ShotScreen.SpacesLong -> runBlocking {
+            container.spaces.create("mac", folder = LONG_FOLDER, name = LONG_SPACE_NAME)
+        }
+
+        ShotScreen.NewSpaceNoMachine -> clearMachines(container)
+        ShotScreen.MachineHostKeySheet -> core.setConnection(
+            "build",
+            ConnectionState.HostKeyUnknown("ssh-ed25519", "SHA256:q8V3mZp1kT0rN7wLx2cY4bH6sJ9dF5gA3eU8iO0pQ1w"),
+        )
         else -> Unit
     }
 }
+
+/** A folder with a long path, for the layout check of a space row. */
+private const val LONG_FOLDER: String = "/home/demo/work/nightly/container-images/platform-team/build-pipeline-for-the-web"
+
+/** A long space name, for the layout check of a space row. */
+private const val LONG_SPACE_NAME: String = "nightly-container-image-build-pipeline-platform"
 
 /**
  * Removes every machine the demo starts with.
@@ -323,12 +417,54 @@ abstract class ScreenHarness {
                 connectAndWait(ADD_REMOVE_TAG)
             }
 
+            ShotScreen.NewSpace -> {
+                openNewSpace()
+                composeRule.onNodeWithTag(NEW_SPACE_FOLDER_TAG, useUnmergedTree = true).performTextInput("/home/demo/web-app")
+            }
+
+            ShotScreen.NewSpaceNoMachine -> openNewSpace()
+            ShotScreen.SpaceMenu -> openSpaceMenu()
+            ShotScreen.RenameSpace -> {
+                openSpaceMenu()
+                composeRule.onNodeWithTag(MENU_SPACE_RENAME_TAG, useUnmergedTree = true).performClick()
+            }
+
+            ShotScreen.CloseSpaceConfirm -> {
+                openSpaceMenu()
+                composeRule.onNodeWithTag(MENU_SPACE_CLOSE_TAG, useUnmergedTree = true).performClick()
+            }
+
+            ShotScreen.NewAgentPicker -> composeRule.onNodeWithTag(NEW_AGENT_TAG, useUnmergedTree = true).performClick()
+            ShotScreen.AgentMenu -> {
+                val description = RuntimeEnvironment.getApplication().getString(R.string.agent_options)
+                composeRule.onNode(hasContentDescription(description) and hasClickAction()).performClick()
+            }
+
+            ShotScreen.LicencesSheet -> {
+                // The About section is the third item of the Settings list; it is only composed once the list reaches it.
+                composeRule.onNode(hasScrollToIndexAction()).performScrollToIndex(SETTINGS_ABOUT_INDEX)
+                clickByText(RuntimeEnvironment.getApplication().getString(R.string.settings_licenses))
+            }
             else -> Unit
         }
         screen.sheetTag()?.let { tag ->
             composeRule.waitUntilAtLeastOneExists(hasTestTag(tag), timeoutMillis = SHEET_TIMEOUT_MS)
         }
         composeRule.waitForIdle()
+    }
+
+    /** Opens the New space sheet from the Spaces add button. */
+    private fun openNewSpace() {
+        val description = RuntimeEnvironment.getApplication().getString(R.string.spaces_new_content_description)
+        composeRule.onNode(hasContentDescription(description) and hasClickAction()).performClick()
+        composeRule.waitUntilAtLeastOneExists(hasTestTag(NEW_SPACE_SHEET_TAG), timeoutMillis = SHEET_TIMEOUT_MS)
+    }
+
+    /** Opens the first space's row menu, as a user taps its options button. */
+    private fun openSpaceMenu() {
+        val description = RuntimeEnvironment.getApplication().getString(R.string.space_options)
+        composeRule.onAllNodes(hasContentDescription(description) and hasClickAction()).onFirst().performClick()
+        composeRule.waitUntilAtLeastOneExists(hasTestTag(SPACE_MENU_SHEET_TAG), timeoutMillis = SHEET_TIMEOUT_MS)
     }
 
     /** Opens the first machine's card menu, as a user taps its menu button. */
@@ -419,6 +555,9 @@ abstract class ScreenHarness {
     }
 
     companion object {
+        /** The index of the About section in the Settings list: General, Shortcut keys, About. */
+        const val SETTINGS_ABOUT_INDEX: Int = 2
+
         /** How long a sheet or a stage may take to appear after it is opened or after a connection attempt. */
         const val SHEET_TIMEOUT_MS: Long = 5_000L
 
