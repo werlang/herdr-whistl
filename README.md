@@ -80,8 +80,7 @@ Working: the six screens, the protocol core against recorded herdr-core fixtures
 and a screenshot suite covering every screen and sheet in dark, light and both locales.
 
 Not done yet: a run on a physical device or emulator in CI, a release signing configuration, and a
-real recording of the `terminal.interrupt` response (the current one is synthetic — see
-`docs/IMPLEMENTATION-NOTES.md`).
+real recording of a `missed` event (its fixture is synthetic — see `docs/event-shapes.md`).
 
 ## License
 

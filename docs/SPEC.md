@@ -205,5 +205,5 @@ Codex…) and key glyphs (Esc, ↑) are not translated.
 ## 9. As built
 
 Implementation choices that this spec does not pin down (tilde resolution, BouncyCastle below API
-33, the synthetic `terminal.interrupt` fixture, screenshot platform, release signing) are recorded
+33, the recorded `terminal.interrupt` fixture, screenshot platform, release signing) are recorded
 in `docs/IMPLEMENTATION-NOTES.md`. Contributions follow `CONTRIBUTING.md`.
