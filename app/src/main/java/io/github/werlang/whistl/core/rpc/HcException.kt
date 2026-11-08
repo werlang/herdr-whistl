@@ -21,6 +21,12 @@ class NotFound(message: String, hint: String?) : HcException(message, hint)
 class Conflict(message: String, hint: String?) : HcException(message, hint)
 
 /**
+ * `kind == "spawn_failed"`: hc could not start the program, usually because the `cwd` does not exist or the program
+ * name is not found (`run_spawn_failed.json`). Nothing was started.
+ */
+class SpawnFailed(message: String, hint: String?) : HcException(message, hint)
+
+/**
  * `kind == "invalid_request"`, or the JSON-RPC standard code `-32600`: hc rejected the request's shape.
  *
  * The kind string is an assumption: no fixture records it, so the code is the fallback.

@@ -81,6 +81,7 @@ internal fun RpcErrorWire.toException(): HcException {
     return when {
         kind == "not_found" -> NotFound(message, hint)
         kind == "conflict" -> Conflict(message, hint)
+        kind == "spawn_failed" -> SpawnFailed(message, hint)
         kind == "invalid_request" || (kind == null && code == JSON_RPC_INVALID_REQUEST) ->
             InvalidRequest(message, hint)
         else -> Unknown(kind, code, message, hint)
@@ -138,7 +139,7 @@ internal class TerminalKeysParams(
     val keys: List<String>,
 )
 
-/** `terminal.interrupt`. Only the terminal id; no fixture records this method. */
+/** `terminal.interrupt`: the terminal id only (`interrupt.json`). */
 @Serializable
 internal class TerminalInterruptParams(val terminal: String)
 
@@ -269,6 +270,13 @@ internal class TerminalSendWire(
 internal class TerminalKeysWire(
     val status: String? = null,
     val turn: Long = 0,
+)
+
+/** `terminal.interrupt` result (`interrupt.json`). Lenient: unknown keys are ignored. */
+@Serializable
+internal class TerminalInterruptWire(
+    val key: String = "",
+    val outcome: String = "",
 )
 
 /** `terminal.rm` result. Lenient: unknown keys are ignored. */
