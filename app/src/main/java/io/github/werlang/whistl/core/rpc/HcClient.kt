@@ -394,10 +394,12 @@ class HcClient(
             throw e
         }
         val dropped = AtomicLong(0L)
+        // The events channel carries `event`, the top-level `heartbeat` and the top-level `missed` (phase 6 P0-5). Anything
+        // else on it is not an event and is ignored without being counted.
         val stream: Flow<HcEvent> = events.notifications
-            .filter { it.method == EVENT_METHOD }
+            .filter { it.method in EVENT_METHODS }
             .mapNotNull { notification ->
-                HcEvent.fromParamsOrNull(notification.params) ?: run {
+                HcEvent.fromNotificationOrNull(notification.method, notification.params) ?: run {
                     dropped.incrementAndGet()
                     null
                 }
@@ -415,8 +417,8 @@ class HcClient(
         /** The only protocol generation this client speaks (SPEC §5). */
         const val SUPPORTED_GENERATION = 1
 
-        /** The notification name hc uses for events (SPEC §5). */
-        const val EVENT_METHOD = "event"
+        /** The notifications of the events channel that are events (SPEC §5, `docs/event-shapes.md`). */
+        val EVENT_METHODS: Set<String> = setOf(HcEvent.EVENT_METHOD, HcEvent.HEARTBEAT_METHOD, HcEvent.MISSED_METHOD)
     }
 }
 

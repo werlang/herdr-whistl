@@ -29,7 +29,7 @@ import org.junit.Test
 /**
  * [DefaultAgentsRepository] on virtual time (round p3r2). Each event test pushes one notification and asserts the agent
  * list after it. Tests named *Assumed* use a shape that no recording covers; the shape is stated in the test (see
- * `event-shapes.md`).
+ * `docs/event-shapes.md`).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AgentsRepositoryTest {
@@ -249,13 +249,13 @@ class AgentsRepositoryTest {
         assertEquals(before, h.agents.agents.value)
     }
 
-    /** assumed shape `{}`: a `heartbeat` changes no state. */
+    /** The recorded heartbeat is a top-level notification (`event_heartbeat.json`) and changes no state. */
     @Test
-    fun assumedHeartbeatChangesNoState() = runTest {
+    fun aRecordedHeartbeatChangesNoState() = runTest {
         val (h, _) = connected(listOf(terminalJson("t1")))
         val before = h.agents.agents.value
 
-        h.pushEvent(eventLine("heartbeat", null, 2, JsonObject(emptyMap())))
+        h.pushEvent("""{"jsonrpc":"2.0","method":"heartbeat","params":{"seq":2}}""")
         runCurrent()
 
         assertEquals(before, h.agents.agents.value)
@@ -345,7 +345,7 @@ class AgentsRepositoryTest {
 
         repeat(4) { step ->
             advanceTimeBy(15_000L)
-            h.pushEvent(eventLine("heartbeat", null, 10L + step, JsonObject(emptyMap())))
+            h.pushEvent("""{"jsonrpc":"2.0","method":"heartbeat","params":{"seq":${10L + step}}}""")
             runCurrent()
         }
 

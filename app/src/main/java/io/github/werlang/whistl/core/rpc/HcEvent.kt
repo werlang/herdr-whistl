@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.longOrNull
 
 /**
  * The terminal event kinds that carry a terminal address and change one terminal (SPEC §5).
@@ -93,9 +94,11 @@ sealed class HcEvent {
     data class Heartbeat(override val seq: Long?) : HcEvent()
 
     /**
-     * hc dropped events because this subscriber fell behind. A fresh snapshot follows.
+     * hc dropped events because this subscriber fell behind. A fresh snapshot follows. The snapshot is the `terminals` array of
+     * [data] (the `event` shape keeps it in `data`, the top-level shape in the params); the reducer decodes it with the subscribe
+     * result's wire type (phase 6 P0-5, `docs/event-shapes.md`).
      *
-     * @property data hc's `data` object, kept raw.
+     * @property data hc's `data` object, or the top-level params, kept raw.
      */
     data class Missed(
         override val seq: Long?,
@@ -117,6 +120,35 @@ sealed class HcEvent {
     ) : HcEvent()
 
     companion object {
+        /** The method of an `event` notification (SPEC §5). */
+        internal const val EVENT_METHOD: String = "event"
+
+        /** The top-level keep-alive notification hc sends every 15 s (recorded, `event_heartbeat.json`). */
+        internal const val HEARTBEAT_METHOD: String = "heartbeat"
+
+        /** The top-level notification that replaces dropped events with a snapshot (synthetic, `event_missed_synthetic.json`). */
+        internal const val MISSED_METHOD: String = "missed"
+
+        /**
+         * Parses one notification of the events channel (phase 6 P0-5). Besides `event`, hc sends two top-level notifications:
+         * `heartbeat`, which decodes to [Heartbeat], and `missed`, whose params carry the snapshot. Any other method is not an event
+         * and gives `null`; so do `event` params that do not decode.
+         *
+         * @param method the notification's method.
+         * @param params the raw `params`.
+         * @return the event, or `null`.
+         */
+        fun fromNotificationOrNull(method: String, params: JsonElement): HcEvent? = when (method) {
+            EVENT_METHOD -> fromParamsOrNull(params)
+            HEARTBEAT_METHOD -> Heartbeat(seqOf(params))
+            MISSED_METHOD -> (params as? JsonObject)?.let { Missed(seqOf(params), it) }
+            else -> null
+        }
+
+        /** The `seq` of a params object, or `null` when it has none. */
+        private fun seqOf(params: JsonElement): Long? =
+            (params as? JsonObject)?.get("seq")?.let { (it as? JsonPrimitive)?.longOrNull }
+
         /**
          * Parses the `params` of an `event` notification.
          *

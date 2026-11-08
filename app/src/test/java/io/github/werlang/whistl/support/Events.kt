@@ -7,7 +7,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-/** A terminal object shaped as hc 0.1.18 sends it (SPEC §5; see `event-shapes.md`). */
+/** A terminal object shaped as hc 0.1.18 sends it (SPEC §5; see `docs/event-shapes.md`). */
 fun terminalJson(
     address: String,
     state: String = "live",

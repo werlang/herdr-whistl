@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.JsonPrimitive
 import java.util.concurrent.ConcurrentHashMap
 
 /** The shell a machine gets when its `SHELL` is empty or not absolute (phase 4b r2, SPEC §2.3). */
@@ -276,9 +275,8 @@ class DefaultAgentsRepository(
     }
 
     private fun onEvent(id: String, event: HcEvent) {
-        if (event is HcEvent.DocChanged && (event.data["name"] as? JsonPrimitive)?.content == WHISTL_DOCUMENT) {
-            documentChanges.notifyChanged(id)
-        }
+        // Any document change is worth a re-read: the whistl document is small and the read is cheap (phase 6 P0-5).
+        if (event is HcEvent.DocChanged) documentChanges.notifyChanged(id)
         terminals.update { all -> all + (id to AgentEventReducer.apply(all[id].orEmpty(), event)) }
     }
 }
