@@ -18,4 +18,10 @@ interface DemoCore {
 
     /** The terminals the Agent screen opens, with static demo output. */
     val terminals: TerminalRepository
+
+    /** The installed agents of each demo machine. */
+    val installed: InstalledAgentsRepository
+
+    /** A fixed demo public key line. */
+    val clientKey: ClientPublicKey
 }

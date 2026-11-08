@@ -14,7 +14,6 @@
 
     <!-- Machines and Spaces are placeholders in this round. -->
     <string name="machines_title">Machines</string>
-    <string name="machines_empty">No machines yet. Add one to start coordinating agents.</string>
     <string name="machines_add_content_description">Add machine</string>
     <string name="spaces_placeholder">Spaces will appear here.</string>
 
@@ -117,4 +116,75 @@
     <string name="license_kotlinx">kotlinx libraries: Apache License 2.0</string>
     <string name="settings_demo">Demo mode</string>
     <string name="settings_demo_hint">Starts on sample data at the next start. Debug builds only.</string>
+
+    <!-- Machines (SPEC §2.1, phase 4b r1) -->
+    <string name="machines_empty_title">No machines yet</string>
+    <string name="machines_empty_hint">Add a computer you reach over ssh that runs herdr-core: a server, a Raspberry Pi, your Mac.</string>
+    <string name="machine_options">Machine options</string>
+    <string name="machine_status_connected">connected</string>
+    <string name="machine_status_connecting">connecting</string>
+    <string name="machine_status_offline">offline</string>
+    <string name="machine_issue_login_refused">login refused</string>
+    <string name="machine_issue_unreachable">unreachable</string>
+    <string name="machine_issue_unsupported_core">unsupported hc version</string>
+    <string name="machine_issue_host_key">host key to confirm</string>
+    <string name="machine_issue_host_key_changed">host key changed</string>
+    <plurals name="machine_agents">
+        <item quantity="one">%1$d agent</item>
+        <item quantity="other">%1$d agents</item>
+    </plurals>
+    <string name="machine_meta">%1$s · hc %2$s</string>
+    <string name="machine_installed">Installed: %1$s</string>
+    <string name="machine_none_installed">No agents installed</string>
+    <string name="machine_reconnect">Reconnect</string>
+    <string name="machine_remove">Remove machine</string>
+    <string name="machine_confirm_remove_title">Remove %1$s?</string>
+    <string name="machine_confirm_remove_text">Its spaces leave the app. Agents keep running on the machine.</string>
+    <string name="common_remove">Remove</string>
+    <string name="common_close">Close</string>
+
+    <!-- Add machine (phase 4b r1 §2.5, §2.6) -->
+    <string name="add_machine_title">Add machine</string>
+    <string name="add_field_host">Host</string>
+    <string name="add_host_placeholder">e.g. 192.168.0.10 or my-pi.local</string>
+    <string name="add_field_user">User</string>
+    <string name="add_user_placeholder">pi</string>
+    <string name="add_field_port">Port</string>
+    <string name="add_field_name">Name</string>
+    <string name="add_field_auth">Authentication</string>
+    <string name="add_auth_key">SSH key</string>
+    <string name="add_auth_password">Password</string>
+    <string name="add_field_password">Password</string>
+    <string name="add_public_key_title">This device’s public key</string>
+    <string name="add_public_key_hint">Add it to ~/.ssh/authorized_keys on the machine.</string>
+    <string name="add_public_key_copy">Copy</string>
+    <string name="add_public_key_copied">Public key copied</string>
+    <string name="add_connect">Connect</string>
+    <string name="add_trust">Trust and connect</string>
+    <string name="add_retry">Retry</string>
+    <string name="add_close">Close</string>
+    <string name="add_connecting">Connecting to %1$s…</string>
+    <string name="add_host_key_title">First connection to %1$s</string>
+    <string name="add_host_key_hint">Check that the fingerprint matches the machine’s before you trust it:</string>
+    <string name="add_host_key_algorithm">Key type: %1$s</string>
+    <string name="add_host_key_changed_title">The host key of %1$s changed</string>
+    <string name="add_host_key_changed_text">The machine shows a key other than the one you trusted, so the connection is refused. Do not trust it. Remove the machine if you did not expect this.</string>
+    <string name="add_host_key_trusted">Trusted</string>
+    <string name="add_host_key_presented">Presented</string>
+    <string name="error_login_refused">The machine refused the login. Check the key or the password, then retry.</string>
+    <string name="error_unreachable">Could not reach the machine. The app keeps trying while this is open.</string>
+    <string name="error_unsupported_core">This machine runs an herdr-core protocol this app does not speak.</string>
+    <string name="problem_host_empty">Enter a host name or an address.</string>
+    <string name="problem_host_bad_characters">Use letters, digits, dots and hyphens, or an IPv6 address.</string>
+    <string name="problem_host_bad_format">This is not a valid host name or address.</string>
+    <string name="problem_host_too_long">This host name is too long.</string>
+    <string name="problem_user_empty">Enter the user name.</string>
+    <string name="problem_user_bad_characters">Use lowercase letters, digits, underscore and hyphen.</string>
+    <string name="problem_user_bad_format">A user name starts with a letter or an underscore.</string>
+    <string name="problem_user_too_long">This user name is too long.</string>
+    <string name="problem_port_not_a_number">The port is a number.</string>
+    <string name="problem_port_out_of_range">The port is between 1 and 65535.</string>
+    <string name="problem_name_empty">Enter a name.</string>
+    <string name="problem_name_too_long">This name is too long.</string>
+    <string name="problem_password_empty">Enter the password.</string>
 </resources>

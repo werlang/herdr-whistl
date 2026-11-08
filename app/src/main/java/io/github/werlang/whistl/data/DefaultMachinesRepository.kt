@@ -144,6 +144,17 @@ class DefaultMachinesRepository(
         return Lease(id)
     }
 
+    override suspend fun reconnect(id: String) {
+        lock.withLock {
+            val slot = slotFor(id)
+            if (slot.holders == 0 || !canConnect(slot.state.value)) return
+            slot.job?.cancel()
+            slot.job = null
+            slot.attempt = 0
+            startAttempt(slot, delayMillis = 0L)
+        }
+    }
+
     override suspend fun confirmHostKey(id: String): ConfirmResult = lock.withLock {
         val slot = slotFor(id)
         when (slot.state.value) {
