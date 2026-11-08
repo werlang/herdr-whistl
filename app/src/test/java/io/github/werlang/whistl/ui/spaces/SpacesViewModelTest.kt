@@ -486,6 +486,49 @@ class SpacesViewModelTest {
     }
 
     /**
+     * P7R8 item 5: a machine that was removed while its New space sheet was open is gone, not offline. The sheet says it is no
+     * longer added, and it stays open.
+     */
+    @Test
+    fun aNewSpaceOnAMachineRemovedMeanwhileSaysItIsNoLongerAddedNotOffline() = runTest {
+        val stack = RepoStack(this)
+        val machine = stack.addMachine()
+        runCurrent()
+        val vm = SpacesViewModel(CreateAnswers(stack.spaces, SpaceResult.MachineOffline), stack.agents, stack.machines)
+        runCurrent()
+        vm.openNewSpace()
+        vm.pickMachine(machine)
+        stack.machines.remove(machine)
+        runCurrent()
+
+        vm.createSpace()
+        runCurrent()
+
+        val sheet = vm.state.value.newSpace
+        assertTrue("the sheet says the machine is no longer added", sheet?.machineMissing == true)
+        assertFalse("the sheet does not say the machine is offline", sheet?.machineOffline == true)
+    }
+
+    /** P7R8 item 5 guard: a machine that is still added but cannot be reached is still reported as offline. */
+    @Test
+    fun aNewSpaceOnAStillAddedOfflineMachineStillSaysOffline() = runTest {
+        val stack = RepoStack(this)
+        stack.addMachine()
+        runCurrent()
+        val vm = SpacesViewModel(CreateAnswers(stack.spaces, SpaceResult.MachineOffline), stack.agents, stack.machines)
+        runCurrent()
+        vm.openNewSpace()
+        vm.pickMachine(stack.machines.machines().value.single().id)
+
+        vm.createSpace()
+        runCurrent()
+
+        val sheet = vm.state.value.newSpace
+        assertTrue("the sheet says the machine is offline", sheet?.machineOffline == true)
+        assertFalse("the sheet does not say the machine is gone", sheet?.machineMissing == true)
+    }
+
+    /**
      * A rename refused because the machine went offline shows why under the field and keeps the sheet open, so the user can
      * cancel (phase 7 r6, row 14). Before this the refusal closed nothing and said nothing.
      */

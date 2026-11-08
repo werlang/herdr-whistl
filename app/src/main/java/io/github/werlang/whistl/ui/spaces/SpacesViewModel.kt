@@ -351,7 +351,12 @@ class SpacesViewModel(
                     }
                 }
 
-                SpaceResult.MachineOffline -> editNewSpace { it.copy(machineOffline = true) }
+                SpaceResult.MachineOffline -> {
+                    // A machine that is no longer added has no lease, so the repository reports it as offline too. It is gone, not
+                    // offline, and the sheet must say so (p7r8 item 5).
+                    val stillAdded = machines.machines().value.any { it.id == machineId }
+                    editNewSpace { if (stillAdded) it.copy(machineOffline = true) else it.copy(machineMissing = true) }
+                }
                 is SpaceResult.UnknownSpace -> editNewSpace { it.copy(machineMissing = true) }
             }
         }
