@@ -7,7 +7,8 @@
   the SDK lint's per-category listing. MissingTranslation and ExtraTranslation
   are kept as errors too: they sit in Correctness:Messages, and SPEC §7 requires them.
 
-  No suppression lives here: no ignore, no baseline, no disable.
+  No suppression lives here except one path-scoped ignore: TrustAllX509TrustManager for the bcpkix jar (see below).
+  No baseline, no disable.
 -->
 <lint>
 
@@ -72,7 +73,13 @@
     <issue id="UnsafeNativeCodeLocation" severity="error" />
     <issue id="WebViewClientOnReceivedSslError" severity="error" />
     <issue id="CustomX509TrustManager" severity="error" />
-    <issue id="TrustAllX509TrustManager" severity="error" />
+    <!--
+      bcpkix (BouncyCastle, phase 4 r1) carries EST classes with a trust-all X.509 manager. The app never uses
+      them: the ignore is scoped to the bcpkix jar, so TrustAllX509TrustManager stays an error for app code.
+    -->
+    <issue id="TrustAllX509TrustManager" severity="error">
+        <ignore path="**/bcpkix-jdk18on-*.jar" />
+    </issue>
 
     <!-- Accessibility -->
     <issue id="ContentDescription" severity="error" />

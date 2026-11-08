@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.roborazzi)
 }
 
 android {
@@ -42,10 +43,36 @@ android {
         // SPEC §8: severities for the security, accessibility and i18n IDs live in lint.xml (one place).
         lintConfig = file("lint.xml")
     }
+
+    packaging {
+        resources {
+            // bcprov, bcutil and bcpkix each ship this manifest for Java 9+; the APK needs none of them.
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        }
+    }
+
+    testOptions {
+        unitTests {
+            // Robolectric renders the merged resources (strings, theme, fonts) in the screenshot tests.
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 kotlin {
     jvmToolchain(17)
+}
+
+roborazzi {
+    // Reference screenshots are committed here. `verifyRoborazziDebug` compares against them; `recordRoborazziDebug`
+    // rewrites them (SPEC §8, phase 4 r1).
+    outputDir.set(file("src/test/screenshots"))
+}
+
+tasks.withType<Test>().configureEach {
+    // Screenshot file names are relative to roborazzi.outputDir above, not to the module folder (Roborazzi 1.40 asks for
+    // this setting in gradle.properties; it is set here so the build file holds the whole screenshot setup).
+    systemProperty("roborazzi.record.filePathStrategy", "relativePathFromRoborazziContextOutputDirectory")
 }
 
 dependencies {
@@ -55,21 +82,33 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.core)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.appcompat)
 
     // Protocol core (phase 2): Android-free JSON-RPC over line transports.
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
 
-    // SSH (phase 2 round 2): sshj for the transport; BouncyCastle is pinned explicitly because
-    // KeyManager calls its Ed25519 API directly (sshj only brings it as a runtime dependency).
-    implementation(libs.sshj) {
-        // sshj uses bcpkix only for PEM key-file loading; the app generates its key (SPEC §6) and never
-        // imports one. bcpkix also carries the EST trust-all manager that lint reports as an error
-        // (TrustAllX509TrustManager), so it is left off the classpath rather than suppressed.
-        exclude(group = "org.bouncycastle", module = "bcpkix-jdk18on")
-    }
+    // SSH: sshj for the transport. BouncyCastle is sshj's crypto provider on API 26-32 only, where the platform has no
+    // Ed25519 in JCA (SPEC §6, phase 4 decision 2); core/ssh/CryptoProviders registers it there. bcpkix is back on the
+    // classpath for that: it was excluded while the app needed no PEM or EST code, and it carries the EST trust-all
+    // manager that lint reports as TrustAllX509TrustManager. app/lint.xml ignores that issue for the bcpkix jar only.
+    implementation(libs.sshj)
     implementation(libs.bouncycastle.bcprov)
+    implementation(libs.bouncycastle.bcpkix)
 
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.junit)
+
+    // Screenshot tests (phase 4 r1): Robolectric runs the Compose shell on the JVM and Roborazzi records the PNGs.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.junit.rule)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    // The test activity the Compose rule launches. Only the debug variant runs the screenshot tests (src/testDebug).
+    debugImplementation(platform(libs.androidx.compose.bom))
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
