@@ -320,5 +320,6 @@ fun unresolvedTextRes(reason: io.github.werlang.whistl.data.UnresolvableReason):
     io.github.werlang.whistl.data.UnresolvableReason.Timeout -> R.string.space_unresolved_timeout
     io.github.werlang.whistl.data.UnresolvableReason.BadOutput -> R.string.space_unresolved_bad_output
     io.github.werlang.whistl.data.UnresolvableReason.NoHome -> R.string.space_unresolved_no_home
+    io.github.werlang.whistl.data.UnresolvableReason.HomeUnreadable -> R.string.space_unresolved_home_unreadable
     io.github.werlang.whistl.data.UnresolvableReason.Invalid -> R.string.space_unresolved_invalid
 }

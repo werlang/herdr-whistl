@@ -215,6 +215,7 @@
     <string name="space_unresolved_timeout">The machine did not answer the folder check in time.</string>
     <string name="space_unresolved_bad_output">The machine’s answer was not a folder path.</string>
     <string name="space_unresolved_no_home">The machine has no home folder to expand ~ with.</string>
+    <string name="space_unresolved_home_unreadable">Could not read the machine’s home folder just now. It is tried again the next time the space is read.</string>
     <string name="space_unresolved_invalid">The folder path is not valid: it is blank, or has a line break or a NUL character.</string>
     <string name="space_options">Space options</string>
     <string name="space_menu_pin">Pin to top</string>

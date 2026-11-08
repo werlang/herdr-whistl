@@ -219,6 +219,7 @@
     <string name="space_unresolved_timeout">A máquina não respondeu à verificação da pasta a tempo.</string>
     <string name="space_unresolved_bad_output">A resposta da máquina não é um caminho de pasta.</string>
     <string name="space_unresolved_no_home">A máquina não tem pasta home para expandir ~.</string>
+    <string name="space_unresolved_home_unreadable">Não foi possível ler a pasta home da máquina agora. Ela será lida de novo na próxima vez que o espaço for lido.</string>
     <string name="space_unresolved_invalid">O caminho da pasta não é válido: está em branco, ou tem quebra de linha ou caractere NUL.</string>
     <string name="space_options">Opções do space</string>
     <string name="space_menu_pin">Fixar no topo</string>
