@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withTimeout
 import net.schmizz.sshj.transport.verification.HostKeyVerifier
 import net.schmizz.sshj.userauth.UserAuthException
@@ -72,7 +73,9 @@ class SshjTransportTest {
                 throw SocketTimeoutException("connect timed out")
             }
             if (blockConnect) {
-                disconnected.await(CONNECT_WAIT_SECONDS, TimeUnit.SECONDS)
+                // Blocks this thread, as sshj's socket connect does: nothing but disconnect() releases it. The safety valve is longer
+                // than the test's own bound, so a test that never disconnects fails on that bound first (phase 6 F1).
+                disconnected.await(SAFETY_VALVE_SECONDS, TimeUnit.SECONDS)
                 throw IOException("connect interrupted by disconnect")
             }
         }
@@ -230,11 +233,17 @@ class SshjTransportTest {
             }
             withContext(Dispatchers.IO) { session.connectEntered.await(CONNECT_WAIT_SECONDS, TimeUnit.SECONDS) }
             opening.cancel()
+            // Only a disconnect from the cancelled open can end the blocked connect. Without one, the open never returns: the
+            // bound below fails the test, and the test then releases the thread itself so the suite does not wait for it.
+            val returned = withTimeoutOrNull(CONNECT_WAIT_SECONDS * 1000) { opening.join() } != null
+            val closedByTheCancel = session.disconnects.get()
+            if (!returned) session.disconnect()
             opening.join()
-        }
 
-        assertTrue("the open was cancelled", cancelled)
-        assertTrue("the blocked connect was closed", session.disconnects.get() >= 1)
+            assertTrue("the cancelled open returned within $CONNECT_WAIT_SECONDS s", returned)
+            assertTrue("the open was cancelled", cancelled)
+            assertTrue("the blocked connect was closed by the cancel", closedByTheCancel >= 1)
+        }
     }
 
     /**
@@ -295,6 +304,12 @@ class SshjTransportTest {
     private companion object {
         /** A real-time bound on a wait for another thread. It is never reached when the code under test works. */
         const val CONNECT_WAIT_SECONDS: Long = 5L
+
+        /**
+         * How long the fake's blocked connect waits for `disconnect` before it gives up by itself. Longer than [CONNECT_WAIT_SECONDS],
+         * so it only ever runs out in a test that is already failing.
+         */
+        const val SAFETY_VALVE_SECONDS: Long = 20L
 
         /** One mebibyte of stderr: more than a pipe buffer. */
         const val ONE_MIB: Int = 1 shl 20
