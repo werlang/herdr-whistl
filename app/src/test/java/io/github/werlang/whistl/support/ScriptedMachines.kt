@@ -12,6 +12,8 @@ import io.github.werlang.whistl.data.MachineAgent
 import io.github.werlang.whistl.data.MachineLease
 import io.github.werlang.whistl.data.MachinesRepository
 import io.github.werlang.whistl.data.NewMachine
+import io.github.werlang.whistl.data.StartChoice
+import io.github.werlang.whistl.data.StartResult
 import io.github.werlang.whistl.domain.HelloResult
 import io.github.werlang.whistl.domain.KnownAgent
 import io.github.werlang.whistl.domain.Machine
@@ -146,6 +148,9 @@ class StaticAgents(initial: List<MachineAgent> = emptyList()) : AgentsRepository
     override val agents: StateFlow<List<MachineAgent>> = MutableStateFlow(initial)
 
     override val blockedCount: StateFlow<Int> = MutableStateFlow(0)
+
+    /** Starting is not part of these tests; a test that needs it uses the real repository. */
+    override suspend fun start(machineId: String, spaceId: String, choice: StartChoice): StartResult = StartResult.Offline
 }
 
 /** Installed agents that never change: the map the test gives. */

@@ -24,6 +24,10 @@ import io.github.werlang.whistl.data.SpaceRecord
 import io.github.werlang.whistl.data.SpaceResult
 import io.github.werlang.whistl.data.SpacesDocument
 import io.github.werlang.whistl.data.SpacesRepository
+import io.github.werlang.whistl.data.FolderResolution
+import io.github.werlang.whistl.data.StartChoice
+import io.github.werlang.whistl.data.StartResult
+import io.github.werlang.whistl.data.UnresolvableReason
 import io.github.werlang.whistl.data.defaultSpaceName
 import io.github.werlang.whistl.data.hasSpace
 import io.github.werlang.whistl.data.isWaitingForUser
@@ -175,6 +179,7 @@ private class FakeState {
     private val outputs = LinkedHashMap<String, MutableList<String>>()
     private var machineCounter = 0
     private var spaceCounter = 0L
+    private var startCounter = 0
 
     /** The detected agents per machine: a connected machine's list, and an offline machine's last known list. */
     private val installedByMachine = LinkedHashMap<String, List<KnownAgent>>()
@@ -333,6 +338,40 @@ private class FakeState {
         outputs.getOrPut(address) { mutableListOf() } += line
     }
 
+    /**
+     * Starts a demo terminal in a space: a known agent with its argv, or the demo machine's shell. Like a started agent on a
+     * real machine, it is labelled with the space and joins the agents. Nothing runs and nothing is sent anywhere.
+     *
+     * @param machineId the machine.
+     * @param spaceId the space.
+     * @param choice the agent or the shell.
+     * @return the start result.
+     */
+    @Synchronized
+    fun startTerminal(machineId: String, spaceId: String, choice: StartChoice): StartResult {
+        if (!isConnected(machineId)) return StartResult.Offline
+        val space = documents[machineId]?.spaces?.firstOrNull { it.id == spaceId } ?: return StartResult.UnknownSpace
+        val resolution = demoResolution(space.folder)
+        if (resolution is FolderResolution.Unresolvable) return StartResult.FolderUnavailable(resolution.reason)
+        val argv = when (choice) {
+            is StartChoice.Known -> choice.agent.argv
+            StartChoice.Terminal -> listOf("/bin/zsh", "-l")
+        }
+        val address = "t-new-${++startCounter}"
+        val known = choice as? StartChoice.Known
+        val started = demoTerminal(
+            address = address,
+            status = if (known != null) AgentStatus.Working else null,
+            cwd = space.folder,
+            labels = mapOf(Agent.SPACE_LABEL to spaceId),
+            name = known?.agent?.displayName ?: "shell",
+        ).copy(argv = argv)
+        terminals[machineId] = terminals[machineId].orEmpty() + started
+        outputs[address] = mutableListOf("demo: started ${argv.first()}")
+        publish()
+        return StartResult.Started(address)
+    }
+
     /** A new machine id, for a machine added in the demo. */
     @Synchronized
     fun nextMachineId(): String = "demo-${++machineCounter}"
@@ -344,10 +383,12 @@ private class FakeState {
     /** Recomputes the three flows from the held data. Called after every mutation. */
     private fun publish() {
         groupFlow.value = machineList.value.map { machine ->
+            val spaces = sortSpaces(documents[machine.id]?.spaces.orEmpty())
             MachineSpaces(
                 machineId = machine.id,
                 offline = !isConnected(machine.id),
-                spaces = sortSpaces(documents[machine.id]?.spaces.orEmpty()),
+                spaces = spaces,
+                resolutions = spaces.associate { it.id to demoResolution(it.folder) },
             )
         }
         val agents = machineList.value.filter { isConnected(it.id) }.flatMap { machine ->
@@ -466,11 +507,27 @@ private class FakeLease(override val machineId: String) : MachineLease {
 }
 
 /** The agents of the demo: those on connected machines, with the space each one matches. */
-private class FakeAgents(state: FakeState) : AgentsRepository {
+private class FakeAgents(private val state: FakeState) : AgentsRepository {
     override val agents: StateFlow<List<MachineAgent>> = state.agentFlow.asStateFlow()
 
     override val blockedCount: StateFlow<Int> = state.blockedFlow.asStateFlow()
+
+    override suspend fun start(machineId: String, spaceId: String, choice: StartChoice): StartResult =
+        state.startTerminal(machineId, spaceId, choice)
 }
+
+/**
+ * The folder resolution the demo gives a space's folder. `/home/demo/docs` does not exist on the demo machine, so its row shows
+ * the typed reason; every other folder resolves to itself.
+ *
+ * @param folder the folder as stored.
+ * @return the resolution.
+ */
+private fun demoResolution(folder: String): FolderResolution =
+    if (folder == DEMO_MISSING_FOLDER) FolderResolution.Unresolvable(UnresolvableReason.NotFound) else FolderResolution.Resolved(folder)
+
+/** The folder of the demo's `docs` space, which the demo treats as missing on its machine. */
+private const val DEMO_MISSING_FOLDER: String = "/home/demo/docs"
 
 /**
  * The spaces of the demo. Edits follow the real repository's rules: an unknown space is reported first, then a write to an
