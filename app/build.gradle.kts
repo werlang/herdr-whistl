@@ -60,6 +60,16 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
 
+    // SSH (phase 2 round 2): sshj for the transport; BouncyCastle is pinned explicitly because
+    // KeyManager calls its Ed25519 API directly (sshj only brings it as a runtime dependency).
+    implementation(libs.sshj) {
+        // sshj uses bcpkix only for PEM key-file loading; the app generates its key (SPEC §6) and never
+        // imports one. bcpkix also carries the EST trust-all manager that lint reports as an error
+        // (TrustAllX509TrustManager), so it is left off the classpath rather than suppressed.
+        exclude(group = "org.bouncycastle", module = "bcpkix-jdk18on")
+    }
+    implementation(libs.bouncycastle.bcprov)
+
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.junit)
 }
