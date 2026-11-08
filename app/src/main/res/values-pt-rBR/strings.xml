@@ -238,6 +238,7 @@
     <string name="space_field_name">Nome</string>
     <string name="space_create">Criar space</string>
     <string name="space_machine_offline">Esta máquina está offline. Conecte-a em Máquinas primeiro.</string>
+    <string name="space_machine_missing">Essa máquina não está mais adicionada. Escolha outra.</string>
     <string name="problem_space_folder_empty">Digite uma pasta, ou deixe para ~.</string>
     <string name="problem_space_folder_bad">Uma pasta não pode ter quebra de linha.</string>
     <string name="space_rename_title">Renomear space</string>

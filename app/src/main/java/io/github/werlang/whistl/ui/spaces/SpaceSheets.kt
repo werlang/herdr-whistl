@@ -208,6 +208,13 @@ fun NewSpaceSheet(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
+            if (ui.machineMissing) {
+                Text(
+                    text = stringResource(R.string.space_machine_missing),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = MinTouchTarget)) {
                     Text(stringResource(R.string.common_cancel))
@@ -329,6 +336,13 @@ fun RenameSpaceSheet(
                 supportingText = problemText(ui.problem),
                 modifier = Modifier.fillMaxWidth().testTag(RENAME_SPACE_FIELD_TAG),
             )
+            if (ui.machineOffline) {
+                Text(
+                    text = stringResource(R.string.space_machine_offline),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onCancel, modifier = Modifier.heightIn(min = MinTouchTarget)) {
                     Text(stringResource(R.string.common_cancel))

@@ -234,6 +234,7 @@
     <string name="space_field_name">Name</string>
     <string name="space_create">Create space</string>
     <string name="space_machine_offline">This machine is offline. Connect it in Machines first.</string>
+    <string name="space_machine_missing">That machine is no longer added. Choose another one.</string>
     <string name="problem_space_folder_empty">Enter a folder, or leave it for ~.</string>
     <string name="problem_space_folder_bad">A folder cannot have a line break.</string>
     <string name="space_rename_title">Rename space</string>

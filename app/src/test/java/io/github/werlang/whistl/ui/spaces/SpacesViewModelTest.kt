@@ -6,6 +6,7 @@ import io.github.werlang.whistl.data.MachineAgent
 import io.github.werlang.whistl.data.MachineSpaces
 import io.github.werlang.whistl.data.SpaceRecord
 import io.github.werlang.whistl.data.SpaceResult
+import io.github.werlang.whistl.data.SpacesRepository
 import io.github.werlang.whistl.data.UnresolvableReason
 import io.github.werlang.whistl.domain.Agent
 import io.github.werlang.whistl.ui.machines.MachineAddress
@@ -453,5 +454,58 @@ class SpacesViewModelTest {
 
     private companion object {
         const val MACHINE = "m1"
+    }
+
+    /** A spaces repository that answers every create with [result] and otherwise delegates to [base]. */
+    private class CreateAnswers(private val base: SpacesRepository, private val result: SpaceResult) : SpacesRepository by base {
+        override suspend fun create(machineId: String, folder: String, name: String): SpaceResult = result
+    }
+
+    /** A spaces repository that answers every rename with [result] and otherwise delegates to [base]. */
+    private class RenameAnswers(private val base: SpacesRepository, private val result: SpaceResult) : SpacesRepository by base {
+        override suspend fun rename(machineId: String, spaceId: String, name: String): SpaceResult = result
+    }
+
+    /**
+     * A New space sheet whose machine is no longer there says so, and stays open (phase 7 r6, row 14). Before this the create
+     * returned without a word.
+     */
+    @Test
+    fun aNewSpaceWhoseMachineIsGoneSaysSoAndStaysOpen() = runTest {
+        val stack = RepoStack(this)
+        stack.addMachine()
+        runCurrent()
+        val vm = SpacesViewModel(CreateAnswers(stack.spaces, SpaceResult.UnknownSpace("sp_gone")), stack.agents, stack.machines)
+        runCurrent()
+
+        vm.openNewSpace()
+        vm.createSpace()
+        runCurrent()
+
+        assertTrue(vm.state.value.newSpace?.machineMissing == true)
+    }
+
+    /**
+     * A rename refused because the machine went offline shows why under the field and keeps the sheet open, so the user can
+     * cancel (phase 7 r6, row 14). Before this the refusal closed nothing and said nothing.
+     */
+    @Test
+    fun aRenameOnAnOfflineMachineSaysSoAndStaysOpen() = runTest {
+        val stack = RepoStack(this)
+        val machine = stack.addMachine()
+        runCurrent()
+        val id = (stack.spaces.create(machine, "~/web", "web") as SpaceResult.Done).spaceId
+        runCurrent()
+        val vm = SpacesViewModel(RenameAnswers(stack.spaces, SpaceResult.MachineOffline), stack.agents, stack.machines)
+        runCurrent()
+
+        vm.openMenu(machine, id)
+        vm.askRename()
+        vm.editRename("web-app")
+        vm.confirmRename()
+        runCurrent()
+
+        assertTrue(vm.state.value.rename?.machineOffline == true)
+        assertEquals(listOf("web"), rowNames(vm))
     }
 }
