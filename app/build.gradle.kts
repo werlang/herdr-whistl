@@ -35,6 +35,8 @@ android {
 
     buildFeatures {
         compose = true
+        // BuildConfig.VERSION_NAME is shown in Settings > About (phase 4 r2).
+        buildConfig = true
     }
 
     lint {

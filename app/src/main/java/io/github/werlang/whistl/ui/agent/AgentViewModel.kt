@@ -1,0 +1,417 @@
+package io.github.werlang.whistl.ui.agent
+
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import io.github.werlang.whistl.data.AgentsRepository
+import io.github.werlang.whistl.data.FontSize
+import io.github.werlang.whistl.data.MachineAgent
+import io.github.werlang.whistl.data.MachinesRepository
+import io.github.werlang.whistl.data.SettingsRepository
+import io.github.werlang.whistl.data.TerminalAction
+import io.github.werlang.whistl.data.TerminalHandle
+import io.github.werlang.whistl.data.TerminalReach
+import io.github.werlang.whistl.data.TerminalRepository
+import io.github.werlang.whistl.data.TerminalScreen
+import io.github.werlang.whistl.domain.AgentStatus
+import io.github.werlang.whistl.domain.KeyAction
+import io.github.werlang.whistl.domain.ShortcutKey
+import io.github.werlang.whistl.domain.TerminalState
+import io.github.werlang.whistl.domain.action
+import io.github.werlang.whistl.domain.ctrlCombination
+import io.github.werlang.whistl.domain.letterCombination
+import io.github.werlang.whistl.ui.agents.displayName
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+/** Why the screen cannot type or send, or why the last action did not go through. */
+enum class AgentNotice {
+    /** The machine is not connected: nothing can be sent until it connects. */
+    Offline,
+
+    /** The terminal is no longer on the machine. */
+    Gone,
+
+    /** The program has finished: the screen is read-only. */
+    Finished,
+
+    /** The last send was refused because the program is waiting for the user. Shown until the next action. */
+    Blocked,
+
+    /** The last action was refused by hc for another reason. Shown until the next action. */
+    Refused,
+}
+
+/** The status label the screen shows next to the status dot (SPEC §2.5). */
+enum class AgentStatusLabel {
+    /** Working. */
+    Working,
+
+    /** Waiting for the user (blocked). */
+    NeedsYou,
+
+    /** Finished its last task. */
+    Done,
+
+    /** Waiting for input. */
+    Idle,
+
+    /** The status is an error. */
+    Error,
+
+    /** A plain program with no status, such as a shell. */
+    Plain,
+
+    /** The program has exited. */
+    Finished,
+}
+
+/**
+ * What the Agent screen shows.
+ *
+ * @property name the agent's name.
+ * @property address the terminal address.
+ * @property machineName the machine's name.
+ * @property spaceName the space's name, or `null` for "No space".
+ * @property statusLabel the label next to the status dot.
+ * @property status the raw status, for the dot's colour; `null` for a plain program.
+ * @property screenText the output last read.
+ * @property reach whether the output is current.
+ * @property input the text field, with its cursor.
+ * @property ctrlArmed whether the sticky Ctrl is armed for the next key.
+ * @property keyBar the shortcut keys, in the order the Settings screen holds them.
+ * @property lastKey the last key sent, for a short hint: `null` when none.
+ * @property notice why input is disabled, or the last refusal.
+ * @property canType whether the text field and the key bar take input.
+ * @property canSend whether Send is enabled: input allowed and the field not empty.
+ * @property blockedAgent whether the agent is blocked, so the screen explains that Send forces the text.
+ * @property menuOpen whether the overflow menu sheet is open.
+ * @property confirmStop whether the stop-and-remove confirmation is open.
+ * @property closed `true` once the agent was stopped and removed: the screen navigates back.
+ * @property fontSize the terminal font size from Settings.
+ */
+data class AgentUiState(
+    val name: String,
+    val address: String,
+    val machineName: String,
+    val spaceName: String?,
+    val statusLabel: AgentStatusLabel,
+    val status: AgentStatus?,
+    val screenText: String,
+    val reach: TerminalReach,
+    val input: TextFieldValue,
+    val ctrlArmed: Boolean,
+    val keyBar: List<ShortcutKey>,
+    val lastKey: String?,
+    val notice: AgentNotice?,
+    val canType: Boolean,
+    val canSend: Boolean,
+    val blockedAgent: Boolean,
+    val menuOpen: Boolean,
+    val confirmStop: Boolean,
+    val closed: Boolean,
+    val fontSize: FontSize,
+)
+
+/** The screen's own interaction state, combined with the repositories' state. */
+private data class Interaction(
+    val input: TextFieldValue = TextFieldValue(""),
+    val ctrlArmed: Boolean = false,
+    val lastKey: String? = null,
+    val refusal: AgentNotice? = null,
+    val menuOpen: Boolean = false,
+    val confirmStop: Boolean = false,
+    val closed: Boolean = false,
+)
+
+/**
+ * The Agent screen (SPEC §2.5): one terminal, its output, and the input, over a [TerminalHandle] held while the screen is open.
+ *
+ * Rules, all here:
+ * - Send sends the text and presses Enter. A blocked program refuses plain text, so Send forces it only when the agent's
+ *   status is `blocked`; for any other status the request has no `force` field.
+ * - Ctrl is sticky. Armed, the next bar key goes out as `ctrl+<key>` when the table has that combination, and otherwise
+ *   disarms and goes out as it is. The first typed letter a–z goes out as `ctrl+<letter>` and is not inserted; any other typed
+ *   character disarms Ctrl and is inserted.
+ * - `/ | ~ -` insert their character at the cursor. Every other bar key is sent at once with `terminal.keys`.
+ * - Interrupt sends Ctrl+C. Stop and remove asks first, then kills and removes the terminal, and the screen closes.
+ * - Input is disabled while the machine is offline, the terminal is gone, or the program has finished.
+ *
+ * @param terminals opens the terminal.
+ * @param agents the agent's status and state.
+ * @param machines the machine's name.
+ * @param settings the font size and the shortcut bar.
+ * @param machineId the machine the agent runs on.
+ * @param address the terminal address.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class AgentViewModel(
+    private val terminals: TerminalRepository,
+    agents: AgentsRepository,
+    machines: MachinesRepository,
+    settings: SettingsRepository,
+    private val machineId: String,
+    private val address: String,
+) : ViewModel() {
+    private val handle = MutableStateFlow<TerminalHandle?>(null)
+    private val interaction = MutableStateFlow(Interaction())
+
+    private val screen = handle.flatMapLatest { open ->
+        open?.screen ?: flowOf(TerminalScreen(text = "", reach = TerminalReach.Offline))
+    }
+
+    private val agent = agents.agents.map { list ->
+        list.firstOrNull { it.machineId == machineId && it.agent.terminal.address == address }
+    }
+
+    /** The screen's state. */
+    val state: StateFlow<AgentUiState> = combine(
+        screen,
+        agent,
+        machines.machines(),
+        settings.settings,
+        interaction,
+    ) { output, current, machineList, prefs, own ->
+        build(output, current, machineList.firstOrNull { it.id == machineId }?.name ?: machineId, prefs.fontSize, prefs.shortcutBar, own)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, placeholder())
+
+    init {
+        viewModelScope.launch {
+            handle.value = terminals.open(machineId, address)
+        }
+    }
+
+    /**
+     * The text field changed. While Ctrl is armed, a typed letter becomes a Ctrl combination and is not inserted.
+     *
+     * @param newValue the field after the change.
+     */
+    fun onInputChange(newValue: TextFieldValue) {
+        val own = interaction.value
+        val old = own.input
+        val added = newValue.text.length - old.text.length
+        if (own.ctrlArmed && added > 0) {
+            val typed = newValue.text.substring(old.selection.min, old.selection.min + added)
+            val combination = letterCombination(typed.first())
+            if (combination != null) {
+                interaction.value = own.copy(ctrlArmed = false, lastKey = "Ctrl+" + typed.first().uppercaseChar())
+                sendKeys(listOf(combination))
+                return
+            }
+            interaction.value = own.copy(input = newValue, ctrlArmed = false)
+            return
+        }
+        interaction.value = own.copy(input = newValue)
+    }
+
+    /**
+     * A bar key was tapped (or the Ctrl key). Ignored while input is disabled.
+     *
+     * @param key the key tapped.
+     */
+    fun onKey(key: ShortcutKey) {
+        val current = state.value
+        if (!current.canType) return
+        val own = interaction.value
+        when (val action = key.action()) {
+            KeyAction.Modifier -> interaction.value = own.copy(ctrlArmed = !own.ctrlArmed)
+            is KeyAction.Insert -> interaction.value = own.copy(
+                input = own.input.insertAtCursor(action.char.toString()),
+                ctrlArmed = false,
+            )
+            is KeyAction.Send -> {
+                if (own.ctrlArmed) {
+                    val combination = key.ctrlCombination()
+                    val hint = if (combination != null) "Ctrl+" + key.label.trimStart('^') else key.label
+                    interaction.value = own.copy(ctrlArmed = false, lastKey = hint)
+                    sendKeys(listOf(combination ?: action.hcName))
+                } else {
+                    interaction.value = own.copy(lastKey = key.label)
+                    sendKeys(listOf(action.hcName))
+                }
+            }
+        }
+    }
+
+    /** Send: the field's text and Enter. A blocked agent receives it forced. Empty text or no connection does nothing. */
+    fun onSend() {
+        val current = state.value
+        if (!current.canSend) return
+        val text = interaction.value.input.text
+        val force = current.status == AgentStatus.Blocked
+        interaction.value = interaction.value.copy(ctrlArmed = false)
+        viewModelScope.launch {
+            val outcome = handle.value?.send(text, force) ?: TerminalAction.Offline
+            when (outcome) {
+                TerminalAction.Done -> interaction.value = interaction.value.copy(input = TextFieldValue(""), refusal = null)
+                else -> interaction.value = interaction.value.copy(refusal = outcome.notice())
+            }
+        }
+    }
+
+    /** Interrupt: Ctrl+C through `terminal.interrupt`. */
+    fun onInterrupt() {
+        interaction.value = interaction.value.copy(menuOpen = false, lastKey = "^C")
+        viewModelScope.launch {
+            val outcome = handle.value?.interrupt() ?: TerminalAction.Offline
+            interaction.value = interaction.value.copy(refusal = if (outcome == TerminalAction.Done) null else outcome.notice())
+        }
+    }
+
+    /** Opens the overflow menu. */
+    fun onOpenMenu() {
+        interaction.value = interaction.value.copy(menuOpen = true)
+    }
+
+    /** Closes the overflow menu. */
+    fun onCloseMenu() {
+        interaction.value = interaction.value.copy(menuOpen = false)
+    }
+
+    /** Asks for confirmation before stopping and removing the agent. */
+    fun onAskStop() {
+        interaction.value = interaction.value.copy(menuOpen = false, confirmStop = true)
+    }
+
+    /** Cancels the stop-and-remove confirmation. */
+    fun onCancelStop() {
+        interaction.value = interaction.value.copy(confirmStop = false)
+    }
+
+    /** Confirmed: kills the terminal, removes it, and closes the screen. */
+    fun onConfirmStop() {
+        interaction.value = interaction.value.copy(confirmStop = false)
+        viewModelScope.launch {
+            val outcome = handle.value?.stopAndRemove() ?: TerminalAction.Offline
+            interaction.value = if (outcome == TerminalAction.Done || outcome == TerminalAction.Gone) {
+                interaction.value.copy(closed = true)
+            } else {
+                interaction.value.copy(refusal = outcome.notice())
+            }
+        }
+    }
+
+    /** The screen closes: the terminal stops being read and the machine's lease is given back. */
+    fun onLeave() {
+        handle.value?.close()
+    }
+
+    override fun onCleared() {
+        onLeave()
+    }
+
+    private fun sendKeys(names: List<String>) {
+        viewModelScope.launch {
+            val outcome = handle.value?.keys(names) ?: TerminalAction.Offline
+            if (outcome != TerminalAction.Done) interaction.value = interaction.value.copy(refusal = outcome.notice())
+        }
+    }
+
+    private fun build(
+        output: TerminalScreen,
+        current: MachineAgent?,
+        machineName: String,
+        fontSize: FontSize,
+        keyBar: List<ShortcutKey>,
+        own: Interaction,
+    ): AgentUiState {
+        val terminal = current?.agent?.terminal
+        val live = terminal?.state == TerminalState.Live
+        val derived = when {
+            output.reach == TerminalReach.Offline -> AgentNotice.Offline
+            output.reach == TerminalReach.Gone || terminal == null -> AgentNotice.Gone
+            !live -> AgentNotice.Finished
+            else -> null
+        }
+        val notice = derived ?: own.refusal
+        val canType = derived == null && output.reach == TerminalReach.Connected
+        val status = terminal?.status
+        val input = own.input
+        return AgentUiState(
+            name = terminal?.let { displayName(it.name, it.argv, it.address) } ?: address,
+            address = address,
+            machineName = machineName,
+            spaceName = current?.space?.name,
+            statusLabel = statusLabel(status, live, terminal != null),
+            status = status,
+            screenText = output.text,
+            reach = output.reach,
+            input = input,
+            ctrlArmed = own.ctrlArmed,
+            keyBar = keyBar,
+            lastKey = own.lastKey,
+            notice = notice,
+            canType = canType,
+            canSend = canType && input.text.isNotBlank(),
+            blockedAgent = status == AgentStatus.Blocked && live,
+            menuOpen = own.menuOpen,
+            confirmStop = own.confirmStop,
+            closed = own.closed,
+            fontSize = fontSize,
+        )
+    }
+
+    private fun statusLabel(status: AgentStatus?, live: Boolean, present: Boolean): AgentStatusLabel = when {
+        !present || !live -> AgentStatusLabel.Finished
+        status == AgentStatus.Working -> AgentStatusLabel.Working
+        status == AgentStatus.Blocked -> AgentStatusLabel.NeedsYou
+        status == AgentStatus.Done -> AgentStatusLabel.Done
+        status == AgentStatus.Idle -> AgentStatusLabel.Idle
+        status == AgentStatus.Error -> AgentStatusLabel.Error
+        else -> AgentStatusLabel.Plain
+    }
+
+    private fun placeholder(): AgentUiState = AgentUiState(
+        name = address,
+        address = address,
+        machineName = "",
+        spaceName = null,
+        statusLabel = AgentStatusLabel.Finished,
+        status = null,
+        screenText = "",
+        reach = TerminalReach.Offline,
+        input = TextFieldValue(""),
+        ctrlArmed = false,
+        keyBar = emptyList(),
+        lastKey = null,
+        notice = AgentNotice.Offline,
+        canType = false,
+        canSend = false,
+        blockedAgent = false,
+        menuOpen = false,
+        confirmStop = false,
+        closed = false,
+        fontSize = FontSize.Medium,
+    )
+}
+
+/** The notice a refused action shows. Done has none. */
+private fun TerminalAction.notice(): AgentNotice? = when (this) {
+    TerminalAction.Done -> null
+    TerminalAction.Offline -> AgentNotice.Offline
+    TerminalAction.Gone -> AgentNotice.Gone
+    TerminalAction.Blocked -> AgentNotice.Blocked
+    TerminalAction.Refused -> AgentNotice.Refused
+}
+
+/**
+ * The field with [text] inserted at the cursor, which moves after it. A selection is replaced.
+ *
+ * @param text the text to insert.
+ * @return the new field value.
+ */
+internal fun TextFieldValue.insertAtCursor(text: String): TextFieldValue {
+    val start = selection.min.coerceIn(0, this.text.length)
+    val end = selection.max.coerceIn(start, this.text.length)
+    val inserted = this.text.substring(0, start) + text + this.text.substring(end)
+    return copy(text = inserted, selection = TextRange(start + text.length))
+}

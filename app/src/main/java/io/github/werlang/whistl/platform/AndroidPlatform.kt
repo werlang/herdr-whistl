@@ -1,8 +1,11 @@
 package io.github.werlang.whistl.platform
 
 import android.content.Context
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import io.github.werlang.whistl.core.ssh.HostKeyStore
 import io.github.werlang.whistl.core.ssh.PinnedHostKey
+import io.github.werlang.whistl.data.AppLanguage
 import io.github.werlang.whistl.data.AuthMethod
 import io.github.werlang.whistl.data.MachineStore
 import io.github.werlang.whistl.data.ResolvedFolderCache
@@ -12,6 +15,9 @@ import io.github.werlang.whistl.data.SpacesDocument
 import io.github.werlang.whistl.data.StoredMachine
 import io.github.werlang.whistl.domain.Clock
 import io.github.werlang.whistl.domain.Machine
+import io.github.werlang.whistl.demo.DemoSwitch
+import io.github.werlang.whistl.ui.settings.DemoControl
+import io.github.werlang.whistl.ui.settings.LanguageApplier
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -211,5 +217,39 @@ class SharedPreferencesResolvedFolderCache(context: Context) : ResolvedFolderCac
 
     private companion object {
         const val PREFS = "whistl.folders"
+    }
+}
+
+/**
+ * Applies the app language with `AppCompatDelegate.setApplicationLocales` (SPEC §7). The system choice is the empty list, so
+ * the device language is used again. The activity must be an `AppCompatActivity`.
+ */
+object AppCompatLanguageApplier : LanguageApplier {
+    override fun apply(language: AppLanguage) {
+        val locales = when (language) {
+            AppLanguage.System -> LocaleListCompat.getEmptyLocaleList()
+            AppLanguage.English -> LocaleListCompat.forLanguageTags("en")
+            AppLanguage.Portuguese -> LocaleListCompat.forLanguageTags("pt-BR")
+        }
+        AppCompatDelegate.setApplicationLocales(locales)
+    }
+}
+
+/**
+ * The demo switch of this build, for the Settings screen (phase 4 F5). It is never on in a release build.
+ *
+ * @param context any context; the application context is used.
+ */
+class AndroidDemoControl(context: Context) : DemoControl {
+    private val appContext = context.applicationContext
+
+    override val available: Boolean
+        get() = DemoSwitch.available
+
+    override val enabled: Boolean
+        get() = DemoSwitch.isOn(appContext)
+
+    override fun setEnabled(on: Boolean) {
+        DemoSwitch.set(appContext, on)
     }
 }

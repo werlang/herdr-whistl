@@ -18,6 +18,8 @@ import io.github.werlang.whistl.data.InstalledAgentsDetector
 import io.github.werlang.whistl.data.MachinesRepository
 import io.github.werlang.whistl.data.SettingsRepository
 import io.github.werlang.whistl.data.SpacesRepository
+import io.github.werlang.whistl.data.TerminalRepository
+import io.github.werlang.whistl.data.DefaultTerminalRepository
 import io.github.werlang.whistl.data.spaceIdsFrom
 import io.github.werlang.whistl.demo.DemoCores
 import io.github.werlang.whistl.platform.AndroidClock
@@ -55,6 +57,9 @@ class AppContainer(context: Context, demoMode: Boolean = false) {
 
     /** The spaces on each machine, and the edits to them. */
     val spaces: SpacesRepository = demo?.spaces ?: live.spaces
+
+    /** The terminals the Agent screen reads and drives. */
+    val terminals: TerminalRepository = demo?.terminals ?: live.terminals
 
     /** The app settings: language, font size, theme and the shortcut bar. */
     val settings: SettingsRepository = DefaultSettingsRepository(SharedPreferencesSettingsStore(context.applicationContext))
@@ -104,4 +109,6 @@ private class LiveCore(context: Context, scope: CoroutineScope) {
         spaces = spaces,
         documentChanges = documentChanges,
     )
+
+    val terminals: TerminalRepository = DefaultTerminalRepository(scope = scope, machines = machines)
 }

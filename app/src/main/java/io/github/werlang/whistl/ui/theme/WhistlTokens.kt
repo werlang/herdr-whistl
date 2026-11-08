@@ -57,3 +57,9 @@ val LightWhistlTokens = WhistlTokens(
 
 /** Provides [WhistlTokens] to the composition. Defaults to the dark set. */
 val LocalWhistlTokens = staticCompositionLocalOf { DarkWhistlTokens }
+
+/** Text on the terminal: light in both themes, because the terminal stays dark (SPEC §3). */
+val WhistlTerminalText: Color = Color(0xFFE8EAED)
+
+/** The dimmed text on the terminal, for the prompt and notices shown over it. */
+val WhistlTerminalDim: Color = Color(0xFF8A9099)

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -24,76 +23,124 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import io.github.werlang.whistl.BuildConfig
 import io.github.werlang.whistl.R
+import io.github.werlang.whistl.platform.AndroidDemoControl
+import io.github.werlang.whistl.platform.AppCompatLanguageApplier
+import io.github.werlang.whistl.ui.agent.AgentScreen
+import io.github.werlang.whistl.ui.agent.AgentViewModel
+import io.github.werlang.whistl.ui.agents.AgentRow
+import io.github.werlang.whistl.ui.agents.AgentsScreen
+import io.github.werlang.whistl.ui.agents.AgentsViewModel
+import io.github.werlang.whistl.ui.settings.SettingsScreen
+import io.github.werlang.whistl.ui.settings.SettingsViewModel
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
+
+/** The navigation routes of the app. */
+object Routes {
+    /** Machines (a placeholder this round). */
+    const val MACHINES = "machines"
+
+    /** Spaces (a placeholder this round). */
+    const val SPACES = "spaces"
+
+    /** The Agents list. */
+    const val AGENTS = "agents"
+
+    /** Settings. */
+    const val SETTINGS = "settings"
+
+    /** The Agent screen's route pattern: the machine and the terminal address. */
+    const val AGENT_PATTERN = "agent/{machineId}/{address}"
+
+    /**
+     * The route to one agent's screen.
+     *
+     * @param machineId the machine the agent runs on.
+     * @param address the terminal address.
+     * @return the route.
+     */
+    fun agent(machineId: String, address: String): String = "agent/$machineId/$address"
+}
 
 /**
  * The four bottom-navigation destinations (SPEC §2), in bar order.
  *
- * @property labelRes string resource for the destination's label.
- * @property icon the core Material icon shown in the bar.
+ * @property labelRes the label string.
+ * @property icon the Material icon in the bar.
+ * @property route the route the destination opens.
  */
 enum class Destination(
     @StringRes val labelRes: Int,
     val icon: ImageVector,
+    val route: String,
 ) {
-    /** Connected machines; the only destination with a shell this round. */
-    Machines(R.string.destination_machines, Icons.Default.Home),
+    /** Connected machines. */
+    Machines(R.string.destination_machines, Icons.Default.Home, Routes.MACHINES),
 
     /** Spaces grouped by machine. */
-    Spaces(R.string.destination_spaces, Icons.AutoMirrored.Filled.List),
+    Spaces(R.string.destination_spaces, Icons.AutoMirrored.Filled.List, Routes.SPACES),
 
-    /** Every agent on connected machines; badged with the blocked count. */
-    Agents(R.string.destination_agents, Icons.Default.PlayArrow),
+    /** Every agent on connected machines; badged with the count waiting for the user. */
+    Agents(R.string.destination_agents, Icons.Default.PlayArrow, Routes.AGENTS),
 
     /** General, shortcut keys and About. */
-    Settings(R.string.destination_settings, Icons.Default.Settings),
+    Settings(R.string.destination_settings, Icons.Default.Settings, Routes.SETTINGS),
 }
 
 /**
- * Root composable: bottom navigation over the four [Destination]s.
+ * The app's root: the navigation host over the four destinations and the Agent screen. The bottom bar shows on the four list
+ * screens only; the Agents badge is the blocked count (SPEC §2).
  *
- * Selecting a destination switches the body. Only [Destination.Machines] has a shell
- * this round; the others show placeholder text.
- *
- * @param blockedAgentCount count shown on the Agents badge. Zero hides the badge.
+ * @param startRoute the route shown first. The screenshot tests start on other screens; the app starts on Machines.
  */
 @Composable
-fun WhistlApp(blockedAgentCount: Int = 0) {
-    var destination by rememberSaveable { mutableStateOf(Destination.Machines) }
+fun WhistlApp(startRoute: String = Routes.MACHINES) {
+    val navController = rememberNavController()
+    val entry by navController.currentBackStackEntryAsState()
+    val route = entry?.destination?.route
+    val showBar = Destination.entries.any { it.route == route }
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                Destination.entries.forEach { item ->
-                    NavigationBarItem(
-                        selected = item == destination,
-                        onClick = { destination = item },
-                        icon = {
-                            NavIcon(
-                                item = item,
-                                badgeCount = if (item == Destination.Agents) blockedAgentCount else 0,
-                            )
-                        },
-                        label = { Text(stringResource(item.labelRes)) },
-                    )
+            if (showBar) {
+                NavigationBar {
+                    Destination.entries.forEach { item ->
+                        NavigationBarItem(
+                            selected = route == item.route,
+                            onClick = { navigateTo(navController, item.route) },
+                            icon = { NavIcon(item = item) },
+                            label = { Text(stringResource(item.labelRes)) },
+                        )
+                    }
                 }
             }
         },
         floatingActionButton = {
-            if (destination == Destination.Machines) {
+            if (route == Routes.MACHINES) {
                 FloatingActionButton(onClick = {}) {
                     Icon(
                         imageVector = Icons.Default.Add,
@@ -103,38 +150,116 @@ fun WhistlApp(blockedAgentCount: Int = 0) {
             }
         },
     ) { innerPadding ->
-        val body = Modifier
-            .padding(innerPadding)
-            .fillMaxSize()
-        when (destination) {
-            Destination.Machines -> MachinesScreen(body)
-            Destination.Spaces -> PlaceholderScreen(R.string.spaces_placeholder, body)
-            Destination.Agents -> PlaceholderScreen(R.string.agents_placeholder, body)
-            Destination.Settings -> PlaceholderScreen(R.string.settings_placeholder, body)
+        NavHost(
+            navController = navController,
+            startDestination = Routes.MACHINES,
+            modifier = Modifier.padding(innerPadding),
+        ) {
+            composable(Routes.MACHINES) {
+                MachinesScreen(Modifier.fillMaxSize())
+                // Opens the requested start route once the graph exists; the app starts on Machines, so this is a no-op there.
+                LaunchedEffect(startRoute) {
+                    if (startRoute != Routes.MACHINES) navController.navigate(startRoute)
+                }
+            }
+            composable(Routes.SPACES) { PlaceholderScreen(R.string.spaces_placeholder, Modifier.fillMaxSize()) }
+            composable(Routes.AGENTS) {
+                AgentsRoute(onOpen = { row -> navController.navigate(Routes.agent(row.machineId, row.address)) })
+            }
+            composable(Routes.SETTINGS) { SettingsRoute() }
+            composable(
+                route = Routes.AGENT_PATTERN,
+                arguments = listOf(
+                    navArgument("machineId") { type = NavType.StringType },
+                    navArgument("address") { type = NavType.StringType },
+                ),
+            ) { backStack ->
+                AgentRoute(
+                    machineId = backStack.arguments?.getString("machineId").orEmpty(),
+                    address = backStack.arguments?.getString("address").orEmpty(),
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
     }
 }
 
-/**
- * Icon for a bar item. A badge is drawn only when [badgeCount] is positive.
- *
- * The visible label already names the destination, so the icon has no content description.
- */
-@Composable
-private fun NavIcon(item: Destination, badgeCount: Int) {
-    val icon: @Composable () -> Unit = {
-        Icon(imageVector = item.icon, contentDescription = null)
-    }
-    if (badgeCount > 0) {
-        BadgedBox(badge = { Badge { Text(badgeCount.toString()) } }) { icon() }
-    } else {
-        icon()
+/** Opens a bottom-bar destination: one copy of it on top, no stacking of the same list. */
+private fun navigateTo(navController: NavHostController, route: String) {
+    navController.navigate(route) {
+        popUpTo(navController.graph.startDestinationId) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
     }
 }
 
 /**
- * Machines destination shell: title, empty-state text, 16dp side gutter.
+ * The bar icon of a destination. The Agents icon carries the count of agents waiting for the user; it is hidden at zero, and
+ * its description says the count.
+ *
+ * @param item the destination.
  */
+@Composable
+private fun NavIcon(item: Destination) {
+    val container = LocalAppContainer.current
+    val blocked by container.agents.blockedCount.collectAsState()
+    if (item == Destination.Agents && blocked > 0) {
+        val description = pluralStringResource(R.plurals.agents_badge_needs_you, blocked, blocked)
+        BadgedBox(badge = { Badge { Text(blocked.toString()) } }) {
+            Icon(imageVector = item.icon, contentDescription = description)
+        }
+    } else {
+        Icon(imageVector = item.icon, contentDescription = null)
+    }
+}
+
+/** The Agents list, with its view model built from the app's container. */
+@Composable
+private fun AgentsRoute(onOpen: (AgentRow) -> Unit) {
+    val container = LocalAppContainer.current
+    val model: AgentsViewModel = viewModel(
+        factory = viewModelFactory { initializer { AgentsViewModel(container.agents, container.machines) } },
+    )
+    val state by model.state.collectAsState()
+    AgentsScreen(state = state, onSelect = model::select, onOpen = onOpen, modifier = Modifier.fillMaxSize())
+}
+
+/** One agent's screen. Its view model is keyed by the agent, so each agent opens its own terminal. */
+@Composable
+private fun AgentRoute(machineId: String, address: String, onBack: () -> Unit) {
+    val container = LocalAppContainer.current
+    val model: AgentViewModel = viewModel(
+        key = Routes.agent(machineId, address),
+        factory = viewModelFactory {
+            initializer {
+                AgentViewModel(container.terminals, container.agents, container.machines, container.settings, machineId, address)
+            }
+        },
+    )
+    AgentScreen(viewModel = model, onBack = onBack, modifier = Modifier.fillMaxSize())
+}
+
+/** Settings, with its view model built from the app's container and this build's switches. */
+@Composable
+private fun SettingsRoute() {
+    val container = LocalAppContainer.current
+    val context = LocalContext.current
+    val model: SettingsViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer {
+                SettingsViewModel(
+                    settings = container.settings,
+                    language = AppCompatLanguageApplier,
+                    demo = AndroidDemoControl(context),
+                    versionName = BuildConfig.VERSION_NAME,
+                )
+            }
+        },
+    )
+    SettingsScreen(viewModel = model, modifier = Modifier.fillMaxSize())
+}
+
+/** The Machines placeholder: its title and the empty-state text (the screen comes in round 3). */
 @Composable
 private fun MachinesScreen(modifier: Modifier) {
     Column(
@@ -162,9 +287,10 @@ private fun MachinesScreen(modifier: Modifier) {
 }
 
 /**
- * Placeholder body for a destination that has no screen yet.
+ * A destination that has no screen yet.
  *
- * @param text string resource shown centred.
+ * @param text the string shown, centred.
+ * @param modifier the modifier for the screen.
  */
 @Composable
 private fun PlaceholderScreen(@StringRes text: Int, modifier: Modifier) {
