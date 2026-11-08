@@ -137,6 +137,8 @@
     <string name="machine_issue_unsupported_core">versão do hc não suportada</string>
     <string name="machine_issue_host_key">chave do host a confirmar</string>
     <string name="machine_issue_host_key_changed">chave do host mudou</string>
+    <string name="machine_issue_connection_refused">conexão recusada</string>
+    <string name="machine_issue_internal">falhou dentro do app</string>
     <plurals name="machine_agents">
         <item quantity="one">%1$d agente</item>
         <item quantity="many">%1$d agentes</item>
@@ -183,6 +185,8 @@
     <string name="error_login_refused">A máquina recusou o login. Confira a chave ou a senha e tente de novo.</string>
     <string name="error_unreachable">Não foi possível alcançar a máquina. O app continua tentando enquanto isto estiver aberto.</string>
     <string name="error_unsupported_core">Esta máquina roda um protocolo do herdr-core que este app não entende.</string>
+    <string name="error_connection_refused">Nada escuta na porta SSH desta máquina. Inicie o servidor SSH e tente de novo.</string>
+    <string name="error_internal">A conexão falhou dentro do app, não na rede. É um erro do app; por favor, informe.</string>
     <string name="problem_host_empty">Digite um nome de host ou um endereço.</string>
     <string name="problem_host_bad_characters">Use letras, dígitos, pontos e hifens, ou um endereço IPv6.</string>
     <string name="problem_host_bad_format">Isto não é um nome de host ou endereço válido.</string>

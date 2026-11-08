@@ -5,6 +5,8 @@ import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.core.rpc.UnsupportedGeneration
 import io.github.werlang.whistl.core.secure.SecretStore
+import io.github.werlang.whistl.core.log.Log
+import io.github.werlang.whistl.core.ssh.FailureStage
 import io.github.werlang.whistl.core.ssh.HostKeyDecision
 import io.github.werlang.whistl.core.ssh.HostKeyGate
 import io.github.werlang.whistl.core.ssh.HostKeyPolicy
@@ -12,6 +14,9 @@ import io.github.werlang.whistl.core.ssh.HostKeyRefused
 import io.github.werlang.whistl.core.ssh.HostKeyStore
 import io.github.werlang.whistl.core.ssh.KeyManager
 import io.github.werlang.whistl.core.ssh.MachineConnector
+import io.github.werlang.whistl.core.ssh.androidErrno
+import io.github.werlang.whistl.core.ssh.classChain
+import io.github.werlang.whistl.core.ssh.failureStage
 import io.github.werlang.whistl.core.ssh.MachineSession
 import io.github.werlang.whistl.core.ssh.PresentedHostKey
 import io.github.werlang.whistl.core.ssh.SshAuth
@@ -42,7 +47,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Transitions:
  * - first [acquire]: `Offline` → `Connecting` → `Connected`, or one of the other states below.
- * - [ConnectionState.Error] with `AuthFailed` or `UnsupportedGeneration`: no automatic retry. A later [acquire] tries once.
+ * - [ConnectionState.Error] with `AuthFailed`, `UnsupportedGeneration`, `ConnectionRefused` or `Internal`: no automatic retry.
+ *   A later [acquire] tries once. Only a network failure (see [failureStage]) goes to `Offline` with a retry.
  * - `HostKeyUnknown`: waits for [confirmHostKey], which pins the presented key and connects.
  * - `HostKeyChanged`: blocks. Nothing connects, nothing retries, and no method pins over it. Only [remove] leaves it.
  * - a lost session (`TransportLost` on open, on a call, or reported by the events watchdog): `Offline`, the dead session
@@ -69,6 +75,8 @@ class DefaultMachinesRepository(
     private val hostKeys: HostKeyStore,
     private val connector: MachineConnector,
     private val newId: () -> String = { UUID.randomUUID().toString() },
+    private val errnoOf: (Throwable) -> Int? = ::androidErrno,
+    private val reportInternal: (String) -> Unit = { Log.w("Machines", it) },
 ) : MachinesRepository {
     private val policy = HostKeyPolicy(hostKeys)
     private val lock = Mutex()
@@ -247,7 +255,16 @@ class DefaultMachinesRepository(
             finish(slot, ConnectionState.Error(ErrorKind.UnsupportedGeneration))
             return
         } catch (e: Throwable) {
-            onOffline(slot)
+            // Only a network failure retries on its own. A refused port or a failure inside the app is an error the user
+            // acts on (phase 7 r1c): retrying would repeat it, and the app's own failure must not read as "unreachable".
+            when (failureStage(e, errnoOf)) {
+                FailureStage.Unreachable -> onOffline(slot)
+                FailureStage.Refused -> finish(slot, ConnectionState.Error(ErrorKind.ConnectionRefused))
+                FailureStage.Internal -> {
+                    reportInternal("connection failed inside the app: ${classChain(e)}")
+                    finish(slot, ConnectionState.Error(ErrorKind.Internal))
+                }
+            }
             return
         }
         lock.withLock {

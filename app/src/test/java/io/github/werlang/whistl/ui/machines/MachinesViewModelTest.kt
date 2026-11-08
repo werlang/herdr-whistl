@@ -92,6 +92,8 @@ class MachinesViewModelTest {
             ConnectionState.Offline to (MachineStatus.Offline to null),
             ConnectionState.Error(ErrorKind.AuthFailed) to (MachineStatus.Error to MachineIssue.LoginRefused),
             ConnectionState.Error(ErrorKind.UnsupportedGeneration) to (MachineStatus.Error to MachineIssue.UnsupportedCore),
+            ConnectionState.Error(ErrorKind.ConnectionRefused) to (MachineStatus.Error to MachineIssue.ConnectionRefused),
+            ConnectionState.Error(ErrorKind.Internal) to (MachineStatus.Error to MachineIssue.Internal),
             ConnectionState.HostKeyUnknown("ssh-ed25519", "SHA256:new") to (MachineStatus.Error to MachineIssue.HostKeyToConfirm),
             ConnectionState.HostKeyChanged("ssh-ed25519", "SHA256:old", "SHA256:new") to
                 (MachineStatus.Error to MachineIssue.HostKeyChanged),

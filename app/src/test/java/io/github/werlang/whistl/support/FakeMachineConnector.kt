@@ -49,6 +49,14 @@ class FakeMachineConnector(private val scope: CoroutineScope) : MachineConnector
         data object GenerationTwo : Attempt
 
         /**
+         * The connection fails with [error] exactly as thrown. Lets a test present the failure the way the production
+         * transport does (for example a `TransportLost` wrapping an sshj `TransportException`).
+         *
+         * @property error the failure to throw.
+         */
+        class Fails(val error: Throwable) : Attempt
+
+        /**
          * A different host key is presented. For an unpinned machine this is an unknown key; for a pinned one, a changed key.
          *
          * @property blob the presented key blob.
@@ -109,6 +117,7 @@ class FakeMachineConnector(private val scope: CoroutineScope) : MachineConnector
         connectCalls++
         val attempt = queued.removeFirstOrNull() ?: Attempt.Healthy
         if (attempt is Attempt.Unreachable) throw TransportLost("open failed")
+        if (attempt is Attempt.Fails) throw attempt.error
         if (attempt is Attempt.AuthRefused) throw AuthFailed()
         val presented = (attempt as? Attempt.PresentKey)?.blob ?: defaultKey
         if (!gate.admit(SshWire.ED25519, presented)) {

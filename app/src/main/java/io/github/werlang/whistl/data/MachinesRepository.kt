@@ -59,7 +59,7 @@ sealed interface ConnectionState {
  * Why a connection is in [ConnectionState.Error].
  *
  * A failure to open is [ConnectionState.Offline] with a scheduled retry, so a machine that cannot be reached is never an error
- * (phase 6 P0-10).
+ * (phase 6 P0-10). The kinds below are failures that retrying will not fix on its own, so none of them retries.
  */
 enum class ErrorKind {
     /** The login was refused. Not retried automatically; the user can acquire again to try once more. */
@@ -67,6 +67,18 @@ enum class ErrorKind {
 
     /** `hello` reported a protocol generation other than 1. Not retried automatically. */
     UnsupportedGeneration,
+
+    /**
+     * The host answered and nothing listens on the port (`ECONNREFUSED`). Not retried automatically; the user can acquire
+     * again once the SSH server runs.
+     */
+    ConnectionRefused,
+
+    /**
+     * The attempt failed inside the app, not on the network (a missing algorithm, a provider error, an internal error).
+     * Not retried automatically: retrying repeats the same failure. Only the class name is logged.
+     */
+    Internal,
 }
 
 /**

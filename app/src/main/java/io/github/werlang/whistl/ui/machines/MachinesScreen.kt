@@ -222,6 +222,8 @@ private fun cardStatusLabelRes(card: MachineCard): Int = when (card.status) {
         MachineIssue.UnsupportedCore -> R.string.machine_issue_unsupported_core
         MachineIssue.HostKeyToConfirm -> R.string.machine_issue_host_key
         MachineIssue.HostKeyChanged -> R.string.machine_issue_host_key_changed
+        MachineIssue.ConnectionRefused -> R.string.machine_issue_connection_refused
+        MachineIssue.Internal -> R.string.machine_issue_internal
         null -> R.string.status_error
     }
 }

@@ -134,6 +134,8 @@
     <string name="machine_issue_unsupported_core">unsupported hc version</string>
     <string name="machine_issue_host_key">host key to confirm</string>
     <string name="machine_issue_host_key_changed">host key changed</string>
+    <string name="machine_issue_connection_refused">connection refused</string>
+    <string name="machine_issue_internal">failed inside the app</string>
     <plurals name="machine_agents">
         <item quantity="one">%1$d agent</item>
         <item quantity="other">%1$d agents</item>
@@ -179,6 +181,8 @@
     <string name="error_login_refused">The machine refused the login. Check the key or the password, then retry.</string>
     <string name="error_unreachable">Could not reach the machine. The app keeps trying while this is open.</string>
     <string name="error_unsupported_core">This machine runs an herdr-core protocol this app does not speak.</string>
+    <string name="error_connection_refused">Nothing is listening on the SSH port of this machine. Start the SSH server, then retry.</string>
+    <string name="error_internal">Connection failed inside the app, not on the network. This is a bug in the app; please report it.</string>
     <string name="problem_host_empty">Enter a host name or an address.</string>
     <string name="problem_host_bad_characters">Use letters, digits, dots and hyphens, or an IPv6 address.</string>
     <string name="problem_host_bad_format">This is not a valid host name or address.</string>

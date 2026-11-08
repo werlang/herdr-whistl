@@ -179,8 +179,16 @@ Unknown fields are preserved on write (round-trip `JsonObject`).
 - Release build: R8 minify + resource shrinking, `debuggable=false`,
   cleartext disabled by network security config, `FLAG_SECURE` optional
   setting is out of scope.
+- Connection failures are classified by their cause, not their message (see
+  `core/ssh/FailureStage.kt`). Only a network failure is "could not reach the
+  machine", and it goes offline with a retry. A refused port, a login refusal,
+  an unsupported core and a failure inside the app are errors that do not retry
+  on their own. A failure inside the app is never shown as "could not reach".
 - Logs: a `Log` wrapper that is a no-op in release; never log terminal text,
-  hosts or credentials.
+  hosts or credentials. Because release logs nothing, a release build cannot
+  diagnose a failure inside the SSH stack: the failure stage the user sees is the
+  only signal there. The internal-failure log line holds class names only, in
+  debug builds.
 
 ## 7. i18n
 

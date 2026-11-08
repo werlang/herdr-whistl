@@ -2,6 +2,7 @@ package io.github.werlang.whistl.data
 
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.core.secure.SecretStore
+import io.github.werlang.whistl.core.ssh.ECONNREFUSED_ERRNO
 import io.github.werlang.whistl.core.ssh.HostKeyStore
 import io.github.werlang.whistl.core.ssh.KeyManager
 import io.github.werlang.whistl.core.ssh.PinnedHostKey
@@ -13,6 +14,11 @@ import io.github.werlang.whistl.support.FakeMachineConnector
 import io.github.werlang.whistl.support.FakeSecretStore
 import io.github.werlang.whistl.support.InMemoryMachineStore
 import io.github.werlang.whistl.support.assertThrowsSuspend
+import net.schmizz.sshj.common.SSHRuntimeException
+import java.io.IOException
+import java.net.ConnectException
+import java.net.UnknownHostException
+import java.security.NoSuchAlgorithmException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -41,6 +47,9 @@ class MachinesRepositoryTest {
         val secrets: SecretStore = FakeSecretStore()
         val hostKeys: HostKeyStore = FakeHostKeyStore()
         private var counter = 0
+
+        /** What the repository reported for failures inside the app. Each entry must hold class names only. */
+        val internalReports = mutableListOf<String>()
         val repo: MachinesRepository = DefaultMachinesRepository(
             scope = scope.backgroundScope,
             store = store,
@@ -49,6 +58,8 @@ class MachinesRepositoryTest {
             hostKeys = hostKeys,
             connector = connector,
             newId = { "m${++counter}" },
+            errnoOf = { if (it is ConnectException) ECONNREFUSED_ERRNO else null },
+            reportInternal = { internalReports += it },
         )
 
         /**
@@ -100,6 +111,86 @@ class MachinesRepositoryTest {
         assertEquals("0.1.18", (seen.last() as ConnectionState.Connected).hello.version)
         assertEquals(1, h.connector.connectCalls)
         assertNotNull(lease.client())
+    }
+
+    /**
+     * A failure inside the app (here an `IllegalStateException`) is `Error(Internal)`: not Offline, and not retried, since a
+     * retry would repeat it (phase 7 r1c). Before the fix it was `Offline` with a retry, which read as "could not reach".
+     */
+    @Test
+    fun internalFailureIsErrorAndIsNotRetriedAutomatically() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.connector.script(FakeMachineConnector.Attempt.Fails(IllegalStateException("provider broke")))
+        val seen = h.record(id)
+
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(listOf("Offline", "Connecting", "Error(Internal)"), seen.kinds())
+        assertEquals(listOf("connection failed inside the app: IllegalStateException"), h.internalReports)
+
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+        assertEquals(listOf("Offline", "Connecting", "Error(Internal)"), seen.kinds())
+    }
+
+    /** The failure sshj raises for a missing key-exchange algorithm, as the transport wraps it, is still `Error(Internal)`. */
+    @Test
+    fun providerFailureWrappedByTheTransportIsInternal() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.connector.script(FakeMachineConnector.Attempt.Fails(TransportLost("ssh connection or login failed", sshjProviderFailure())))
+        val seen = h.record(id)
+
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(listOf("Offline", "Connecting", "Error(Internal)"), seen.kinds())
+        assertEquals(1, h.connector.connectCalls)
+        assertEquals(
+            listOf("connection failed inside the app: TransportLost <- IOException <- SSHRuntimeException <- NoSuchAlgorithmException"),
+            h.internalReports,
+        )
+    }
+
+    /** Nothing listens on the port (`ECONNREFUSED`): `Error(ConnectionRefused)`, not retried automatically. */
+    @Test
+    fun refusedPortIsErrorAndIsNotRetriedAutomatically() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.connector.script(FakeMachineConnector.Attempt.Fails(ConnectException("refused")))
+        val seen = h.record(id)
+
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(listOf("Offline", "Connecting", "Error(ConnectionRefused)"), seen.kinds())
+
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+    }
+
+    /** A network failure (here an unknown host) stays `Offline` and retries on its own, as before. */
+    @Test
+    fun networkFailureIsOfflineAndRetriesOnItsOwn() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.connector.script(FakeMachineConnector.Attempt.Fails(UnknownHostException("homelab")))
+        val seen = h.record(id)
+
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(listOf("Offline", "Connecting", "Offline"), seen.kinds())
+
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(2, h.connector.connectCalls)
+        assertEquals(listOf("Offline", "Connecting", "Offline", "Connecting", "Connected"), seen.kinds())
+    }
+
+    /** The chain sshj produces when the key exchange asks the `BC` provider for a missing algorithm (phase 7 r1c). */
+    private fun sshjProviderFailure(): Throwable = IOException("key exchange failed").apply {
+        initCause(SSHRuntimeException("key exchange failed").apply { initCause(NoSuchAlgorithmException("X25519")) })
     }
 
     /** A refused login is `Error(AuthFailed)`; the connector is not called again, even after a long virtual delay. */

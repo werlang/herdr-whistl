@@ -332,6 +332,33 @@ class AddMachineViewModelTest {
         assertEquals(listOf("s-auth"), machines.reconnected)
     }
 
+    /**
+     * A refused port and a failure inside the app each get their own stage (not Unreachable), and Retry tries again (phase
+     * 7 r1c). The sheet strings for these stages are checked on the device, not here.
+     */
+    @Test
+    fun refusedPortAndInternalFailureGetTheirOwnStages() = runTest {
+        val cases = listOf(
+            ErrorKind.ConnectionRefused to AddStage.ConnectionRefused,
+            ErrorKind.Internal to AddStage.Internal,
+        )
+        cases.forEachIndexed { index, (kind, stage) ->
+            machines.addAnswer = { draft ->
+                val machine = Machine("s-$index", draft.name, draft.host, draft.port, draft.user)
+                machines.put(machine, ConnectionState.Error(kind))
+                AddResult.Added(machine)
+            }
+            val vm = vm()
+            fill(vm, host = "case$index.demo")
+
+            vm.connect(null)
+
+            assertEquals(stage, vm.uiState.value.stage)
+            vm.retry()
+            assertEquals("s-$index", machines.reconnected.last())
+        }
+    }
+
     /** An unreachable machine: the attempt starts, then goes offline, and the sheet shows Unreachable with Retry. */
     @Test
     fun anUnreachableMachineShowsUnreachableAfterItsAttempt() = runTest {

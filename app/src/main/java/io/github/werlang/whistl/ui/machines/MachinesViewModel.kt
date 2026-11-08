@@ -47,6 +47,12 @@ enum class MachineIssue {
 
     /** The machine presented a key other than the trusted one. */
     HostKeyChanged,
+
+    /** Nothing listens on the SSH port of the machine (the host answered). */
+    ConnectionRefused,
+
+    /** The connection failed inside the app, not on the network. */
+    Internal,
 }
 
 /**
@@ -376,6 +382,8 @@ internal fun classify(state: ConnectionState): Pair<MachineStatus, MachineIssue?
     is ConnectionState.Error -> MachineStatus.Error to when (state.kind) {
         ErrorKind.AuthFailed -> MachineIssue.LoginRefused
         ErrorKind.UnsupportedGeneration -> MachineIssue.UnsupportedCore
+        ErrorKind.ConnectionRefused -> MachineIssue.ConnectionRefused
+        ErrorKind.Internal -> MachineIssue.Internal
     }
     is ConnectionState.HostKeyUnknown -> MachineStatus.Error to MachineIssue.HostKeyToConfirm
     is ConnectionState.HostKeyChanged -> MachineStatus.Error to MachineIssue.HostKeyChanged

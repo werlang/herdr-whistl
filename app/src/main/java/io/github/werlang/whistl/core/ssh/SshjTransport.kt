@@ -240,14 +240,15 @@ class SshjTransport internal constructor(
  * Maps a failure while connecting or logging in to the typed error the lifecycle needs.
  *
  * A login the server refused (sshj's [UserAuthException]) is [AuthFailed], which is not retried. Anything else is
- * [TransportLost]. Messages name neither the host, the user nor any credential.
+ * [TransportLost], with the original failure kept as its cause, so [failureStage] can tell a network failure from an
+ * internal one (phase 7 r1c). Messages name neither the host, the user nor any credential.
  *
  * @param e the failure sshj raised.
  * @return the typed error to throw.
  */
 internal fun openFailure(e: Throwable): HcException = when (e) {
     is UserAuthException -> AuthFailed()
-    else -> TransportLost("ssh connection or login failed")
+    else -> TransportLost("ssh connection or login failed", e)
 }
 
 /** [SshSessionPort] over sshj's [SSHClient]. */

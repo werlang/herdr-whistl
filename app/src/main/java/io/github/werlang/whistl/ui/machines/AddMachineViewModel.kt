@@ -46,6 +46,12 @@ enum class AddStage {
     /** The machine runs an hc protocol generation this app does not speak. */
     UnsupportedCore,
 
+    /** The host answered but nothing listens on the SSH port. Retry tries once more. */
+    ConnectionRefused,
+
+    /** The connection failed inside the app, not on the network. Retry tries once more. */
+    Internal,
+
     /** The machine is connected: the sheet closes. */
     Connected,
 
@@ -320,6 +326,8 @@ class AddMachineViewModel(
                 stage = when (connection.kind) {
                     ErrorKind.AuthFailed -> AddStage.LoginRefused
                     ErrorKind.UnsupportedGeneration -> AddStage.UnsupportedCore
+                    ErrorKind.ConnectionRefused -> AddStage.ConnectionRefused
+                    ErrorKind.Internal -> AddStage.Internal
                 },
             )
         }
