@@ -16,6 +16,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
 import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.common.Buffer
 import net.schmizz.sshj.common.Ed25519KeyFactory
@@ -118,6 +119,16 @@ internal interface ExecChannelPort {
      * @return the exit status, or `null`.
      */
     fun exitStatus(): Int? = null
+
+    /**
+     * Waits up to [timeoutMillis] for the command to end, then returns its exit status (see [exitStatus]). A timeout is not an
+     * error: the status is then whatever the channel has, usually `null`. OpenSSH may send end-of-stream before the exit status,
+     * so a status read at once can miss it (p7r8 item 2). Blocks: call it on the IO dispatcher.
+     *
+     * @param timeoutMillis the longest wait.
+     * @return the exit status, or `null`.
+     */
+    fun awaitExit(timeoutMillis: Long): Int? = exitStatus()
 
     /** Closes the channel and its session. */
     fun close()
@@ -239,11 +250,15 @@ class SshjTransport internal constructor(
     }
 
     /**
-     * The exit status of the hc command, once it has ended: `127` when the shell could not find it.
+     * The exit status of the hc command: `127` when the shell could not find it. Waits up to [timeoutMillis] for the command to
+     * end first, because the status can arrive after end-of-stream (p7r8 item 2). Runs on [io].
      *
-     * @return the exit status, or `null` while it runs or when none was given.
+     * @param timeoutMillis the longest wait for the command to end.
+     * @return the exit status, or `null` when none came in time or none was given.
      */
-    fun hcExitStatus(): Int? = commandChannel?.exitStatus()
+    suspend fun awaitHcExitStatus(timeoutMillis: Long): Int? = withContext(io) {
+        commandChannel?.awaitExit(timeoutMillis)
+    }
 
     /** Disconnects the SSH session and so every channel on it. */
     override suspend fun close() {
@@ -314,6 +329,12 @@ private class SshjExecChannel(
     override val stderr: InputStream get() = command.errorStream
 
     override fun exitStatus(): Int? = command.exitStatus
+
+    override fun awaitExit(timeoutMillis: Long): Int? {
+        // sshj's join waits for the channel to close, which comes after the exit status. A timeout is ignored: the status stays null.
+        runCatching { command.join(timeoutMillis, TimeUnit.MILLISECONDS) }
+        return command.exitStatus
+    }
 
     override fun close() {
         runCatching { command.close() }

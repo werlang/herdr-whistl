@@ -233,7 +233,8 @@ Unknown fields are preserved on write (round-trip `JsonObject`).
   on their own. A failure inside the app is never shown as "could not reach".
 - A missing `hc` on the login (the `hc` channel exits with status 127, "command
   not found") is `CoreMissing`: "herdr-core not found", an error with no automatic
-  retry, and the install hint (phase 7 r3).
+  retry, and the install hint (phase 7 r3). The status is read after a bounded
+  wait of 2 s, since it can arrive after the end of the stream (phase 7 r8).
 - A failed `printenv HOME` probe for a space is `HomeUnreadable` ("Could not read
   the machine’s home folder just now. It is tried again the next time the space
   is read."): it is not remembered for the connection, so the next read tries again. Only a real empty HOME is "no home", which is kept for the

@@ -14,26 +14,38 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import net.schmizz.sshj.SSHClient
+
+/** The longest wait for the hc command to end before its exit status is read: a status that comes later than this is not seen. */
+private const val EXIT_STATUS_WAIT_MILLIS: Long = 2_000L
 
 /**
  * The production [MachineConnector]: an [SshjTransport] per connection, the command channel as a [JsonRpcConnection],
  * and `hello` before a session is handed out (SPEC §5, §6).
  *
- * Not covered by JVM tests: they open no socket. The lifecycle around it is covered with a fake connector.
+ * The transport is real, but its session is a seam ([newSession]): the JVM tests pass a fake session, so the CoreMissing path is
+ * tested without a socket. The lifecycle around it is covered with a fake connector.
  *
  * @param scope the scope for the command connection's reader; the lifecycle passes its own scope.
  * @param io the dispatcher for blocking SSH calls.
  */
-class SshMachineConnector(
+class SshMachineConnector internal constructor(
     private val scope: CoroutineScope,
-    private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val io: CoroutineDispatcher,
+    private val newSession: () -> SshSessionPort,
 ) : MachineConnector {
+    /** The production connector: sshj sessions on [io]. */
+    constructor(scope: CoroutineScope, io: CoroutineDispatcher = Dispatchers.IO) :
+        this(scope, io, { SshjSession(SSHClient()) })
+
     override suspend fun connect(machine: Machine, auth: SshAuth, gate: HostKeyGate): MachineSession {
         val transport = SshjTransport(
             SshTarget(machine.id, machine.host, machine.port, machine.user),
             auth,
             gate,
             io,
+            SshTimeouts(),
+            newSession,
         )
         transport.open()
         return try {
@@ -56,8 +68,9 @@ class SshMachineConnector(
             client.hello()
         } catch (e: TransportLost) {
             // The login worked, and the command ended before it answered. Exit status 127 is "command not found": herdr-core is not
-            // installed for this login. That is not a network failure, so it does not read as "could not reach the machine".
-            if (isCoreMissing(transport.hcExitStatus())) throw CoreMissing(e)
+            // installed for this login. That is not a network failure, so it does not read as "could not reach the machine". The
+            // status may arrive after end-of-stream, so the wait for it is bounded (p7r8 item 2).
+            if (isCoreMissing(transport.awaitHcExitStatus(EXIT_STATUS_WAIT_MILLIS))) throw CoreMissing(e)
             throw e
         }
         return SshMachineSession(transport, client, hello, lost)
