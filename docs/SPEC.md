@@ -199,7 +199,11 @@ Codex…) and key glyphs (Esc, ↑) are not translated.
   recorded fixtures, KnownAgents parsing, input validation, doc
   read–modify–write conflict retry, shortcut key editing.
 - Screenshot tests with **Roborazzi** (Robolectric, JVM) for every screen in
-  dark and light, en and pt-BR: `scripts/gradle recordRoborazziDebug`.
+  dark and light, en and pt-BR. Goldens in `app/src/test/screenshots/` are
+  recorded with `scripts/gradle recordRoborazziDebug` and compared by
+  `scripts/gradle check` (and `verifyRoborazziDebug`); a differing frame fails
+  the build. Goldens are recorded on macOS and fonts rasterise per platform, so
+  the comparison runs on macOS only (CI: the macOS `screenshots` job).
 - KDoc on public types and non-obvious functions.
 
 ## 9. As built
