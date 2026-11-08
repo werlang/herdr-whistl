@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Screenshot goldens are recorded on macOS and Robolectric rasterises fonts per platform, so
+      # the Roborazzi comparison stays a local gate (see CONTRIBUTING.md). Everything else runs here.
+      - name: Unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Lint
+        run: ./gradlew --no-daemon lintDebug
+
+      - name: Assemble debug and release
+        run: ./gradlew --no-daemon assembleDebug assembleRelease
+
+      - name: Release must not contain debug-only code
+        run: |
+          set -euo pipefail
+          dexdump app/build/outputs/apk/release/app-release-unsigned.apk \
+            | grep -c FakeCore && { echo "FakeCore leaked into the release dex"; exit 1; } || true
+
+      - name: Verify the APK really is what we think
+        run: |
+          set -euo pipefail
+          B="$ANDROID_HOME/build-tools/35.0.0"
+          "$B/aapt2" dump badging app/build/outputs/apk/debug/app-debug.apk | head -3
+          "$B/aapt2" dump resources app/build/outputs/apk/debug/app-debug.apk \
+            | grep -A3 'string/machines_title'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
