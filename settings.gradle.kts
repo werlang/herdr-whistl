@@ -15,3 +15,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "herdr-whistl"
+
+include(":app")
