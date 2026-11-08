@@ -125,18 +125,66 @@ class AgentViewModelTest {
         assertNull(vm.state.value.notice)
     }
 
-    /** Ctrl armed, then a typed letter: the letter goes out as `ctrl+<letter>`, is not inserted, and Ctrl disarms. */
+    /** Ctrl armed, then a typed letter: nothing is sent yet, the letter waits in the field, and Ctrl stays armed. */
     @Test
-    fun ctrlThenALetterSendsTheCtrlLetterAndInsertsNothing() = runTest {
+    fun ctrlThenATypedLetterWaitsInTheFieldUntilSend() = runTest {
         val (h, vm, _) = openAgent()
 
         vm.onKey(ShortcutKey.CTRL)
         assertTrue(vm.state.value.ctrlArmed)
-        vm.onInputChange(TextFieldValue("X"))
+        vm.onInputChange(TextFieldValue("x"))
         runCurrent()
 
-        assertEquals(listOf("ctrl+x"), h.sent("terminal.keys").single().keyNames())
+        assertTrue(h.sent("terminal.keys").isEmpty())
+        assertTrue(h.sent("terminal.send").isEmpty())
+        assertEquals("x", vm.state.value.input.text)
+        assertTrue(vm.state.value.ctrlArmed)
+    }
+
+    /** Ctrl armed, one letter typed, then Send: the letter arrives plainly (never `ctrl+x`), the field clears, and Ctrl disarms. */
+    @Test
+    fun ctrlThenSendOfATypedLetterSendsItPlainly() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onKey(ShortcutKey.CTRL)
+        vm.onInputChange(TextFieldValue("x"))
+        vm.onSend()
+        runCurrent()
+
+        assertTrue(h.sent("terminal.keys").isEmpty())
+        assertEquals("x", h.sent("terminal.send").single().params().getValue("text").jsonPrimitive.content)
         assertEquals("", vm.state.value.input.text)
+        assertFalse(vm.state.value.ctrlArmed)
+    }
+
+    /** Ctrl armed, then Send of longer text: the text goes out unmodified with Enter, no Ctrl key is sent, and Ctrl disarms. */
+    @Test
+    fun ctrlThenSendOfLongerTextSendsItUnmodifiedAndDisarms() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onKey(ShortcutKey.CTRL)
+        vm.onInputChange(TextFieldValue("sleep 100"))
+        vm.onSend()
+        runCurrent()
+
+        assertTrue(h.sent("terminal.keys").isEmpty())
+        val send = h.sent("terminal.send").single()
+        assertEquals("sleep 100", send.params().getValue("text").jsonPrimitive.content)
+        assertFalse(vm.state.value.ctrlArmed)
+    }
+
+    /** Ctrl armed, then Send of one character with no Ctrl combination (a digit): it goes out unmodified, and Ctrl disarms. */
+    @Test
+    fun ctrlThenSendOfASingleDigitSendsItUnmodified() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onKey(ShortcutKey.CTRL)
+        vm.onInputChange(TextFieldValue("1"))
+        vm.onSend()
+        runCurrent()
+
+        assertTrue(h.sent("terminal.keys").isEmpty())
+        assertEquals("1", h.sent("terminal.send").single().params().getValue("text").jsonPrimitive.content)
         assertFalse(vm.state.value.ctrlArmed)
     }
 
@@ -166,16 +214,16 @@ class AgentViewModelTest {
         assertFalse(vm.state.value.ctrlArmed)
     }
 
-    /** Ctrl armed, then a typed character that is not a letter: it is inserted, and Ctrl disarms. */
+    /** Ctrl armed, then a typed character that is not a letter: it is inserted, nothing is sent, and Ctrl stays armed until Send. */
     @Test
-    fun ctrlThenATypedDigitIsInsertedAndDisarms() = runTest {
+    fun ctrlThenATypedDigitIsInsertedAndStaysArmed() = runTest {
         val (h, vm, _) = openAgent()
 
         vm.onKey(ShortcutKey.CTRL)
         vm.onInputChange(TextFieldValue("1"))
 
         assertEquals("1", vm.state.value.input.text)
-        assertFalse(vm.state.value.ctrlArmed)
+        assertTrue(vm.state.value.ctrlArmed)
         assertTrue(h.sent("terminal.keys").isEmpty())
     }
 

@@ -20,7 +20,6 @@ import io.github.werlang.whistl.domain.ShortcutKey
 import io.github.werlang.whistl.domain.TerminalState
 import io.github.werlang.whistl.domain.action
 import io.github.werlang.whistl.domain.ctrlCombination
-import io.github.werlang.whistl.domain.letterCombination
 import io.github.werlang.whistl.ui.agents.displayName
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -152,8 +151,8 @@ private data class Interaction(
  * - Send sends the text and presses Enter. A blocked program refuses plain text, so Send forces it only when the agent's
  *   status is `blocked`; for any other status the request has no `force` field.
  * - Ctrl is sticky. Armed, the next bar key goes out as `ctrl+<key>` when the table has that combination, and otherwise
- *   disarms and goes out as it is. The first typed letter a–z goes out as `ctrl+<letter>` and is not inserted; any other typed
- *   character disarms Ctrl and is inserted.
+ *   disarms and goes out as it is. Typing only inserts and keeps Ctrl armed; Send never applies Ctrl: the text goes out
+ *   plainly and clears the latch (phase 7 r5 amendment U3).
  * - `/ | ~ -` insert their character at the cursor. Every other bar key is sent at once with `terminal.keys`.
  * - Interrupt sends Ctrl+C. Stop and remove asks first, then kills and removes the terminal, and the screen closes.
  * - Input is disabled while the machine is offline, the terminal is gone, or the program has finished.
@@ -210,29 +209,13 @@ class AgentViewModel(
     }
 
     /**
-     * The text field changed. While Ctrl is armed, a typed letter becomes a Ctrl combination and is not inserted.
+     * The text field changed. Typing only inserts: a latched Ctrl stays armed until Send or a bar key (phase 7 r5: typing used
+     * to send the first letter as Ctrl at once, so `sleep` began with Ctrl+S, which froze the terminal).
      *
      * @param newValue the field after the change.
      */
     fun onInputChange(newValue: TextFieldValue) {
-        val own = interaction.value
-        val old = own.input
-        val added = newValue.text.length - old.text.length
-        if (own.ctrlArmed && added > 0) {
-            val typed = newValue.text.substring(old.selection.min, old.selection.min + added)
-            val combination = letterCombination(typed.first())
-            if (combination != null) {
-                interaction.value = own.copy(
-                    ctrlArmed = false,
-                    lastKey = SentKey(typed.first().uppercaseChar().toString(), ctrl = true),
-                )
-                sendKeys(listOf(combination))
-                return
-            }
-            interaction.value = own.copy(input = newValue, ctrlArmed = false)
-            return
-        }
-        interaction.value = own.copy(input = newValue)
+        interaction.value = interaction.value.copy(input = newValue)
     }
 
     /**
@@ -268,13 +251,17 @@ class AgentViewModel(
         }
     }
 
-    /** Send: the field's text and Enter. A blocked agent receives it forced. Empty text or no connection does nothing. */
+    /**
+     * Send: the field's text goes out unmodified, with Enter, and a blocked agent receives it forced. Send never applies a
+     * latched Ctrl (phase 7 r5 amendment U3): Ctrl disarms, and only a bar key takes it. Empty text or no connection does nothing.
+     */
     fun onSend() {
         val current = state.value
         if (!current.canSend) return
-        val text = interaction.value.input.text
+        val own = interaction.value
+        val text = own.input.text
         val force = current.status == AgentStatus.Blocked
-        interaction.value = interaction.value.copy(ctrlArmed = false)
+        interaction.value = own.copy(ctrlArmed = false)
         viewModelScope.launch {
             val outcome = handle.value?.send(text, force) ?: TerminalAction.Offline
             when (outcome) {

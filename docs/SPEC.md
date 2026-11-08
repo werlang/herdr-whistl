@@ -74,8 +74,10 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    screen, a one-line status bar `[machine] space · agent    status`, then a
    horizontally scrolling **shortcut key bar**, then a text field + Send.
    Typed text is sent to the terminal (Send = text + Enter). `Ctrl` is a
-   sticky modifier: armed, the next key or first typed character is sent with
-   Ctrl. Menu: Interrupt (Ctrl+C), Stop and remove.
+   sticky modifier: armed, the next bar key is sent with Ctrl (`ctrl+<key>`).
+   Typing only inserts and keeps Ctrl armed. Send never applies Ctrl: the text
+   goes out plainly and clears the latch (phase 7 r5 amendment U3). Menu:
+   Interrupt (Ctrl+C), Stop and remove.
 6. **Settings** — General: Language (System / English / Português), terminal
    font size (S/M/L), theme (System / Dark / Light). Shortcut keys: list in bar
    order with move up / move down / remove, "Add key" sheet listing the keys
