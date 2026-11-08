@@ -225,6 +225,13 @@ Unknown fields are preserved on write (round-trip `JsonObject`).
   machine", and it goes offline with a retry. A refused port, a login refusal,
   an unsupported core and a failure inside the app are errors that do not retry
   on their own. A failure inside the app is never shown as "could not reach".
+- A missing `hc` on the login (the `hc` channel exits with status 127, "command
+  not found") is `CoreMissing`: "herdr-core not found", an error with no automatic
+  retry, and the install hint (phase 7 r3).
+- A failed `printenv HOME` probe for a space is `HomeUnreadable` ("Could not read
+  the machine’s home folder just now. It is tried again the next time the space
+  is read."): it is not remembered for the connection, so the next read tries again. Only a real empty HOME is "no home", which is kept for the
+  connection (phase 7 r4).
 - Logs: a `Log` wrapper that is a no-op in release; never log terminal text,
   hosts or credentials. Because release logs nothing, a release build cannot
   diagnose a failure inside the SSH stack: the failure stage the user sees is the
