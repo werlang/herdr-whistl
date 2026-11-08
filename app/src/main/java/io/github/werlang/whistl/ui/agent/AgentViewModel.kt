@@ -20,6 +20,7 @@ import io.github.werlang.whistl.domain.ShortcutKey
 import io.github.werlang.whistl.domain.TerminalState
 import io.github.werlang.whistl.domain.action
 import io.github.werlang.whistl.domain.ctrlCombination
+import io.github.werlang.whistl.domain.letterCombination
 import io.github.werlang.whistl.ui.agents.displayName
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -155,8 +156,9 @@ private data class Interaction(
  * - Send sends the text and presses Enter. A blocked program refuses plain text, so Send forces it only when the agent's
  *   status is `blocked`; for any other status the request has no `force` field.
  * - Ctrl is sticky. Armed, the next bar key goes out as `ctrl+<key>` when the table has that combination, and otherwise
- *   disarms and goes out as it is. Typing only inserts and keeps Ctrl armed; Send never applies Ctrl: the text goes out
- *   plainly and clears the latch (phase 7 r5 amendment U3).
+ *   disarms and goes out as it is. Armed on an empty field, one typed letter goes out as `ctrl+<letter>` and is not inserted,
+ *   and Ctrl disarms (phase 7 r9, user decision); other typing inserts and keeps Ctrl armed. Send never applies Ctrl: the
+ *   text goes out plainly and clears the latch (phase 7 r5 amendment U3).
  * - `/ | ~ -` insert their character at the cursor. Every other bar key is sent at once with `terminal.keys`.
  * - Interrupt sends Ctrl+C. Stop and remove asks first, then kills and removes the terminal, and the screen closes.
  * - Input is disabled while the machine is offline, the terminal is gone, or the program has finished.
@@ -221,13 +223,30 @@ class AgentViewModel(
     }
 
     /**
-     * The text field changed. Typing only inserts: a latched Ctrl stays armed until Send or a bar key (phase 7 r5: typing used
-     * to send the first letter as Ctrl at once, so `sleep` began with Ctrl+S, which froze the terminal).
+     * The text field changed. Ctrl armed on an empty field sends one typed letter as its Ctrl combination (phase 7 r9, user
+     * decision): `s` goes out as `ctrl+s`, the field stays empty, and Ctrl disarms. So `sleep` typed with Ctrl armed on an
+     * empty field begins with Ctrl+S; that is the intended result, not a fault. Every other change only inserts and keeps Ctrl
+     * armed: a digit or punctuation on an empty field, typing into a field that has text, and a paste or IME commit of more than
+     * one character. A latched Ctrl stays armed until Send or a bar key. (Phase 7 r5: typing used to send the first letter as
+     * Ctrl whatever the field held, so `sleep` began with Ctrl+S and froze the terminal. r5 made typing insert; r9 keeps that
+     * for a field with text and for non-letters, and sends one letter as Ctrl only when Ctrl was armed on an empty field.)
      *
      * @param newValue the field after the change.
      */
     fun onInputChange(newValue: TextFieldValue) {
-        interaction.value = interaction.value.copy(input = newValue)
+        val own = interaction.value
+        val combination = if (own.ctrlArmed && state.value.canType && own.input.text.isEmpty() && newValue.text.length == 1) {
+            letterCombination(newValue.text[0])
+        } else {
+            null
+        }
+        if (combination == null) {
+            interaction.value = own.copy(input = newValue)
+        } else {
+            val letter = newValue.text[0].uppercaseChar().toString()
+            interaction.value = own.copy(ctrlArmed = false, lastKey = SentKey(letter, ctrl = true))
+            sendKeys(listOf(combination))
+        }
     }
 
     /**

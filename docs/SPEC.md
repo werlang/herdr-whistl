@@ -78,7 +78,11 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    horizontally scrolling **shortcut key bar**, then a text field + Send.
    Typed text is sent to the terminal (Send = text + Enter). `Ctrl` is a
    sticky modifier: armed, the next bar key is sent with Ctrl (`ctrl+<key>`).
-   Typing only inserts and keeps Ctrl armed. Send never applies Ctrl: the text
+   With Ctrl armed and the field empty, one typed letter is sent as its Ctrl
+   combination (`s` → `ctrl+s`), is not inserted, and Ctrl disarms; a digit or
+   punctuation is inserted and Ctrl stays armed; typing into a field that has
+   text, or a paste or IME commit of more than one character, inserts and keeps
+   Ctrl armed (phase 7 r9, user decision). Send never applies Ctrl: the text
    goes out plainly and clears the latch (phase 7 r5 amendment U3). Menu:
    Interrupt (Ctrl+C), Stop and remove. While the machine has no connection
    (offline or connecting), the screen keeps the agent's last known status and
