@@ -24,12 +24,21 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      # The runner image already ships an Android SDK; android-actions/setup-android@v3
+      # fails on current repositories because it tries to install the removed "tools"
+      # package, so the packages we need are installed directly.
+      - name: Android SDK packages
+        run: |
+          set -euo pipefail
+          sdkmanager="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)"
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          "$sdkmanager" --list_installed | sed -n '1,20p'
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # Screenshot goldens are recorded on macOS and Robolectric rasterises fonts per platform, so
-      # the Roborazzi comparison stays a local gate (see CONTRIBUTING.md). Everything else runs here.
+      # Screenshot goldens are recorded on macOS and Robolectric rasterises fonts per platform,
+      # so the Roborazzi comparison stays a local gate (see CONTRIBUTING.md).
       - name: Unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
 
@@ -42,16 +51,17 @@ jobs:
       - name: Release must not contain debug-only code
         run: |
           set -euo pipefail
-          dexdump app/build/outputs/apk/release/app-release-unsigned.apk \
-            | grep -c FakeCore && { echo "FakeCore leaked into the release dex"; exit 1; } || true
+          dexdump="$ANDROID_HOME/build-tools/35.0.0/dexdump"
+          count="$("$dexdump" app/build/outputs/apk/release/app-release-unsigned.apk | grep -c FakeCore || true)"
+          echo "FakeCore classes in the release dex: $count"
+          test "$count" -eq 0
 
-      - name: Verify the APK really is what we think
+      - name: Verify the APK is what we think it is
         run: |
           set -euo pipefail
-          B="$ANDROID_HOME/build-tools/35.0.0"
-          "$B/aapt2" dump badging app/build/outputs/apk/debug/app-debug.apk | head -3
-          "$B/aapt2" dump resources app/build/outputs/apk/debug/app-debug.apk \
-            | grep -A3 'string/machines_title'
+          aapt2="$ANDROID_HOME/build-tools/35.0.0/aapt2"
+          "$aapt2" dump badging app/build/outputs/apk/debug/app-debug.apk | head -3
+          "$aapt2" dump resources app/build/outputs/apk/debug/app-debug.apk | grep -A3 'string/machines_title'
 
       - uses: actions/upload-artifact@v4
         with:
