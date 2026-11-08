@@ -160,7 +160,12 @@ backs Compose previews, screenshot tests and a debug-only "demo mode".
 - `terminal.list {labels?, all?}` → `{terminals, machines, hidden_finished}`.
 - `terminal.run {argv, cwd, labels, keep?, no_parent:true, no_notify:true}` →
   Terminal (has `address`). The app always passes `no_parent` and `no_notify`.
-- `terminal.read {terminal, lines}` → `{text, complete, how}`.
+- `terminal.read {terminal, lines}` → `{text, complete, how}`: plain text, no
+  colour and no cell attributes. Colour and live resize are **not supported in
+  v0.1.x**: they need `terminal.attach` (a raw framed stream with cols/rows and
+  resize notifications) and a VT emulator, a phase of its own (report F1).
+- `terminal.run` has no size parameter in hc 0.1.14 (`rpc.discover`); every
+  terminal is created at the core's 200×120. The app cannot size it.
 - `terminal.list` and `events.subscribe` decode each terminal entry on its own:
   an entry that does not decode is skipped and counted (class name in the log),
   the others are kept. `status` is a string, or for an agent the object
