@@ -62,6 +62,7 @@ class FixtureCoverageTest {
             "event_heartbeat.json",
             "event_missed_synthetic.json",
             "events_seen.json",
+            "events_snapshot_agent_status.json",
             "exec_installed.json",
             "hello.json",
             "interrupt.json",
@@ -77,6 +78,7 @@ class FixtureCoverageTest {
             "run_spawn_failed.json",
             "send.json",
             "subscribe.json",
+            "terminal_list_agent_status.json",
             "unknown_terminal.json",
         )
     }
