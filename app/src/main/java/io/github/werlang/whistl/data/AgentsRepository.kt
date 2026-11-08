@@ -5,7 +5,6 @@ import io.github.werlang.whistl.core.rpc.HcEvent
 import io.github.werlang.whistl.core.rpc.HcException
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.domain.Agent
-import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.Terminal
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -28,7 +27,10 @@ interface AgentsRepository {
     /** Every agent on a connected machine, each with its machine and its matched space, in machine order. */
     val agents: StateFlow<List<MachineAgent>>
 
-    /** How many agents are blocked: the Agents badge (SPEC §2). Zero hides the badge. */
+    /**
+     * How many agents are waiting for the user: live and `blocked`, by [isWaitingForUser]. A finished agent never counts.
+     * This is the Agents badge (SPEC §2); zero hides the badge.
+     */
     val blockedCount: StateFlow<Int>
 }
 
@@ -72,7 +74,7 @@ class DefaultAgentsRepository(
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     override val blockedCount: StateFlow<Int> = agents
-        .map { list -> list.count { it.agent.terminal.status == AgentStatus.Blocked } }
+        .map { list -> list.count { it.agent.terminal.isWaitingForUser() } }
         .stateIn(scope, SharingStarted.Eagerly, 0)
 
     init {

@@ -148,13 +148,30 @@ object AgentEventReducer {
 }
 
 /**
- * The order the agents screen shows (SPEC §2): blocked, working, done, idle, then error, then plain programs with no
- * status. Equal ranks keep their order from the input.
+ * Whether the terminal counts as waiting for the user: it is live and its status is `blocked`. This is the one rule the
+ * Agents badge counts (SPEC §2), and the screen uses it to place agents too.
+ *
+ * A finished program cannot be waiting, so a finished terminal whose last status was `blocked` does not count. Neither
+ * does a terminal whose state is unknown. The reducer keeps the status on `finished`, so the status alone is not enough.
+ *
+ * @return `true` when the terminal is live and blocked.
+ */
+fun Terminal.isWaitingForUser(): Boolean = state == TerminalState.Live && status == AgentStatus.Blocked
+
+/**
+ * The order the agents screen shows (SPEC §2). Live agents come first: blocked, working, done, idle, then error, then
+ * plain programs with no status. Equal ranks keep their order from the input.
+ *
+ * Agents that are not live (finished, or with no known state) come after all the live ones, in their input order. Their
+ * status is left as the reducer set it, and it does not move them up.
  *
  * @param agents the agents in any order.
  * @return the agents sorted for the screen.
  */
-fun sortForAgentsScreen(agents: List<MachineAgent>): List<MachineAgent> = agents.sortedBy { rank(it.agent.terminal.status) }
+fun sortForAgentsScreen(agents: List<MachineAgent>): List<MachineAgent> {
+    val (live, notLive) = agents.partition { it.agent.terminal.state == TerminalState.Live }
+    return live.sortedBy { rank(it.agent.terminal.status) } + notLive
+}
 
 /**
  * The screen rank of a status: lower shows first. Blocked 0, working 1, done 2, idle 3, error 4, no status 5.

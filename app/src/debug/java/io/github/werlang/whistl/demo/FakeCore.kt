@@ -21,6 +21,7 @@ import io.github.werlang.whistl.data.SpacesDocument
 import io.github.werlang.whistl.data.SpacesRepository
 import io.github.werlang.whistl.data.defaultSpaceName
 import io.github.werlang.whistl.data.hasSpace
+import io.github.werlang.whistl.data.isWaitingForUser
 import io.github.werlang.whistl.data.mapSpace
 import io.github.werlang.whistl.data.matchSpace
 import io.github.werlang.whistl.data.moved
@@ -47,7 +48,8 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * An in-memory [DemoCore] for the debug build only. It is seeded like the design prototype: a connected `mac` with spaces
- * and agents in every status, an offline `lab` whose spaces come from its cache, and agents with no space.
+ * and agents in every status, an offline `lab` whose spaces come from its cache, and agents with no space. The `mac` also
+ * holds a finished agent whose last status was `blocked`; the badge does not count it.
  *
  * Edits change the in-memory copy and nothing else: no machine is contacted and nothing is saved. A killed agent leaves
  * the list at once; the real core keeps a finished terminal until it is removed.
@@ -86,7 +88,7 @@ private class FakeState {
     /** Agents on connected machines, as the agents screen reads them. */
     val agentFlow = MutableStateFlow<List<MachineAgent>>(emptyList())
 
-    /** Agents whose status is blocked: the badge count. */
+    /** Agents waiting for the user (live and blocked): the badge count. */
     val blockedFlow = MutableStateFlow(0)
 
     private val connections = LinkedHashMap<String, MutableStateFlow<ConnectionState>>()
@@ -113,6 +115,7 @@ private class FakeState {
             demoTerminal("t-blocked", AgentStatus.Blocked, cwd = "/home/demo/web"),
             demoTerminal("t-error", AgentStatus.Error, cwd = "/tmp"),
             demoTerminal("t-plain", null, cwd = "/home/demo/notes"),
+            demoTerminal("t-finished", AgentStatus.Blocked, cwd = "/home/demo/docs", state = TerminalState.Finished),
         )
         addMachine(MAC_MACHINE, ConnectionState.Connected(DEMO_HELLO))
         addMachine(LAB_MACHINE, ConnectionState.Offline)
@@ -199,23 +202,24 @@ private class FakeState {
             terminals[machine.id].orEmpty().map { MachineAgent(machine.id, Agent(it), matchSpace(it, spaces)) }
         }
         agentFlow.value = agents
-        blockedFlow.value = agents.count { it.agent.terminal.status == AgentStatus.Blocked }
+        blockedFlow.value = agents.count { it.agent.terminal.isWaitingForUser() }
     }
 
     private companion object {
-        /** A live demo terminal: it runs, so it is never a finished one. */
+        /** A demo terminal, live unless [state] says it finished. */
         fun demoTerminal(
             address: String,
             status: AgentStatus?,
             cwd: String,
             labels: Map<String, String> = emptyMap(),
+            state: TerminalState = TerminalState.Live,
         ): Terminal = Terminal(
             address = address,
             name = null,
             argv = emptyList(),
             cwd = cwd,
             labels = labels,
-            state = TerminalState.Live,
+            state = state,
             status = status,
             turn = 1,
             exitCode = null,

@@ -1,7 +1,9 @@
 package io.github.werlang.whistl.demo
 
 import io.github.werlang.whistl.data.SpaceResult
+import io.github.werlang.whistl.data.isWaitingForUser
 import io.github.werlang.whistl.domain.AgentStatus
+import io.github.werlang.whistl.domain.TerminalState
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -55,6 +57,20 @@ class FakeCoreTest {
     @Test
     fun blockedCountIsAtLeastOne() {
         assertTrue(core.agents.blockedCount.value >= 1)
+    }
+
+    /**
+     * The badge equals the live blocked agents, by the shared rule. The demo also holds a finished agent whose status is
+     * blocked, so the test shows the badge does not count it (round p3r3).
+     */
+    @Test
+    fun blockedCountEqualsTheLiveBlockedAgents() {
+        val agents = core.agents.agents.value
+        val liveBlocked = agents.count { it.agent.terminal.isWaitingForUser() }
+
+        assertEquals(liveBlocked, core.agents.blockedCount.value)
+        assertEquals(1, liveBlocked)
+        assertTrue(agents.any { it.agent.terminal.status == AgentStatus.Blocked && it.agent.terminal.state == TerminalState.Finished })
     }
 
     /** Closing a space kills its live agents and removes it; the agents of other spaces stay. */

@@ -426,4 +426,74 @@ class AgentsRepositoryTest {
         assertTrue(h.agents.agents.value.isEmpty())
         assertEquals(0, h.agents.blockedCount.value)
     }
+
+    /**
+     * observed `finished` on a blocked agent: it stays listed with the status it kept, but the badge drops it, because a
+     * finished program cannot be waiting for the user (round p3r3).
+     */
+    @Test
+    fun blockedThenFinishedLeavesTheBadge() = runTest {
+        val (h, _) = connected(listOf(terminalJson("t1", status = "blocked")))
+        assertEquals(1, h.agents.blockedCount.value)
+
+        h.pushEvent(eventLine("finished", "t1", 2, dataOf("exit_code" to JsonNull, "reason" to JsonPrimitive("exited"))))
+        runCurrent()
+
+        assertEquals(TerminalState.Finished, h.only().state)
+        assertEquals(AgentStatus.Blocked, h.only().status)
+        assertEquals(0, h.agents.blockedCount.value)
+    }
+
+    /**
+     * assumed shape `{}`: `restarted` makes the terminal live again. The reducer keeps the status it had, which is
+     * `blocked`, so the terminal is live and blocked again and the badge counts it again (round p3r3). Expectation: 1.
+     */
+    @Test
+    fun assumedRestartedBringsTheBlockedAgentBackToTheBadge() = runTest {
+        val (h, _) = connected(listOf(terminalJson("t1", status = "blocked")))
+        h.pushEvent(eventLine("finished", "t1", 2, dataOf("exit_code" to JsonNull)))
+        runCurrent()
+        assertEquals(0, h.agents.blockedCount.value)
+
+        h.pushEvent(eventLine("restarted", "t1", 3, JsonObject(emptyMap())))
+        runCurrent()
+
+        assertEquals(TerminalState.Live, h.only().state)
+        assertEquals(AgentStatus.Blocked, h.only().status)
+        assertEquals(1, h.agents.blockedCount.value)
+    }
+
+    /**
+     * assumed shape `{}`: `lost` finishes a blocked agent (reason `lost`). It is no longer waiting, so the badge drops it,
+     * and the agent stays listed (round p3r3).
+     */
+    @Test
+    fun assumedLostOnABlockedAgentIsNotCounted() = runTest {
+        val (h, _) = connected(listOf(terminalJson("t1", status = "blocked")))
+        assertEquals(1, h.agents.blockedCount.value)
+
+        h.pushEvent(eventLine("lost", "t1", 2, JsonObject(emptyMap())))
+        runCurrent()
+
+        assertEquals(TerminalState.Finished, h.only().state)
+        assertEquals(0, h.agents.blockedCount.value)
+        assertEquals(listOf("t1"), h.addresses())
+    }
+
+    /**
+     * A finished blocked terminal in the snapshot is listed but not counted, and beside a live blocked one only the live
+     * one counts (round p3r3).
+     */
+    @Test
+    fun onlyTheLiveBlockedAgentIsCountedBesideAFinishedBlockedOne() = runTest {
+        val (h, _) = connected(
+            listOf(
+                terminalJson("t1", status = "blocked"),
+                terminalJson("t2", state = "finished", status = "blocked"),
+            ),
+        )
+
+        assertEquals(2, h.agents.agents.value.size)
+        assertEquals(1, h.agents.blockedCount.value)
+    }
 }
