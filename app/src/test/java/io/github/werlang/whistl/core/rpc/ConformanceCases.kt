@@ -126,6 +126,13 @@ object ConformanceCases {
             assertEquals("check the program name and cwd", error.hint)
         },
 
+        ConformanceCase("terminal.rm while running | rm_live.json", "terminal.rm", "rm_live.json") {
+            val error = assertThrowsSuspend(StillLive::class.java) {
+                clientWith(command = FakeLinePipe.replaying(Fixtures.load("rm_live.json"))).terminalRm("t16b")
+            }
+            assertEquals("kill it first: hc kill t16b", error.hint)
+        },
+
         ConformanceCase("terminal.kill | kill.json", "terminal.kill", "kill.json") {
             val terminal = clientWith(command = FakeLinePipe.replaying(Fixtures.load("kill.json")))
                 .terminalKill("t15s")

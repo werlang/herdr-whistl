@@ -17,6 +17,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -105,6 +106,36 @@ class SpaceFolderResolutionTest {
         assertTrue(group.offline)
         assertEquals(FolderResolution.Resolved("/home/u/code/web"), group.resolutions["sp_a"])
         assertEquals(emptyList<String>(), h.core.methods)
+    }
+
+    /** A new space's folder resolves right after the create, on the same connection, without any `doc` event (F4). */
+    @Test
+    fun aNewSpaceResolvesRightAwayWithoutADocEvent() = runTest {
+        val (h, id) = connectedWith(spacesDocJson(emptyList()))
+
+        val result = h.spaces.create(id, folder = "/srv/new") as SpaceResult.Done
+        runCurrent()
+
+        assertEquals(
+            FolderResolution.Resolved("/srv/new"),
+            h.spaces.groups().value.single().resolutions[result.spaceId],
+        )
+        assertTrue(h.core.probeFolders.contains("/srv/new"))
+    }
+
+    /** Removing a machine: its spaces leave the app, so its cached document and its resolved folders go too (F3, SPEC §2). */
+    @Test
+    fun removingAMachineClearsItsSpacesAndItsResolvedFolders() = runTest {
+        val (h, id) = connectedWith(spacesDocJson(listOf(spaceJson("sp_a", "web", "~/code/web"))))
+        assertEquals("/home/u/code/web", h.folderCache.get(id, "~/code/web"))
+        assertTrue(h.cache.get(id) != null)
+
+        h.machines.remove(id)
+        runCurrent()
+
+        assertNull(h.cache.get(id))
+        assertNull(h.folderCache.get(id, "~/code/web"))
+        assertTrue(h.spaces.groups().value.isEmpty())
     }
 
     /** A folder hc cannot start in is a typed error on its row. It never matches by cwd; a label still matches it. */

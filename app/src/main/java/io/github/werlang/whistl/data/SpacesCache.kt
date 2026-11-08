@@ -22,4 +22,11 @@ interface SpacesCache {
      * @param document the document as last read or written.
      */
     fun put(machineId: String, document: SpacesDocument)
+
+    /**
+     * Drops the document kept for a machine. Called when the machine is removed: its spaces leave the app (SPEC §2).
+     *
+     * @param machineId the machine id.
+     */
+    fun remove(machineId: String)
 }

@@ -6,6 +6,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -58,6 +60,15 @@ class FakeCoreDoc(initialValue: JsonObject? = null, initialVersion: Long = 1) {
     /** The method of every command received, in order (`machine.exec` included). */
     val methods: MutableList<String> = mutableListOf()
 
+    /** Every command received, without its id, in order. */
+    val requests: MutableList<JsonObject> = mutableListOf()
+
+    /** The output `terminal.read` returns for each terminal in [terminals], by address. */
+    val screens: MutableMap<String, String> = mutableMapOf()
+
+    /** The address of every terminal `terminal.rm` removed, in order. */
+    val removedTerminals: MutableList<String> = mutableListOf()
+
     private var probeCount = 0
 
     /**
@@ -70,6 +81,13 @@ class FakeCoreDoc(initialValue: JsonObject? = null, initialVersion: Long = 1) {
     class Probe(val address: String, val cwd: String, val finishAfterPolls: Int) {
         /** The `terminal.list` polls it has been reported in. */
         var polls: Int = 0
+
+        /** Whether `terminal.kill` was sent to it. A killed probe is finished. */
+        var wasKilled: Boolean = false
+
+        /** Whether hc would report it as running: not killed, and not yet at its finishing poll. */
+        val isRunning: Boolean
+            get() = !wasKilled && polls < finishAfterPolls
     }
 
     /**
@@ -88,6 +106,7 @@ class FakeCoreDoc(initialValue: JsonObject? = null, initialVersion: Long = 1) {
         val params = request["params"]?.jsonObject ?: JsonObject(emptyMap())
         val method = request["method"]?.jsonPrimitive?.content
         methods += method.orEmpty()
+        requests += request
         return when (method) {
             "doc.get" -> reply(
                 mapOf<String, JsonElement>("value" to (value ?: JsonNull), "version" to JsonPrimitive(version)),
@@ -107,9 +126,17 @@ class FakeCoreDoc(initialValue: JsonObject? = null, initialVersion: Long = 1) {
 
             "terminal.run" -> runProbe(params)
 
-            "terminal.read" -> readProbe(params)
+            "terminal.read" -> readProbe(params) ?: readTerminal(params)
 
-            "terminal.rm" -> removeProbe(params)
+            "terminal.send" -> sendTo(params)
+
+            "terminal.keys" -> knownTerminal(params) ?: reply(mapOf<String, JsonElement>("turn" to JsonPrimitive(0)))
+
+            "terminal.interrupt" -> knownTerminal(params) ?: reply(
+                mapOf<String, JsonElement>("key" to JsonPrimitive("ctrl+c"), "outcome" to JsonPrimitive("exited")),
+            )
+
+            "terminal.rm" -> removeProbe(params) ?: removeTerminal(params)
 
             "machine.exec" -> machineExec(params)
 
@@ -125,6 +152,8 @@ class FakeCoreDoc(initialValue: JsonObject? = null, initialVersion: Long = 1) {
 
             "terminal.kill" -> {
                 val address = params.getValue("terminal").jsonPrimitive.content
+                probes[address]?.wasKilled = true
+                markFinished(address)
                 killed += address
                 reply(mapOf<String, JsonElement>("address" to JsonPrimitive(address)))
             }
@@ -172,7 +201,7 @@ class FakeCoreDoc(initialValue: JsonObject? = null, initialVersion: Long = 1) {
     private fun listProbes(): JsonObject {
         val listed = probes.values.map { probe ->
             probe.polls += 1
-            val state = if (probe.polls >= probe.finishAfterPolls) "finished" else "live"
+            val state = if (probe.isRunning) "live" else "finished"
             JsonObject(
                 mapOf<String, JsonElement>(
                     "address" to JsonPrimitive(probe.address),
@@ -191,6 +220,104 @@ class FakeCoreDoc(initialValue: JsonObject? = null, initialVersion: Long = 1) {
         )
     }
 
+    /** `terminal.read` of a terminal in [terminals]: its scripted screen, or `not_found` for an unknown address. */
+    private fun readTerminal(params: JsonObject): JsonObject? {
+        val address = params.getValue("terminal").jsonPrimitive.content
+        if (terminalObject(address) == null) return notFound(address)
+        return reply(
+            mapOf<String, JsonElement>(
+                "text" to JsonPrimitive(screens[address].orEmpty()),
+                "complete" to JsonPrimitive(true),
+                "how" to JsonPrimitive("history"),
+            ),
+        )
+    }
+
+    /**
+     * `terminal.send`: a blocked program refuses the text unless the request says `force: true` (hc's `blocked` kind, measured).
+     * Otherwise the text is recorded in [requests] and the send is accepted.
+     */
+    private fun sendTo(params: JsonObject): JsonObject? {
+        val address = params.getValue("terminal").jsonPrimitive.content
+        val terminal = terminalObject(address) ?: return notFound(address)
+        val blocked = terminal["status"]?.jsonPrimitive?.contentOrNull == "blocked"
+        val forced = params["force"]?.jsonPrimitive?.booleanOrNull == true
+        if (blocked && !forced) {
+            return errorReply(
+                JsonObject(
+                    mapOf<String, JsonElement>(
+                        "code" to JsonPrimitive(-32000),
+                        "message" to JsonPrimitive("$address is waiting for input"),
+                        "data" to JsonObject(
+                            mapOf<String, JsonElement>(
+                                "kind" to JsonPrimitive("blocked"),
+                                "hint" to JsonPrimitive("send with force: true to answer it"),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        }
+        return reply(mapOf<String, JsonElement>("turn" to JsonPrimitive(0)))
+    }
+
+    /** `terminal.rm` of a terminal in [terminals]: refused while it is live (kind `live`), otherwise removed. */
+    private fun removeTerminal(params: JsonObject): JsonObject? {
+        val address = params.getValue("terminal").jsonPrimitive.content
+        val terminal = terminalObject(address) ?: return notFound(address)
+        if (terminal["state"]?.jsonPrimitive?.contentOrNull == "live") {
+            return errorReply(
+                JsonObject(
+                    mapOf<String, JsonElement>(
+                        "code" to JsonPrimitive(-32000),
+                        "message" to JsonPrimitive("$address is still running"),
+                        "data" to JsonObject(
+                            mapOf<String, JsonElement>(
+                                "kind" to JsonPrimitive("live"),
+                                "hint" to JsonPrimitive("kill it first: hc kill $address"),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        }
+        terminals.remove(terminal)
+        removedTerminals += address
+        return reply(mapOf<String, JsonElement>("removed" to JsonPrimitive(address)))
+    }
+
+    /** A command for a terminal in [terminals] is answered with an empty reply; an unknown address is `not_found`. */
+    private fun knownTerminal(params: JsonObject): JsonObject? {
+        val address = params.getValue("terminal").jsonPrimitive.content
+        return if (terminalObject(address) == null) notFound(address) else null
+    }
+
+    /** The terminal object with [address] in [terminals], or `null`. */
+    private fun terminalObject(address: String): JsonObject? =
+        terminals.firstOrNull { it["address"]?.jsonPrimitive?.contentOrNull == address }
+
+    /** Replaces a terminal's state with finished, as hc does after `terminal.kill`. */
+    private fun markFinished(address: String) {
+        val index = terminals.indexOfFirst { it["address"]?.jsonPrimitive?.contentOrNull == address }
+        if (index < 0) return
+        terminals[index] = JsonObject(terminals[index] + ("state" to JsonPrimitive("finished")))
+    }
+
+    private fun notFound(address: String): JsonObject = errorReply(
+        JsonObject(
+            mapOf<String, JsonElement>(
+                "code" to JsonPrimitive(-32000),
+                "message" to JsonPrimitive("no terminal \"$address\""),
+                "data" to JsonObject(
+                    mapOf<String, JsonElement>(
+                        "kind" to JsonPrimitive("not_found"),
+                        "hint" to JsonPrimitive("see `hc ls --all`"),
+                    ),
+                ),
+            ),
+        ),
+    )
+
     /** `terminal.read` of a probe: its folder, as `pwd` prints it, with the terminal's trailing padding. */
     private fun readProbe(params: JsonObject): JsonObject? {
         val probe = probes[params.getValue("terminal").jsonPrimitive.content] ?: return null
@@ -203,10 +330,30 @@ class FakeCoreDoc(initialValue: JsonObject? = null, initialVersion: Long = 1) {
         )
     }
 
-    /** `terminal.rm` of a probe: the probe is gone and its address is recorded. */
+    /**
+     * `terminal.rm` of a probe: refused while the probe is running (kind `live`, as hc answers it: `rm_live.json`). Otherwise
+     * the probe is gone and its address is recorded.
+     */
     private fun removeProbe(params: JsonObject): JsonObject? {
         val address = params.getValue("terminal").jsonPrimitive.content
-        if (probes.remove(address) == null) return null
+        val probe = probes[address] ?: return null
+        if (probe.isRunning) {
+            return errorReply(
+                JsonObject(
+                    mapOf<String, JsonElement>(
+                        "code" to JsonPrimitive(-32000),
+                        "message" to JsonPrimitive("$address is still running"),
+                        "data" to JsonObject(
+                            mapOf<String, JsonElement>(
+                                "kind" to JsonPrimitive("live"),
+                                "hint" to JsonPrimitive("kill it first: hc kill $address"),
+                            ),
+                        ),
+                    ),
+                ),
+            )
+        }
+        probes.remove(address)
         removedProbes += address
         return reply(mapOf<String, JsonElement>("removed" to JsonPrimitive(address)))
     }

@@ -82,6 +82,8 @@ internal fun RpcErrorWire.toException(): HcException {
         kind == "not_found" -> NotFound(message, hint)
         kind == "conflict" -> Conflict(message, hint)
         kind == "spawn_failed" -> SpawnFailed(message, hint)
+        kind == "live" -> StillLive(message, hint)
+        kind == "blocked" -> Blocked(message, hint)
         kind == "invalid_request" || (kind == null && code == JSON_RPC_INVALID_REQUEST) ->
             InvalidRequest(message, hint)
         else -> Unknown(kind, code, message, hint)
@@ -125,11 +127,15 @@ internal class TerminalReadParams(
     val lines: Int? = null,
 )
 
-/** `terminal.send`. */
+/**
+ * `terminal.send`. `force` is sent only when set: hc refuses a blocked program without it (kind `blocked`), and a request
+ * without the field must stay byte-for-byte what `send.json` records.
+ */
 @Serializable
 internal class TerminalSendParams(
     val terminal: String,
     val text: String,
+    val force: Boolean? = null,
 )
 
 /** `terminal.keys`. */

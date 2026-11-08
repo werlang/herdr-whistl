@@ -217,11 +217,13 @@ class HcClient(
      *
      * @param terminal the terminal address.
      * @param text the text to send.
+     * @param force `true` to send to a blocked program; omitted from the request when `null`.
+     * @throws Blocked when the program is blocked and [force] is not `true`.
      */
-    suspend fun terminalSend(terminal: String, text: String): TerminalSent {
+    suspend fun terminalSend(terminal: String, text: String, force: Boolean? = null): TerminalSent {
         val wire = command.typed<TerminalSendParams, TerminalSendWire>(
             "terminal.send",
-            TerminalSendParams(terminal = terminal, text = text),
+            TerminalSendParams(terminal = terminal, text = text, force = force),
         )
         return TerminalSent(started = wire.started, status = AgentStatus.fromWire(wire.status), turn = wire.turn)
     }

@@ -13,6 +13,10 @@ class InMemorySpacesCache : SpacesCache {
     override fun put(machineId: String, document: SpacesDocument) {
         docs[machineId] = document
     }
+
+    override fun remove(machineId: String) {
+        docs.remove(machineId)
+    }
 }
 
 /** In-memory [ResolvedFolderCache] for tests. */
@@ -23,5 +27,9 @@ class InMemoryResolvedFolderCache : ResolvedFolderCache {
 
     override fun put(machineId: String, folder: String, path: String) {
         paths[machineId to folder] = path
+    }
+
+    override fun remove(machineId: String) {
+        paths.keys.removeAll { it.first == machineId }
     }
 }

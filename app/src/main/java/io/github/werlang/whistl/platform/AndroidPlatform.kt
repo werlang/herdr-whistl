@@ -162,6 +162,10 @@ class SharedPreferencesSpacesCache(context: Context) : SpacesCache {
         prefs.edit().putString(key(machineId), text).apply()
     }
 
+    override fun remove(machineId: String) {
+        prefs.edit().remove(key(machineId)).apply()
+    }
+
     private fun key(machineId: String): String = "spaces.$machineId"
 
     private companion object {
@@ -197,6 +201,10 @@ class SharedPreferencesResolvedFolderCache(context: Context) : ResolvedFolderCac
         } catch (e: RuntimeException) {
             emptyMap()
         }
+    }
+
+    override fun remove(machineId: String) {
+        prefs.edit().remove(key(machineId)).apply()
     }
 
     private fun key(machineId: String): String = "resolved.$machineId"

@@ -1,0 +1,22 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "terminal.rm",
+    "params": {
+      "terminal": "t16b"
+    }
+  },
+  "response": {
+    "error": {
+      "code": -32000,
+      "data": {
+        "hint": "kill it first: hc kill t16b",
+        "kind": "live"
+      },
+      "message": "t16b is still running"
+    },
+    "id": 3,
+    "jsonrpc": "2.0"
+  }
+}

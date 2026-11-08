@@ -3,6 +3,7 @@ package io.github.werlang.whistl.data
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.HcException
 import io.github.werlang.whistl.core.rpc.SpawnFailed
+import io.github.werlang.whistl.core.rpc.StillLive
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.domain.Terminal
 import io.github.werlang.whistl.domain.TerminalState
@@ -88,6 +89,13 @@ interface ResolvedFolderCache {
      * @param path the absolute path the probe printed.
      */
     fun put(machineId: String, folder: String, path: String)
+
+    /**
+     * Drops every path kept for a machine. Called when the machine is removed (SPEC §2).
+     *
+     * @param machineId the machine id.
+     */
+    fun remove(machineId: String)
 }
 
 /**
@@ -175,9 +183,11 @@ class FolderResolver(
         } catch (e: HcException) {
             return FolderResolution.Unresolvable(UnresolvableReason.BadOutput)
         }
+        var finished = false
         try {
             withTimeoutOrNull(PROBE_TIMEOUT_MS) { awaitFinished(terminal.address) }
                 ?: return FolderResolution.Unresolvable(UnresolvableReason.Timeout)
+            finished = true
             val line = lastNonBlankLine(client.terminalRead(terminal.address).text)
             return if (line != null && line.startsWith("/")) {
                 FolderResolution.Resolved(line)
@@ -189,7 +199,8 @@ class FolderResolver(
         } catch (e: HcException) {
             return FolderResolution.Unresolvable(UnresolvableReason.BadOutput)
         } finally {
-            removeProbe(terminal.address)
+            // A probe that did not finish may still be running, and hc refuses to remove a running terminal (kind `live`).
+            removeProbe(terminal.address, mayBeLive = !finished)
         }
     }
 
@@ -202,13 +213,32 @@ class FolderResolver(
         }
     }
 
-    /** Removes the probe even when this coroutine was cancelled. A removal that fails is ignored: the label hides it. */
-    private suspend fun removeProbe(address: String) {
+    /**
+     * Removes the probe even when this coroutine was cancelled. A probe that may still run is killed first, and a removal
+     * that hc refuses while the probe is still running (`live`) is retried for a bounded time. A removal that still fails is
+     * ignored: the probe carries [PROBE_LABEL], so it is hidden from the agents either way.
+     *
+     * @param address the probe's terminal address.
+     * @param mayBeLive `true` when the probe was not seen finished, so it may still be running.
+     */
+    private suspend fun removeProbe(address: String, mayBeLive: Boolean) {
         withContext(NonCancellable) {
-            try {
-                client.terminalRm(address)
-            } catch (e: HcException) {
-                // Best effort. The probe carries PROBE_LABEL, so it is hidden from the agents either way.
+            if (mayBeLive) {
+                try {
+                    client.terminalKill(address)
+                } catch (e: HcException) {
+                    // Already gone, or the connection is lost: the removal below decides.
+                }
+            }
+            for (attempt in 1..RM_ATTEMPTS) {
+                try {
+                    client.terminalRm(address)
+                    return@withContext
+                } catch (e: StillLive) {
+                    delay(POLL_INTERVAL_MS)
+                } catch (e: HcException) {
+                    return@withContext
+                }
             }
         }
     }
@@ -219,6 +249,9 @@ class FolderResolver(
 
         /** How often the probe's state is read while waiting (phase 4 brief: 100 ms). */
         const val POLL_INTERVAL_MS: Long = 100L
+
+        /** How many times a removal refused as `live` is tried again, [POLL_INTERVAL_MS] apart (about 2 s). */
+        const val RM_ATTEMPTS: Int = 20
 
         /** The probe's program. A constant argv: nothing from the folder is ever part of it. */
         private val PWD: List<String> = listOf("pwd")

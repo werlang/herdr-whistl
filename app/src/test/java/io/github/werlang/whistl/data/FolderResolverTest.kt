@@ -19,7 +19,9 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -126,17 +128,36 @@ class FolderResolverTest {
         assertNull(cache.get("m1", "/gone"))
     }
 
-    /** A probe that never finishes is a Timeout after 5 s of virtual time, and the probe is still removed. */
+    /**
+     * A probe that never finishes is a Timeout after 5 s of virtual time. It may still be running, so it is killed first and
+     * then removed: hc refuses to remove a running terminal (`rm_live.json`).
+     */
     @Test
-    fun aProbeThatNeverFinishesTimesOutAndIsRemoved() = runTest {
+    fun aProbeThatNeverFinishesTimesOutAndIsKilledThenRemoved() = runTest {
         val core = FakeCoreDoc().apply { probeFinishesAfterPolls = Int.MAX_VALUE }
         val recorded = Recorded(core)
 
         val resolution = resolverFor(recorded, InMemoryResolvedFolderCache()).resolve("/srv/app")
 
         assertEquals(FolderResolution.Unresolvable(UnresolvableReason.Timeout), resolution)
+        val methods = recorded.methods()
+        val kill = methods.indexOf("terminal.kill")
+        val rm = methods.indexOf("terminal.rm")
+        assertTrue("kill (at $kill) must come before rm (at $rm): $methods", kill >= 0 && kill < rm)
         assertEquals(1, core.removedProbes.size)
         assertEquals(emptyMap<String, FakeCoreDoc.Probe>(), core.probes)
+    }
+
+    /** A probe seen finished is removed without a kill. */
+    @Test
+    fun aFinishedProbeIsRemovedWithoutAKill() = runTest {
+        val core = FakeCoreDoc()
+        val recorded = Recorded(core)
+
+        resolverFor(recorded, InMemoryResolvedFolderCache()).resolve("/srv/app")
+
+        assertFalse(recorded.methods().contains("terminal.kill"))
+        assertEquals(1, core.removedProbes.size)
     }
 
     /** A probe that finishes on a later poll is waited for: the state is read again every 100 ms. */

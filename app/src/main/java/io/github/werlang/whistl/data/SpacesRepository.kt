@@ -233,7 +233,10 @@ class DefaultSpacesRepository(
         val written = write(machineId) { doc ->
             doc.withSpace(SpaceRecord(id = id, name = spaceName, folder = path, pinned = false, order = doc.nextOrder()))
         }
-        return if (written) SpaceResult.Done(id) else SpaceResult.MachineOffline
+        if (!written) return SpaceResult.MachineOffline
+        // The new folder is resolved now, on this connection, not when the core's doc event comes back (phase 4 r2, F4).
+        resolveFolders(machineId)
+        return SpaceResult.Done(id)
     }
 
     override suspend fun rename(machineId: String, spaceId: String, name: String): SpaceResult {
@@ -303,6 +306,8 @@ class DefaultSpacesRepository(
                 documents.remove(id)
                 online.remove(id)
                 verdicts.remove(id)
+                cache.remove(id)
+                folderCache.remove(id)
             }
         }
         for (id in current) {
