@@ -4,7 +4,9 @@ import io.github.werlang.whistl.KeyPublicKey
 import io.github.werlang.whistl.core.secure.KeystoreSecretStore
 import io.github.werlang.whistl.core.ssh.KeyManager
 import io.github.werlang.whistl.data.AddResult
+import io.github.werlang.whistl.data.AuthMethod
 import io.github.werlang.whistl.data.ConnectionState
+import io.github.werlang.whistl.data.EditResult
 import io.github.werlang.whistl.data.ErrorKind
 import io.github.werlang.whistl.data.MachineField
 import io.github.werlang.whistl.domain.Machine
@@ -491,6 +493,153 @@ class AddMachineViewModelTest {
 
         vm.trust()
         runCurrent()
+
+        assertEquals(AddStage.Missing, vm.uiState.value.stage)
+    }
+
+    /** A stored machine, `m-1`, in the scripted list, and an Edit machine sheet for it. */
+    private fun editVm(auth: AuthMethod = AuthMethod.Key): AddMachineViewModel {
+        machines.put(Machine("m-1", "homelab", "homelab.lan", 22, "ci"), ConnectionState.Connected(testHello()), auth)
+        return AddMachineViewModel(machines, FixedClientKey, clipboard, editing = "m-1")
+    }
+
+    /** Edit machine opens prefilled with the stored machine, titled as an edit, and the stored login method; no password. */
+    @Test
+    fun editPrefillsTheStoredMachineAndTheLoginMethodButNeverAPassword() {
+        val vm = editVm(AuthMethod.Password)
+
+        val state = vm.uiState.value
+        assertTrue(state.editing)
+        assertEquals("m-1", state.machineId)
+        assertEquals("homelab.lan", state.host)
+        assertEquals("ci", state.user)
+        assertEquals("22", state.port)
+        assertEquals("homelab", state.name)
+        assertEquals(AuthChoice.Password, state.auth)
+        assertEquals(AddStage.Form, state.stage)
+        assertFalse(state.canSave)
+    }
+
+    /** Save is disabled until a field differs from the stored machine, and disabled again when it is typed back. */
+    @Test
+    fun saveStaysDisabledUntilSomethingDiffersAndAgainWhenTypedBack() {
+        val vm = editVm()
+        assertFalse(vm.uiState.value.canSave)
+
+        vm.onHost("other.lan")
+        assertTrue(vm.uiState.value.canSave)
+
+        vm.onHost("homelab.lan")
+        assertFalse(vm.uiState.value.canSave)
+    }
+
+    /** A name-only change is saved as an edit of the same machine, and the sheet closes. */
+    @Test
+    fun renameOnlySavesTheMachineAndClosesTheSheet() = runTest {
+        val vm = editVm()
+        vm.onName("renamed")
+        assertTrue(vm.uiState.value.canSave)
+
+        vm.connect(null)
+        runCurrent()
+
+        val call = machines.edits.single()
+        assertEquals("m-1", call.id)
+        assertEquals("renamed", call.draft.name)
+        assertEquals(AuthMethod.Key, call.auth)
+        assertFalse(call.passwordGiven)
+        assertTrue(vm.uiState.value.closed)
+    }
+
+    /** A host change follows the new host's connection, so the sheet asks for the new host's key, and Trust confirms it. */
+    @Test
+    fun aHostChangeFollowsTheFirstConnectionSheet() = runTest {
+        val vm = editVm()
+        machines.editAnswer = { call ->
+            machines.setState(call.id, ConnectionState.HostKeyUnknown("ssh-ed25519", "SHA256:new"))
+            EditResult.Saved(Machine(call.id, call.draft.name, call.draft.host, call.draft.port, call.draft.user))
+        }
+        vm.onHost("new.lan")
+
+        vm.connect(null)
+        runCurrent()
+
+        assertEquals(AddStage.HostKeyUnknown, vm.uiState.value.stage)
+        assertEquals("SHA256:new", vm.uiState.value.hostKeyFingerprint)
+        assertFalse(vm.uiState.value.closed)
+        vm.trust()
+        runCurrent()
+        assertEquals(listOf("m-1"), machines.trusted)
+    }
+
+    /** A rejected save names the field, and the sheet stays open on the form. */
+    @Test
+    fun aRejectedSaveShowsTheProblemOnTheFormAndStaysOpen() = runTest {
+        val vm = editVm()
+        machines.editAnswer = { EditResult.Rejected(MachineField.Name, Rejection.TOO_LONG) }
+        vm.onName("renamed")
+
+        vm.connect(null)
+        runCurrent()
+
+        assertEquals(AddStage.Form, vm.uiState.value.stage)
+        assertTrue(vm.uiState.value.problems.containsKey(AddField.Name))
+        assertFalse(vm.uiState.value.closed)
+    }
+
+    /**
+     * A password typed in the sheet is a change, and Save needs it for password login. Typed, it is sent; blank with a saved
+     * password, it is not sent and the saved one is kept.
+     */
+    @Test
+    fun aTypedPasswordEnablesSaveAndIsSentOnlyThen() = runTest {
+        val vm = editVm(AuthMethod.Key)
+        vm.onAuth(AuthChoice.Password)
+        assertFalse(vm.uiState.value.canSave)
+
+        vm.onPasswordEntered(true)
+        assertTrue(vm.uiState.value.canSave)
+        vm.connect("pw".toCharArray())
+        runCurrent()
+
+        val call = machines.edits.single()
+        assertEquals(AuthMethod.Password, call.auth)
+        assertTrue(call.passwordGiven)
+    }
+
+    /** A machine saved for password login: a blank password field keeps the saved password, so a name change needs no password. */
+    @Test
+    fun aBlankPasswordKeepsTheSavedOneOnAnEditOfAPasswordMachine() = runTest {
+        val vm = editVm(AuthMethod.Password)
+        vm.onName("renamed")
+        assertTrue(vm.uiState.value.canSave)
+
+        vm.connect(null)
+        runCurrent()
+
+        val call = machines.edits.single()
+        assertEquals(AuthMethod.Password, call.auth)
+        assertFalse(call.passwordGiven)
+    }
+
+    /** Switching a password machine back to key login is a change, and the saved password goes with it. */
+    @Test
+    fun switchingToKeyLoginNeedsNoPasswordAndSavesTheChange() = runTest {
+        val vm = editVm(AuthMethod.Password)
+        vm.onAuth(AuthChoice.Key)
+        assertTrue(vm.uiState.value.canSave)
+
+        vm.connect(null)
+        runCurrent()
+
+        assertEquals(AuthMethod.Key, machines.edits.single().auth)
+        assertTrue(vm.uiState.value.closed)
+    }
+
+    /** Edit of a machine that is no longer added shows that, rather than an empty form. */
+    @Test
+    fun editingAMachineThatIsGoneShowsItIsMissing() {
+        val vm = AddMachineViewModel(machines, FixedClientKey, clipboard, editing = "gone")
 
         assertEquals(AddStage.Missing, vm.uiState.value.stage)
     }

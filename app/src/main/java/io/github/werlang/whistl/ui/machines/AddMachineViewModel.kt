@@ -4,11 +4,14 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.werlang.whistl.data.AddResult
+import io.github.werlang.whistl.data.AuthMethod
 import io.github.werlang.whistl.data.ClientPublicKey
 import io.github.werlang.whistl.data.ConnectionState
+import io.github.werlang.whistl.data.EditResult
 import io.github.werlang.whistl.data.ErrorKind
 import io.github.werlang.whistl.data.MachinesRepository
 import io.github.werlang.whistl.data.NewMachine
+import io.github.werlang.whistl.domain.Machine
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -105,6 +108,10 @@ data class AddMachineUiState(
     val publicKeyCopied: Boolean,
     val canConnect: Boolean,
     val closed: Boolean,
+    /** `true` in the Edit machine sheet: the fields are the stored machine's, the title says Edit, and Connect is Save. */
+    val editing: Boolean = false,
+    /** Edit mode: Save is enabled only when the form is valid and something differs from the stored machine. */
+    val canSave: Boolean = false,
 )
 
 /**
@@ -112,39 +119,53 @@ data class AddMachineUiState(
  * machine through the repository; the connection state then drives the sheet: a host key to trust, a blocking changed key, a
  * refused login, an unreachable machine, or connected, which closes it. Events in, state out.
  *
+ * Edit machine (phase 7 P2) is the same sheet with [editing] set: the form starts with the stored machine, and Connect is Save.
+ * Save edits the machine in place, and follows the new host's first connection only when the host changed.
+ *
  * @param machines adds the machine and follows its connection.
  * @param clientKey this device's public key line.
  * @param clipboard copies the public key.
+ * @param editing the id of the machine to edit, or `null` for Add machine.
  */
 class AddMachineViewModel(
     private val machines: MachinesRepository,
     clientKey: ClientPublicKey,
     private val clipboard: ClipboardWriter,
+    private val editing: String? = null,
 ) : ViewModel() {
     private val publicKey: String = clientKey.publicKeyLine()
+
+    /** Edit mode: the stored machine as it was when the sheet opened, the baseline Save compares with. */
+    private val origin: EditOrigin? = editing?.let { loadOrigin(it) }
+
     private val state = MutableStateFlow(
         AddMachineUiState(
-            host = "",
-            user = "",
-            port = "",
-            name = "",
-            defaultName = "",
-            auth = AuthChoice.Key,
-            stage = AddStage.Form,
+            host = origin?.machine?.host.orEmpty(),
+            user = origin?.machine?.user.orEmpty(),
+            port = origin?.machine?.port?.toString().orEmpty(),
+            name = origin?.machine?.name.orEmpty(),
+            defaultName = origin?.machine?.host?.let { defaultFor(it) }.orEmpty(),
+            auth = origin?.auth ?: AuthChoice.Key,
+            stage = if (editing != null && origin == null) AddStage.Missing else AddStage.Form,
             problems = emptyMap(),
             hostKeyAlgorithm = null,
             hostKeyFingerprint = null,
             trustedFingerprint = null,
             presentedFingerprint = null,
-            machineId = null,
-            machineName = null,
-            machineAddress = null,
+            machineId = origin?.machine?.id,
+            machineName = origin?.machine?.name,
+            machineAddress = origin?.machine?.address(),
             publicKey = publicKey,
             publicKeyCopied = false,
             canConnect = false,
             closed = false,
+            editing = editing != null,
+            canSave = false,
         ),
     )
+
+    /** Edit mode: whether the sheet's password field has text. The text itself stays in the sheet. */
+    private var passwordEntered = false
     private var observer: Job? = null
     private var attempted = false
 
@@ -194,6 +215,10 @@ class AddMachineViewModel(
     fun connect(password: CharArray?) {
         val current = state.value
         if (current.stage != AddStage.Form) return
+        if (editing != null) {
+            saveEdit(password)
+            return
+        }
         val passwordMode = current.auth == AuthChoice.Password
         val passwordGiven = if (passwordMode) password else null
         when (val check = checkAddForm(current.host, current.user, current.port, current.name, passwordMode, passwordGiven)) {
@@ -222,6 +247,106 @@ class AddMachineViewModel(
             }
         }
     }
+
+    /**
+     * Edit mode: the password field's text is empty or not. The sheet reports it, so Save knows whether a new password was typed
+     * (a new password counts as a change) or the stored one is kept.
+     *
+     * @param entered whether the password field has text.
+     */
+    fun onPasswordEntered(entered: Boolean) {
+        passwordEntered = entered
+        state.value = state.value.copy(canSave = canSave(state.value))
+    }
+
+    /**
+     * Edit mode, Save: checks the form, then edits the stored machine in place (rules R1–R4 in `MachinesRepository.edit`). A
+     * changed host follows the new host's first connection, so the sheet can ask for the new key; any other change closes the
+     * sheet, and the machine reconnects in the background when it must.
+     */
+    private fun saveEdit(password: CharArray?) {
+        val current = state.value
+        val origin = origin ?: return
+        val check = checkAddForm(current.host, current.user, current.port, current.name, passwordMode = false, password = null)
+        if (check !is FormCheck.Valid || !canSave(current)) {
+            state.value = current.copy(
+                problems = (check as? FormCheck.Invalid)?.problems.orEmpty(),
+                canSave = canSave(current),
+            )
+            return
+        }
+        val draft = check.draft
+        val id = origin.machine.id
+        val method = if (current.auth == AuthChoice.Password) AuthMethod.Password else AuthMethod.Key
+        state.value = current.copy(problems = emptyMap())
+        viewModelScope.launch {
+            try {
+                when (val result = machines.edit(id, NewMachine(draft.name, draft.host, draft.port, draft.user), method, password)) {
+                    is EditResult.Saved -> if (draft.host != origin.machine.host) {
+                        // Rule R3: the new host has no pinned key, so its key is confirmed on the next connection.
+                        state.value = state.value.copy(
+                            stage = AddStage.Connecting,
+                            machineName = result.machine.name,
+                            machineAddress = result.machine.address(),
+                        )
+                        follow(id)
+                    } else {
+                        state.value = state.value.copy(closed = true)
+                    }
+
+                    is EditResult.Rejected -> state.value = state.value.copy(
+                        problems = mapOf(addFieldFor(result.field) to problemFor(result.field, result.reason)),
+                    )
+                }
+            } catch (e: NoSuchElementException) {
+                missing()
+            }
+        }
+    }
+
+    /**
+     * Edit mode: Save is enabled when the form is valid, something differs from the stored machine, and a password is available
+     * for the login method (typed now, or already saved for password login). Nothing is enabled outside the form stage.
+     *
+     * @param next the state to judge.
+     * @return whether Save can be tapped.
+     */
+    private fun canSave(next: AddMachineUiState): Boolean {
+        val origin = origin ?: return false
+        if (next.stage != AddStage.Form) return false
+        val draft = (checkAddForm(next.host, next.user, next.port, next.name, passwordMode = false, password = null) as? FormCheck.Valid)
+            ?.draft ?: return false
+        val stored = origin.machine
+        val changed = draft.host != stored.host || draft.user != stored.user || draft.port != stored.port ||
+            draft.name != stored.name || next.auth != origin.auth ||
+            (next.auth == AuthChoice.Password && passwordEntered)
+        val passwordReady = next.auth == AuthChoice.Key || passwordEntered || origin.auth == AuthChoice.Password
+        return changed && passwordReady
+    }
+
+    /**
+     * The stored machine and how it logs in, when it is still added. The password is never read here.
+     *
+     * @param id the machine id.
+     * @return the origin, or `null` when the machine is no longer added.
+     */
+    private fun loadOrigin(id: String): EditOrigin? {
+        val machine = machines.machines().value.firstOrNull { it.id == id } ?: return null
+        val auth = try {
+            machines.authOf(id)
+        } catch (e: NoSuchElementException) {
+            return null
+        }
+        return EditOrigin(machine, if (auth == AuthMethod.Password) AuthChoice.Password else AuthChoice.Key)
+    }
+
+    /**
+     * The machine an Edit sheet started from, and its login method.
+     *
+     * @property machine the stored machine.
+     * @property auth the stored login method, as the sheet shows it.
+     */
+    private class EditOrigin(val machine: Machine, val auth: AuthChoice)
 
     /**
      * Trust and connect: pins the presented host key and connects (SPEC §6). Only the unknown-key stage has this action; a
@@ -335,7 +460,7 @@ class AddMachineViewModel(
 
     private fun edit(change: (AddMachineUiState) -> AddMachineUiState) {
         val next = change(state.value)
-        state.value = next.copy(canConnect = canConnect(next))
+        state.value = next.copy(canConnect = canConnect(next), canSave = canSave(next))
     }
 
     private fun canConnect(current: AddMachineUiState): Boolean =

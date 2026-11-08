@@ -40,6 +40,7 @@ import io.github.werlang.whistl.ui.machines.ADD_REMOVE_TAG
 import io.github.werlang.whistl.ui.machines.ADD_TRUST_TAG
 import io.github.werlang.whistl.ui.machines.ADD_USER_TAG
 import io.github.werlang.whistl.ui.machines.MACHINE_MENU_SHEET_TAG
+import io.github.werlang.whistl.ui.machines.MENU_EDIT_TAG
 import io.github.werlang.whistl.ui.machines.MENU_REMOVE_TAG
 import io.github.werlang.whistl.ui.machines.REMOVE_MACHINE_SHEET_TAG
 import io.github.werlang.whistl.ui.settings.ADD_KEY_SHEET_TAG
@@ -108,6 +109,9 @@ enum class ShotScreen(val slug: String) {
 
     /** A machine's card menu. */
     MachineMenu("machine-menu"),
+
+    /** The Edit machine sheet of the demo's first machine, prefilled from it (phase 7 P2). */
+    EditMachine("edit-machine"),
 
     /** The confirmation before a machine is removed. */
     RemoveMachineConfirm("remove-machine-confirm"),
@@ -201,7 +205,7 @@ fun ShotScreen.route(): String = when (this) {
     ShotScreen.Settings, ShotScreen.AddKeySheet -> Routes.SETTINGS
     ShotScreen.Machines, ShotScreen.MachinesEmpty, ShotScreen.MachinesLong, ShotScreen.AddMachineKey,
     ShotScreen.AddMachinePassword, ShotScreen.HostKeyUnknown, ShotScreen.HostKeyChanged, ShotScreen.MachineMenu,
-    ShotScreen.RemoveMachineConfirm,
+    ShotScreen.RemoveMachineConfirm, ShotScreen.EditMachine,
     -> Routes.MACHINES
     ShotScreen.SpaceDetail, ShotScreen.NewAgentPicker -> Routes.space("mac", "sp_web")
     ShotScreen.SpaceDetailOffline -> Routes.space("lab", "sp_lab")
@@ -221,8 +225,9 @@ fun ShotScreen.route(): String = when (this) {
  */
 fun ShotScreen.sheetTag(): String? = when (this) {
     ShotScreen.AddKeySheet -> ADD_KEY_SHEET_TAG
-    ShotScreen.AddMachineKey, ShotScreen.AddMachinePassword, ShotScreen.HostKeyUnknown, ShotScreen.HostKeyChanged ->
-        ADD_MACHINE_SHEET_TAG
+    ShotScreen.AddMachineKey, ShotScreen.AddMachinePassword, ShotScreen.HostKeyUnknown, ShotScreen.HostKeyChanged,
+    ShotScreen.EditMachine,
+    -> ADD_MACHINE_SHEET_TAG
 
     ShotScreen.MachineMenu -> MACHINE_MENU_SHEET_TAG
     ShotScreen.RemoveMachineConfirm -> REMOVE_MACHINE_SHEET_TAG
@@ -252,6 +257,7 @@ fun ShotScreen.expectedText(): String {
         ShotScreen.Settings -> app.getString(R.string.settings_title)
         ShotScreen.AddKeySheet -> app.getString(R.string.settings_add_key)
         ShotScreen.Machines, ShotScreen.MachinesEmpty, ShotScreen.MachinesLong -> app.getString(R.string.machines_title)
+        ShotScreen.EditMachine -> app.getString(R.string.edit_machine_title)
         ShotScreen.AddMachineKey, ShotScreen.AddMachinePassword, ShotScreen.HostKeyUnknown, ShotScreen.HostKeyChanged ->
             app.getString(R.string.add_machine_title)
 
@@ -427,6 +433,11 @@ abstract class ScreenHarness {
             ShotScreen.RemoveMachineConfirm -> {
                 openMachineMenu()
                 composeRule.onNodeWithTag(MENU_REMOVE_TAG, useUnmergedTree = true).performClick()
+            }
+
+            ShotScreen.EditMachine -> {
+                openMachineMenu()
+                composeRule.onNodeWithTag(MENU_EDIT_TAG, useUnmergedTree = true).performClick()
             }
 
             ShotScreen.AddMachineKey -> {

@@ -32,8 +32,29 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    SSH key mode shows this device's public key with a Copy button and the
    hint "add it to ~/.ssh/authorized_keys". Connect → first-connection
    host-key confirmation (algorithm + SHA256 fingerprint) → Trust and connect →
-   detection of installed agents. Card menu: Reconnect, Remove (confirm; spaces
-   of that machine leave the app, agents keep running there).
+   detection of installed agents. Card menu: Edit machine, Reconnect, Remove
+   (confirm; spaces of that machine leave the app, agents keep running there).
+   **Edit machine** (phase 7 P2) opens the Add machine sheet prefilled with the
+   stored name, host, user, port and login method, titled "Edit machine", with
+   Save in place of Connect. The saved password is never shown: a blank password
+   field keeps the saved one. Save is enabled only when a field differs from the
+   stored machine, and disabled again when it is typed back. Four rules, as
+   implemented in `MachinesRepository.edit`:
+   - **R1, name only:** stored in place. The pinned host key and the live session
+     are not touched.
+   - **R2, user, port, login method or a new password:** the pinned host key is
+     kept (same host, same key). The session closes and reconnects with the new
+     settings when the machine is held. A machine waiting for a host-key decision,
+     or blocked by a changed key, keeps that state until the user decides.
+   - **R3, host:** the pinned host key is forgotten and the session closes. The
+     next connection goes through first-connection confirmation again, with the
+     new host's fingerprint. The old host's fingerprint is never compared with, or
+     saved for, the new host. A changed-key block is cleared, since its key was the
+     old host's. Cancelling the confirmation leaves the new host with no pin and no
+     session, in the host-key state until the user trusts the key or removes the
+     machine.
+   - **R4, identity:** the machine keeps its id and the machine count is unchanged,
+     so its spaces (keyed by machine id) stay listed under it.
 2. **Spaces** — grouped by machine, pinned first, then user order. Row: name,
    status dots per agent, "waiting" badge if any agent is blocked,
    `N agents · folder`. Offline machine → group subtitle "offline", rows dimmed.

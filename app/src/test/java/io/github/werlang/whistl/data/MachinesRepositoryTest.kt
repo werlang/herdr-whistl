@@ -30,6 +30,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -505,5 +506,165 @@ class MachinesRepositoryTest {
 
         assertEquals(listOf("Offline"), seen.kinds())
         assertEquals(0, h.connector.connectCalls)
+    }
+
+    // ---- Edit machine (phase 7 P2). Rules R1–R4 are in MachinesRepository.edit; each has its own test below. ----
+
+    /** R1: a name-only edit is stored in place; the pinned key and the live session are not touched. */
+    @Test
+    fun r1NameOnlyKeepsThePinnedKeyAndTheSession() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.repo.acquire(id)
+        runCurrent()
+        val pinned = h.hostKeys.pinned(id)
+        val opened = h.connector.sessionsOpened
+
+        val result = h.repo.edit(id, NewMachine("renamed", "homelab.example", 22, "root"), AuthMethod.Key)
+
+        assertEquals("renamed", (result as EditResult.Saved).machine.name)
+        assertEquals("renamed", h.repo.machines().value.single().name)
+        assertSame(pinned, h.hostKeys.pinned(id))
+        assertEquals(opened, h.connector.sessionsOpened)
+        assertEquals(0, h.connector.sessionsClosed)
+        assertEquals(1, h.connector.connectCalls)
+        assertTrue(h.repo.observe(id).value is ConnectionState.Connected)
+    }
+
+    /** R2: a user or port change keeps the pinned key, closes the session and reconnects with the new settings. */
+    @Test
+    fun r2UserOrPortChangeKeepsThePinnedKeyAndReconnects() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.repo.acquire(id)
+        runCurrent()
+        val pinned = h.hostKeys.pinned(id)
+
+        h.repo.edit(id, NewMachine("", "homelab.example", 2222, "admin"), AuthMethod.Key)
+        runCurrent()
+
+        assertSame(pinned, h.hostKeys.pinned(id))
+        assertEquals(1, h.connector.sessionsClosed)
+        assertEquals(2, h.connector.connectCalls)
+        assertEquals(2222, h.repo.machines().value.single().port)
+        assertEquals("admin", h.repo.machines().value.single().user)
+        assertTrue(h.repo.observe(id).value is ConnectionState.Connected)
+    }
+
+    /** R2: a login-method change to password reconnects and keeps the pinned key; the saved password is stored. */
+    @Test
+    fun r2LoginMethodChangeToPasswordReconnectsAndKeepsThePin() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.repo.acquire(id)
+        runCurrent()
+        val pinned = h.hostKeys.pinned(id)
+
+        h.repo.edit(id, NewMachine("", "homelab.example", 22, "root"), AuthMethod.Password, "secret".toCharArray())
+        runCurrent()
+
+        assertSame(pinned, h.hostKeys.pinned(id))
+        assertEquals(2, h.connector.connectCalls)
+        assertEquals(AuthMethod.Password, h.repo.authOf(id))
+        assertEquals("secret", String(h.secrets.get(DefaultMachinesRepository.passwordAlias(id))!!))
+    }
+
+    /** R3: a host change forgets the pin, and the next connection shows the new host's key for confirmation. */
+    @Test
+    fun r3HostChangeForgetsThePinAndRequiresFirstConfirmation() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        val newKey = SshWire.ed25519Blob(ByteArray(32) { 9 })
+        h.repo.acquire(id)
+        runCurrent()
+        assertTrue(h.repo.observe(id).value is ConnectionState.Connected)
+
+        // The new host presents its own key on the next connection.
+        h.connector.script(FakeMachineConnector.Attempt.PresentKey(newKey))
+        h.repo.edit(id, NewMachine("", "new.example", 22, "root"), AuthMethod.Key)
+        runCurrent()
+
+        assertNull(h.hostKeys.pinned(id))
+        val unknown = h.repo.observe(id).value as ConnectionState.HostKeyUnknown
+        assertEquals(SshFingerprint.of(newKey), unknown.fingerprint)
+
+        // After Trust the same host presents the same key again: the connection goes through.
+        h.connector.script(FakeMachineConnector.Attempt.PresentKey(newKey))
+        assertEquals(ConfirmResult.Trusted, h.repo.confirmHostKey(id))
+        runCurrent()
+        assertTrue(h.repo.observe(id).value is ConnectionState.Connected)
+        assertTrue(h.hostKeys.pinned(id)!!.blob.contentEquals(newKey))
+    }
+
+    /**
+     * R3, cancelled: the confirmation is not given. The machine keeps the new host, has no pinned key, and has no session. It
+     * stays in the host-key state until the user trusts the key, or removes the machine (the decision stated in the report).
+     */
+    @Test
+    fun r3CancelledConfirmationLeavesTheNewHostWithoutAPinOrASession() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.repo.acquire(id)
+        runCurrent()
+
+        h.connector.script(FakeMachineConnector.Attempt.PresentKey(SshWire.ed25519Blob(ByteArray(32) { 9 })))
+        h.repo.edit(id, NewMachine("", "new.example", 22, "root"), AuthMethod.Key)
+        runCurrent()
+
+        assertEquals("new.example", h.repo.machines().value.single().host)
+        assertNull(h.hostKeys.pinned(id))
+        assertEquals(0, h.openSessions())
+        assertTrue(h.repo.observe(id).value is ConnectionState.HostKeyUnknown)
+    }
+
+    /** R4: an edit keeps the machine's id and the machine count, so its spaces (keyed by id) stay with it. */
+    @Test
+    fun r4EditKeepsTheIdAndTheMachineCount() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.repo.acquire(id)
+        runCurrent()
+
+        h.repo.edit(id, NewMachine("box", "other.example", 22, "root"), AuthMethod.Key)
+        runCurrent()
+
+        assertEquals(1, h.repo.machines().value.size)
+        assertEquals(id, h.repo.machines().value.single().id)
+    }
+
+    /** A rejected edit changes nothing: the stored machine, the pin and the connections stay as they were. */
+    @Test
+    fun aRejectedEditChangesNothing() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        val before = h.repo.machines().value.single()
+
+        val result = h.repo.edit(id, NewMachine("", "", 22, "root"), AuthMethod.Key)
+
+        assertEquals(EditResult.Rejected(MachineField.Host, Rejection.EMPTY), result)
+        assertEquals(before, h.repo.machines().value.single())
+        assertEquals(0, h.connector.connectCalls)
+    }
+
+    /** Switching to password login with no password, and none saved, is rejected; a blank password on a saved one keeps it. */
+    @Test
+    fun aPasswordIsRequiredOnlyWhenNoneIsSaved() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+
+        val needsOne = h.repo.edit(id, NewMachine("", "homelab.example", 22, "root"), AuthMethod.Password, null)
+        assertEquals(EditResult.Rejected(MachineField.Password, Rejection.EMPTY), needsOne)
+        assertEquals(AuthMethod.Key, h.repo.authOf(id))
+
+        h.repo.edit(id, NewMachine("", "homelab.example", 22, "root"), AuthMethod.Password, "first".toCharArray())
+        val kept = h.repo.edit(id, NewMachine("", "homelab.example", 22, "root"), AuthMethod.Password, null)
+        assertEquals(EditResult.Saved(h.repo.machines().value.single()), kept)
+        assertEquals("first", String(h.secrets.get(DefaultMachinesRepository.passwordAlias(id))!!))
+
+        h.repo.edit(id, NewMachine("", "homelab.example", 22, "root"), AuthMethod.Password, "second".toCharArray())
+        assertEquals("second", String(h.secrets.get(DefaultMachinesRepository.passwordAlias(id))!!))
+
+        h.repo.edit(id, NewMachine("", "homelab.example", 22, "root"), AuthMethod.Key, null)
+        assertNull(h.secrets.get(DefaultMachinesRepository.passwordAlias(id)))
     }
 }

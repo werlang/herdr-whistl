@@ -93,26 +93,14 @@ class DefaultMachinesRepository(
     override fun observe(id: String): StateFlow<ConnectionState> = slotFor(id).state.asStateFlow()
 
     override suspend fun add(draft: NewMachine, password: CharArray?): AddResult {
-        val host = when (val r = validateHost(draft.host)) {
-            is Validation.Valid -> r.value
-            is Validation.Invalid -> return AddResult.Rejected(MachineField.Host, r.reason)
-        }
-        val port = when (val r = validatePort(draft.port)) {
-            is Validation.Valid -> r.value
-            is Validation.Invalid -> return AddResult.Rejected(MachineField.Port, r.reason)
-        }
-        val user = when (val r = validateUser(draft.user)) {
-            is Validation.Valid -> r.value
-            is Validation.Invalid -> return AddResult.Rejected(MachineField.User, r.reason)
-        }
-        val name = when (val r = validateMachineName(draft.name.ifBlank { defaultName(host.text) })) {
-            is Validation.Valid -> r.value
-            is Validation.Invalid -> return AddResult.Rejected(MachineField.Name, r.reason)
+        val checked = when (val c = checkDraft(draft)) {
+            is DraftCheck.Invalid -> return AddResult.Rejected(c.field, c.reason)
+            is DraftCheck.Valid -> c
         }
         if (password != null && password.isEmpty()) return AddResult.Rejected(MachineField.Password, Rejection.EMPTY)
 
         val id = newId()
-        val machine = Machine(id = id, name = name, host = host.text, port = port, user = user)
+        val machine = Machine(id = id, name = checked.name, host = checked.host, port = checked.port, user = checked.user)
         val stored = StoredMachine(machine, if (password == null) AuthMethod.Key else AuthMethod.Password)
         lock.withLock {
             if (password != null) {
@@ -161,6 +149,56 @@ class DefaultMachinesRepository(
             slot.attempt = 0
             startAttempt(slot, delayMillis = 0L)
         }
+    }
+
+    override fun authOf(id: String): AuthMethod = slotFor(id).stored.auth
+
+    override suspend fun edit(id: String, draft: NewMachine, auth: AuthMethod, password: CharArray?): EditResult {
+        val current = slotFor(id).stored
+        val checked = when (val c = checkDraft(draft)) {
+            is DraftCheck.Invalid -> return EditResult.Rejected(c.field, c.reason)
+            is DraftCheck.Valid -> c
+        }
+        if (auth == AuthMethod.Password && password != null && password.isEmpty()) {
+            return EditResult.Rejected(MachineField.Password, Rejection.EMPTY)
+        }
+        // No password given and none saved: switching to password login has nothing to log in with.
+        if (auth == AuthMethod.Password && password == null && current.auth != AuthMethod.Password) {
+            return EditResult.Rejected(MachineField.Password, Rejection.EMPTY)
+        }
+        val machine = Machine(id = id, name = checked.name, host = checked.host, port = checked.port, user = checked.user)
+        val stored = StoredMachine(machine, auth)
+        lock.withLock {
+            val slot = slotFor(id)
+            val before = slot.stored
+            if (auth == AuthMethod.Password && password != null) {
+                secrets.put(passwordAlias(id), String(password).toByteArray(Charsets.UTF_8))
+            }
+            if (auth == AuthMethod.Key) secrets.delete(passwordAlias(id))
+            store.put(stored)
+            slot.stored = stored
+            when {
+                machine.host != before.machine.host -> {
+                    // Rule R3: the pin belongs to the old host. Forget it, and connect again so the new host is confirmed.
+                    hostKeys.forget(id)
+                    slot.pendingKey = null
+                    restartConnection(slot)
+                }
+
+                machine.user != before.machine.user || machine.port != before.machine.port ||
+                    auth != before.auth || (auth == AuthMethod.Password && password != null) -> {
+                    // Rule R2: the same host, so the pin stays. A machine that waits for a host-key decision keeps that state.
+                    when (slot.state.value) {
+                        is ConnectionState.HostKeyUnknown, is ConnectionState.HostKeyChanged -> Unit
+                        else -> restartConnection(slot)
+                    }
+                }
+
+                else -> Unit // Rule R1: the name only. Nothing else is touched, and the session stays as it is.
+            }
+            publishList()
+        }
+        return EditResult.Saved(machine)
     }
 
     override suspend fun confirmHostKey(id: String): ConfirmResult = lock.withLock {
@@ -366,6 +404,42 @@ class DefaultMachinesRepository(
         machineList.value = store.list().map { it.machine }
     }
 
+    /** The rules every add and edit share: host, port, user and display name, with the default name filled in. */
+    private fun checkDraft(draft: NewMachine): DraftCheck {
+        val host = when (val r = validateHost(draft.host)) {
+            is Validation.Valid -> r.value
+            is Validation.Invalid -> return DraftCheck.Invalid(MachineField.Host, r.reason)
+        }
+        val port = when (val r = validatePort(draft.port)) {
+            is Validation.Valid -> r.value
+            is Validation.Invalid -> return DraftCheck.Invalid(MachineField.Port, r.reason)
+        }
+        val user = when (val r = validateUser(draft.user)) {
+            is Validation.Valid -> r.value
+            is Validation.Invalid -> return DraftCheck.Invalid(MachineField.User, r.reason)
+        }
+        val name = when (val r = validateMachineName(draft.name.ifBlank { defaultName(host.text) })) {
+            is Validation.Valid -> r.value
+            is Validation.Invalid -> return DraftCheck.Invalid(MachineField.Name, r.reason)
+        }
+        return DraftCheck.Valid(name = name, host = host.text, port = port, user = user)
+    }
+
+    /**
+     * Ends the session and any attempt, and starts a new attempt when a lease is held. The state goes to `Offline` first, so
+     * a stale connected or connecting state does not stay on screen. Call with the lock held.
+     */
+    private suspend fun restartConnection(slot: Slot) {
+        slot.job?.cancel()
+        slot.job = null
+        slot.attempt = 0
+        val dying = slot.session
+        slot.session = null
+        dying?.close()
+        slot.state.value = ConnectionState.Offline
+        if (slot.holders > 0) startAttempt(slot, delayMillis = 0L)
+    }
+
     private fun resolveAuth(stored: StoredMachine): SshAuth = when (stored.auth) {
         AuthMethod.Key -> {
             keys.ensureKey()
@@ -385,8 +459,14 @@ class DefaultMachinesRepository(
         is ConnectionState.HostKeyUnknown, is ConnectionState.HostKeyChanged -> false
     }
 
+    /** The checked values of an add or an edit, or the field that failed. */
+    private sealed interface DraftCheck {
+        data class Valid(val name: String, val host: String, val port: Int, val user: String) : DraftCheck
+        data class Invalid(val field: MachineField, val reason: Rejection) : DraftCheck
+    }
+
     /** Per-machine bookkeeping. Every field is read and written under [lock] except the observable state. */
-    private class Slot(val stored: StoredMachine) {
+    private class Slot(var stored: StoredMachine) {
         val machine: Machine get() = stored.machine
         val state = MutableStateFlow<ConnectionState>(ConnectionState.Offline)
 

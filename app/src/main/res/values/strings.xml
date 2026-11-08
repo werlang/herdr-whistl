@@ -144,7 +144,11 @@
     <string name="machine_installed">Installed: %1$s</string>
     <string name="machine_none_installed">No agents installed</string>
     <string name="machine_reconnect">Reconnect</string>
+    <string name="machine_edit">Edit machine</string>
     <string name="machine_remove">Remove machine</string>
+    <string name="edit_machine_title">Edit machine</string>
+    <string name="edit_save">Save</string>
+    <string name="edit_password_keep">Leave blank to keep the saved password.</string>
     <string name="machine_confirm_remove_title">Remove %1$s?</string>
     <string name="machine_confirm_remove_text">Its spaces leave the app. Agents keep running on the machine.</string>
     <string name="common_remove">Remove</string>
