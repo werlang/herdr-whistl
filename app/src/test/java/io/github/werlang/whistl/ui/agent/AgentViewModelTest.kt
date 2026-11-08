@@ -128,34 +128,99 @@ class AgentViewModelTest {
         assertNull(vm.state.value.notice)
     }
 
-    /** Ctrl armed, then a typed letter: nothing is sent yet, the letter waits in the field, and Ctrl stays armed. */
+    /**
+     * Ctrl armed on an empty field, then one typed letter: `ctrl+s` goes out, the letter is not inserted, Ctrl disarms, and the
+     * hint says "Ctrl+S" (phase 7 r9, user decision).
+     */
     @Test
-    fun ctrlThenATypedLetterWaitsInTheFieldUntilSend() = runTest {
+    fun ctrlThenOneTypedLetterOnAnEmptyFieldSendsCtrlLetter() = runTest {
         val (h, vm, _) = openAgent()
 
         vm.onKey(ShortcutKey.CTRL)
         assertTrue(vm.state.value.ctrlArmed)
-        vm.onInputChange(TextFieldValue("x"))
+        vm.onInputChange(TextFieldValue("s"))
         runCurrent()
 
-        assertTrue(h.sent("terminal.keys").isEmpty())
+        assertEquals(listOf("ctrl+s"), h.sent("terminal.keys").single().keyNames())
         assertTrue(h.sent("terminal.send").isEmpty())
-        assertEquals("x", vm.state.value.input.text)
-        assertTrue(vm.state.value.ctrlArmed)
+        assertEquals("", vm.state.value.input.text)
+        assertFalse(vm.state.value.ctrlArmed)
+        assertEquals(SentKey("S", ctrl = true), vm.state.value.lastKey)
     }
 
-    /** Ctrl armed, one letter typed, then Send: the letter arrives plainly (never `ctrl+x`), the field clears, and Ctrl disarms. */
+    /** Ctrl armed on an empty field, then an uppercase letter: the lowercase combination goes out, and the hint says "S". */
     @Test
-    fun ctrlThenSendOfATypedLetterSendsItPlainly() = runTest {
+    fun ctrlThenAnUppercaseLetterSendsTheLowercaseCombination() = runTest {
         val (h, vm, _) = openAgent()
 
         vm.onKey(ShortcutKey.CTRL)
-        vm.onInputChange(TextFieldValue("x"))
+        vm.onInputChange(TextFieldValue("S"))
+        runCurrent()
+
+        assertEquals(listOf("ctrl+s"), h.sent("terminal.keys").single().keyNames())
+        assertEquals(SentKey("S", ctrl = true), vm.state.value.lastKey)
+        assertEquals("", vm.state.value.input.text)
+    }
+
+    /** Ctrl armed with text in the field, then a typed letter: it is inserted, nothing is sent, and Ctrl stays armed. */
+    @Test
+    fun ctrlWithTextInTheFieldInsertsTheLetterAndStaysArmed() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onInputChange(TextFieldValue("l"))
+        vm.onKey(ShortcutKey.CTRL)
+        vm.onInputChange(TextFieldValue("ls"))
+        runCurrent()
+
+        assertEquals("ls", vm.state.value.input.text)
+        assertTrue(vm.state.value.ctrlArmed)
+        assertTrue(h.sent("terminal.keys").isEmpty())
+    }
+
+    /** Ctrl armed on an empty field, then a pasted word (more than one character): it is inserted, and Ctrl stays armed. */
+    @Test
+    fun ctrlThenAPastedWordIsInsertedAndStaysArmed() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onKey(ShortcutKey.CTRL)
+        vm.onInputChange(TextFieldValue("sleep"))
+        runCurrent()
+
+        assertEquals("sleep", vm.state.value.input.text)
+        assertTrue(vm.state.value.ctrlArmed)
+        assertTrue(h.sent("terminal.keys").isEmpty())
+    }
+
+    /** Ctrl armed while offline: the field takes no input, so nothing is sent and Ctrl stays armed. */
+    @Test
+    fun ctrlThenATypedLetterWhileOfflineIsInsertedAndStaysArmed() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onKey(ShortcutKey.CTRL)
+        h.connector.lastSession!!.kill()
+        advanceTimeBy(500)
+        runCurrent()
+        vm.onInputChange(TextFieldValue("s"))
+        runCurrent()
+
+        assertFalse(vm.state.value.canType)
+        assertEquals("s", vm.state.value.input.text)
+        assertTrue(vm.state.value.ctrlArmed)
+        assertTrue(h.sent("terminal.keys").isEmpty())
+    }
+
+    /** Ctrl armed, then Send of text already in the field: the text goes out plainly, no Ctrl key is sent, and Ctrl disarms. */
+    @Test
+    fun ctrlThenSendSendsThePlainTextAndNeverCtrl() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onInputChange(TextFieldValue("ls"))
+        vm.onKey(ShortcutKey.CTRL)
         vm.onSend()
         runCurrent()
 
         assertTrue(h.sent("terminal.keys").isEmpty())
-        assertEquals("x", h.sent("terminal.send").single().params().getValue("text").jsonPrimitive.content)
+        assertEquals("ls", h.sent("terminal.send").single().params().getValue("text").jsonPrimitive.content)
         assertEquals("", vm.state.value.input.text)
         assertFalse(vm.state.value.ctrlArmed)
     }
