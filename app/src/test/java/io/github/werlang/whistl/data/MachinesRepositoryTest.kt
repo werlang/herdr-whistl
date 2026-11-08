@@ -121,6 +121,29 @@ class MachinesRepositoryTest {
     }
 
     /**
+     * A password machine whose saved password can no longer be opened reads as absent: the attempt ends in `Error(AuthFailed)` before
+     * any connect, and the connector is not called again after a long virtual delay (phase 6 P0-4).
+     */
+    @Test
+    fun aPasswordMachineWhoseSecretIsGoneIsAuthFailedAndNeverRetried() = runTest {
+        val h = Harness(this)
+        val added = h.repo.add(NewMachine("web", "homelab.example", 22, "root"), password = "hunter2".toCharArray()) as AddResult.Added
+        h.hostKeys.pin(added.machine.id, PinnedHostKey(SshWire.ED25519, h.connector.defaultKey))
+        // What KeystoreSecretStore.get leaves behind when the blob does not open: nothing under the alias.
+        h.secrets.delete("machine.password.${added.machine.id}")
+        val seen = h.record(added.machine.id)
+
+        h.repo.acquire(added.machine.id)
+        runCurrent()
+        assertEquals(listOf("Offline", "Connecting", "Error(AuthFailed)"), seen.kinds())
+
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(0, h.connector.connectCalls)
+        assertEquals(listOf("Offline", "Connecting", "Error(AuthFailed)"), seen.kinds())
+    }
+
+    /**
      * A changed host key blocks: the state is `HostKeyChanged`, the session never reaches `hello`, nothing is pinned
      * over the old key, nothing retries after a long delay, and `confirmHostKey` is refused.
      */

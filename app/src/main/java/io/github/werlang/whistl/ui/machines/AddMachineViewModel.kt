@@ -73,7 +73,7 @@ enum class AddStage {
  * @property presentedFingerprint the presented key's fingerprint, in the changed stage.
  * @property machineId the id of the machine once it was added.
  * @property machineName the name of the machine once it was added.
- * @property machineAddress the address of the machine once it was added.
+ * @property machineAddress the address of the machine once it was added, or `null` before that.
  * @property publicKey this device's public key line, for key mode.
  * @property publicKeyCopied whether the key was copied since the sheet opened.
  * @property canConnect whether Connect can be tapped: the form is open and host and user are filled.
@@ -94,7 +94,7 @@ data class AddMachineUiState(
     val presentedFingerprint: String?,
     val machineId: String?,
     val machineName: String?,
-    val machineAddress: String?,
+    val machineAddress: MachineAddress?,
     val publicKey: String,
     val publicKeyCopied: Boolean,
     val canConnect: Boolean,
@@ -202,7 +202,7 @@ class AddMachineViewModel(
                             state.value = state.value.copy(
                                 machineId = result.machine.id,
                                 machineName = result.machine.name,
-                                machineAddress = "${result.machine.user}@${result.machine.host}",
+                                machineAddress = result.machine.address(),
                             )
                             follow(result.machine.id)
                         }
@@ -319,7 +319,6 @@ class AddMachineViewModel(
             is ConnectionState.Error -> current.copy(
                 stage = when (connection.kind) {
                     ErrorKind.AuthFailed -> AddStage.LoginRefused
-                    ErrorKind.Unreachable -> AddStage.Unreachable
                     ErrorKind.UnsupportedGeneration -> AddStage.UnsupportedCore
                 },
             )

@@ -46,6 +46,15 @@
     <string name="agent_ctrl_on">Ctrl on: the next key is sent with Ctrl</string>
     <string name="agent_ctrl_armed_description">Control, armed</string>
     <string name="agent_key_sent">sent: %1$s</string>
+    <string name="agent_key_ctrl">Ctrl+%1$s</string>
+    <!-- Joins the place of an agent card: "machine · space". Quoted so the spaces survive. -->
+    <string name="separator_place">" · "</string>
+    <!-- Joins a list of agent names. Quoted so the space survives. -->
+    <string name="separator_list">", "</string>
+    <!-- The address notation is the same in every language (SPEC §2.1): user@host, host:port, [IPv6]. -->
+    <string name="address_user_host" translatable="false">%1$s@%2$s</string>
+    <string name="address_host_port" translatable="false">%1$s:%2$d</string>
+    <string name="address_host_ipv6" translatable="false">[%1$s]</string>
     <string name="agent_hint_blocked">Waiting for you. Send goes in with force.</string>
     <string name="agent_notice_offline">%1$s is offline. Reconnect it in Machines to keep reading and sending.</string>
     <string name="agent_notice_gone">This terminal is no longer on the machine.</string>
@@ -122,7 +131,6 @@
     <string name="machine_status_connecting">connecting</string>
     <string name="machine_status_offline">offline</string>
     <string name="machine_issue_login_refused">login refused</string>
-    <string name="machine_issue_unreachable">unreachable</string>
     <string name="machine_issue_unsupported_core">unsupported hc version</string>
     <string name="machine_issue_host_key">host key to confirm</string>
     <string name="machine_issue_host_key_changed">host key changed</string>
@@ -199,6 +207,7 @@
     <string name="space_unresolved_timeout">The machine did not answer the folder check in time.</string>
     <string name="space_unresolved_bad_output">The machine’s answer was not a folder path.</string>
     <string name="space_unresolved_no_home">The machine has no home folder to expand ~ with.</string>
+    <string name="space_unresolved_invalid">The folder path is not valid: it is blank, or has a line break or a NUL character.</string>
     <string name="space_options">Space options</string>
     <string name="space_menu_pin">Pin to top</string>
     <string name="space_menu_unpin">Unpin</string>

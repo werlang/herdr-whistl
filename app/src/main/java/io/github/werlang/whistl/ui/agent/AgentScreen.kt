@@ -320,15 +320,26 @@ private fun KeyBar(state: AgentUiState, onKey: (ShortcutKey) -> Unit) {
 /** What the screen is doing: the Ctrl hint, the last key sent, or nothing. */
 @Composable
 private fun HintLine(state: AgentUiState) {
+    val lastKey = state.lastKey
     val text = when {
         state.ctrlArmed -> stringResource(R.string.agent_ctrl_on)
-        state.lastKey != null -> stringResource(R.string.agent_key_sent, state.lastKey)
+        lastKey != null -> stringResource(R.string.agent_key_sent, sentKeyText(lastKey))
         else -> null
     }
     if (text != null) {
         Text(text = text, style = MaterialTheme.typography.bodySmall, color = LocalWhistlTokens.current.muted, modifier = Modifier.padding(horizontal = 4.dp))
     }
 }
+
+/**
+ * The key as the hint shows it: its name, with "Ctrl+" in front when it was sent with Ctrl.
+ *
+ * @param key the last key sent.
+ * @return the text the hint line shows for the key.
+ */
+@Composable
+private fun sentKeyText(key: SentKey): String =
+    if (key.ctrl) stringResource(R.string.agent_key_ctrl, key.label) else key.label
 
 /**
  * The notice line: why input is off, or the last refusal (red), or, for a blocked agent, what Send does. Nothing shows when the

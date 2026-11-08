@@ -1,12 +1,17 @@
 package io.github.werlang.whistl.ui.machines
 
+import io.github.werlang.whistl.KeyPublicKey
+import io.github.werlang.whistl.core.secure.KeystoreSecretStore
+import io.github.werlang.whistl.core.ssh.KeyManager
 import io.github.werlang.whistl.data.AddResult
 import io.github.werlang.whistl.data.ConnectionState
 import io.github.werlang.whistl.data.ErrorKind
 import io.github.werlang.whistl.data.MachineField
 import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.domain.Rejection
+import io.github.werlang.whistl.support.FakeWrappingCipher
 import io.github.werlang.whistl.support.FixedClientKey
+import io.github.werlang.whistl.support.MapBlobStore
 import io.github.werlang.whistl.support.MainDispatcherRule
 import io.github.werlang.whistl.support.RecordingClipboard
 import io.github.werlang.whistl.support.ScriptedMachines
@@ -14,6 +19,8 @@ import io.github.werlang.whistl.support.testHello
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import java.security.UnrecoverableKeyException
+import java.util.Base64
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -48,6 +55,23 @@ class AddMachineViewModelTest {
     private fun fill(vm: AddMachineViewModel, host: String = "build.lan", user: String = "ci") {
         vm.onHost(host)
         vm.onUser(user)
+    }
+
+    /**
+     * The sheet opens with a public key when the stored SSH key was lost: its blob cannot be opened, the store forgets it and the key
+     * manager makes a new one, so the sheet shows a key (phase 6 P0-4).
+     */
+    @Test
+    fun theSheetOpensWithAFreshPublicKeyAfterTheStoredKeyWasLost() {
+        val blobs = MapBlobStore()
+        blobs.write(KeyManager.PRIVATE_KEY_ALIAS, Base64.getEncoder().encodeToString(ByteArray(40)))
+        val cipher = FakeWrappingCipher(openFailure = UnrecoverableKeyException("key gone"))
+        val keys = KeyManager(KeystoreSecretStore(blobs, cipher))
+
+        val sheet = AddMachineViewModel(machines, KeyPublicKey(keys), clipboard)
+
+        assertTrue(sheet.uiState.value.publicKey.startsWith("ssh-ed25519 "))
+        assertEquals(1, cipher.discards)
     }
 
     /** Connect is off while the host or the user is empty, and on once both are filled. */

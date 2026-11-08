@@ -7,6 +7,8 @@ import io.github.werlang.whistl.core.rpc.StillLive
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.domain.Terminal
 import io.github.werlang.whistl.domain.TerminalState
+import io.github.werlang.whistl.domain.Validation
+import io.github.werlang.whistl.domain.validateFolder
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -46,6 +48,9 @@ enum class UnresolvableReason {
 
     /** The folder starts with `~`, and the machine's home directory could not be read. */
     NoHome,
+
+    /** The folder is blank, or holds a line break or a NUL character. It is never probed (phase 6 P0-9). */
+    Invalid,
 }
 
 /**
@@ -143,6 +148,8 @@ class FolderResolver(
     }
 
     private suspend fun compute(folder: String): FolderResolution {
+        // Checked before anything else: an invalid folder is never expanded, probed or passed to terminal.run (phase 6 P0-9).
+        if (validateFolder(folder) is Validation.Invalid) return FolderResolution.Unresolvable(UnresolvableReason.Invalid)
         val tilde = folder.startsWith("~")
         if (tilde && folder != "~" && !folder.startsWith("~/")) {
             return FolderResolution.Unresolvable(UnresolvableReason.UnsupportedTilde)

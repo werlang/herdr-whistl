@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.werlang.whistl.R
+import io.github.werlang.whistl.ui.machines.text
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.machines.SheetRow
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
@@ -89,7 +90,7 @@ const val CLOSE_SPACE_CONFIRM_TAG: String = "close-space-confirm"
  * @param id the machine.
  * @return the tag.
  */
-fun newSpaceMachineTag(id: String): String = "new-space-machine-$id"
+fun newSpaceMachineTag(id: String): String = "new-space-machine-$id" // i18n-ok: test tag, never shown
 
 /**
  * The New space sheet (SPEC §2.2): pick an added machine, a folder (default `~`), and a name (default: the folder's last
@@ -165,7 +166,7 @@ fun NewSpaceSheet(
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
-                            text = machine.address,
+                            text = machine.address.text(),
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = WhistlMono,
                             color = LocalWhistlTokens.current.muted,

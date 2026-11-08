@@ -58,15 +58,12 @@ sealed interface ConnectionState {
 /**
  * Why a connection is in [ConnectionState.Error].
  *
- * `Unreachable` is declared for the UI but not produced this round: a failure to open is [ConnectionState.Offline] with a
- * scheduled retry, as the round's brief requires.
+ * A failure to open is [ConnectionState.Offline] with a scheduled retry, so a machine that cannot be reached is never an error
+ * (phase 6 P0-10).
  */
 enum class ErrorKind {
     /** The login was refused. Not retried automatically; the user can acquire again to try once more. */
     AuthFailed,
-
-    /** Reserved: the machine could not be reached and the app stopped trying. Not produced in this round. */
-    Unreachable,
 
     /** `hello` reported a protocol generation other than 1. Not retried automatically. */
     UnsupportedGeneration,

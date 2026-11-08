@@ -112,7 +112,7 @@ data class AgentUiState(
     val input: TextFieldValue,
     val ctrlArmed: Boolean,
     val keyBar: List<ShortcutKey>,
-    val lastKey: String?,
+    val lastKey: SentKey?,
     val notice: AgentNotice?,
     val canType: Boolean,
     val canSend: Boolean,
@@ -123,11 +123,20 @@ data class AgentUiState(
     val fontSize: FontSize,
 )
 
+/**
+ * The last key sent, for the hint line. The label is the key's own name; the screen adds "Ctrl+" through a string resource when
+ * [ctrl] is set, so no visible text is built here (phase 6 P0-11).
+ *
+ * @property label the key's name, such as `Esc` or `C`.
+ * @property ctrl whether the key was sent with Ctrl.
+ */
+data class SentKey(val label: String, val ctrl: Boolean = false)
+
 /** The screen's own interaction state, combined with the repositories' state. */
 private data class Interaction(
     val input: TextFieldValue = TextFieldValue(""),
     val ctrlArmed: Boolean = false,
-    val lastKey: String? = null,
+    val lastKey: SentKey? = null,
     val refusal: AgentNotice? = null,
     /** Set when the terminal could not be opened: the machine or the terminal is no longer there (phase 6 P0-2). */
     val unavailable: Boolean = false,
@@ -213,7 +222,10 @@ class AgentViewModel(
             val typed = newValue.text.substring(old.selection.min, old.selection.min + added)
             val combination = letterCombination(typed.first())
             if (combination != null) {
-                interaction.value = own.copy(ctrlArmed = false, lastKey = "Ctrl+" + typed.first().uppercaseChar())
+                interaction.value = own.copy(
+                    ctrlArmed = false,
+                    lastKey = SentKey(typed.first().uppercaseChar().toString(), ctrl = true),
+                )
                 sendKeys(listOf(combination))
                 return
             }
@@ -241,11 +253,15 @@ class AgentViewModel(
             is KeyAction.Send -> {
                 if (own.ctrlArmed) {
                     val combination = key.ctrlCombination()
-                    val hint = if (combination != null) "Ctrl+" + key.label.trimStart('^') else key.label
+                    val hint = if (combination != null) {
+                        SentKey(key.label.trimStart('^'), ctrl = true)
+                    } else {
+                        SentKey(key.label)
+                    }
                     interaction.value = own.copy(ctrlArmed = false, lastKey = hint)
                     sendKeys(listOf(combination ?: action.hcName))
                 } else {
-                    interaction.value = own.copy(lastKey = key.label)
+                    interaction.value = own.copy(lastKey = SentKey(key.label))
                     sendKeys(listOf(action.hcName))
                 }
             }
@@ -270,7 +286,7 @@ class AgentViewModel(
 
     /** Interrupt: Ctrl+C through `terminal.interrupt`. */
     fun onInterrupt() {
-        interaction.value = interaction.value.copy(menuOpen = false, lastKey = "^C")
+        interaction.value = interaction.value.copy(menuOpen = false, lastKey = SentKey("^C"))
         viewModelScope.launch {
             val outcome = handle.value?.interrupt() ?: TerminalAction.Offline
             interaction.value = interaction.value.copy(refusal = if (outcome == TerminalAction.Done) null else outcome.notice())

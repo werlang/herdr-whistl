@@ -72,7 +72,7 @@ fun MachineMenuSheet(
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
             Text(text = menu.name, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
             Text(
-                text = menu.address,
+                text = menu.address.text(),
                 style = MaterialTheme.typography.bodyMedium,
                 fontFamily = WhistlMono,
                 color = LocalWhistlTokens.current.muted,

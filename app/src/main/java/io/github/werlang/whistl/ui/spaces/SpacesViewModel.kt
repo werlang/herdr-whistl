@@ -19,7 +19,8 @@ import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.domain.Rejection
 import io.github.werlang.whistl.domain.TerminalState
-import io.github.werlang.whistl.ui.machines.machineAddress
+import io.github.werlang.whistl.ui.machines.MachineAddress
+import io.github.werlang.whistl.ui.machines.address
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -102,14 +103,14 @@ data class SpaceRow(
  *
  * @property machineId the machine.
  * @property name the machine's name.
- * @property address the machine's `user@host[:port]`.
+ * @property address the machine's address, or `null` when the machine is not known.
  * @property offline whether the machine is offline: the group's subtitle says so, and its rows are dimmed.
  * @property rows the rows.
  */
 data class SpaceGroup(
     val machineId: String,
     val name: String,
-    val address: String,
+    val address: MachineAddress?,
     val offline: Boolean,
     val rows: List<SpaceRow>,
 )
@@ -119,10 +120,10 @@ data class SpaceGroup(
  *
  * @property id the machine.
  * @property name its name.
- * @property address its `user@host[:port]`.
+ * @property address its address.
  * @property offline whether it is offline.
  */
-data class MachineChoice(val id: String, val name: String, val address: String, val offline: Boolean)
+data class MachineChoice(val id: String, val name: String, val address: MachineAddress, val offline: Boolean)
 
 /** A typed problem of one field of a space form. The screen maps each to its message. */
 enum class SpaceProblem {
@@ -472,7 +473,7 @@ class SpacesViewModel(
             MachineChoice(
                 id = machine.id,
                 name = machine.name,
-                address = machineAddress(machine),
+                address = machine.address(),
                 offline = groups.firstOrNull { it.machineId == machine.id }?.offline ?: true,
             )
         }
@@ -503,7 +504,7 @@ class SpacesViewModel(
         return SpaceGroup(
             machineId = group.machineId,
             name = machine?.name ?: group.machineId,
-            address = machine?.let { machineAddress(it) }.orEmpty(),
+            address = machine?.address(),
             offline = group.offline,
             rows = group.spaces.mapIndexed { index, space ->
                 val mine = agentList.filter { it.machineId == group.machineId && it.spaceId == space.id }

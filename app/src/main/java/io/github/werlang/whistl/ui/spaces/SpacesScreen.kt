@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.ui.agentLabelRes
 import io.github.werlang.whistl.ui.components.MinTouchTarget
+import io.github.werlang.whistl.ui.machines.text
 import io.github.werlang.whistl.ui.statusColor
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
@@ -57,7 +58,7 @@ const val SPACES_LIST_TAG: String = "spaces-list"
  * @param spaceId the space.
  * @return the tag.
  */
-fun spaceRowTag(machineId: String, spaceId: String): String = "space-row-$machineId-$spaceId"
+fun spaceRowTag(machineId: String, spaceId: String): String = "space-row-$machineId-$spaceId" // i18n-ok: test tag, never shown
 
 /**
  * The Spaces list (SPEC §2.2): one group per machine, pinned first and then the user's order. A row shows its name, one dot per
@@ -160,9 +161,9 @@ private fun GroupHeader(group: SpaceGroup) {
                 )
             }
         }
-        if (group.address.isNotEmpty()) {
+        group.address?.let { address ->
             Text(
-                text = group.address,
+                text = address.text(),
                 style = MaterialTheme.typography.bodySmall,
                 fontFamily = WhistlMono,
                 color = muted,
@@ -319,4 +320,5 @@ fun unresolvedTextRes(reason: io.github.werlang.whistl.data.UnresolvableReason):
     io.github.werlang.whistl.data.UnresolvableReason.Timeout -> R.string.space_unresolved_timeout
     io.github.werlang.whistl.data.UnresolvableReason.BadOutput -> R.string.space_unresolved_bad_output
     io.github.werlang.whistl.data.UnresolvableReason.NoHome -> R.string.space_unresolved_no_home
+    io.github.werlang.whistl.data.UnresolvableReason.Invalid -> R.string.space_unresolved_invalid
 }

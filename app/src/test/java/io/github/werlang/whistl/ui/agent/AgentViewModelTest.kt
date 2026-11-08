@@ -220,7 +220,7 @@ class AgentViewModelTest {
         runCurrent()
 
         assertEquals(1, h.sent("terminal.interrupt").size)
-        assertEquals("^C", vm.state.value.lastKey)
+        assertEquals(SentKey("^C"), vm.state.value.lastKey)
         assertFalse(vm.state.value.menuOpen)
     }
 

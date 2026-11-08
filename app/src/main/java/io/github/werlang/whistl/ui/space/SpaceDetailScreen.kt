@@ -77,7 +77,7 @@ const val PICKER_TERMINAL_TAG: String = "picker-terminal"
  * @param address the terminal's address.
  * @return the tag.
  */
-fun detailAgentTag(address: String): String = "detail-agent-$address"
+fun detailAgentTag(address: String): String = "detail-agent-$address" // i18n-ok: test tag, never shown
 
 /**
  * The test tag of one installed agent in the picker: `picker-agent-<id>`.
@@ -85,7 +85,7 @@ fun detailAgentTag(address: String): String = "detail-agent-$address"
  * @param id the agent's id.
  * @return the tag.
  */
-fun pickerAgentTag(id: String): String = "picker-agent-$id"
+fun pickerAgentTag(id: String): String = "picker-agent-$id" // i18n-ok: test tag, never shown
 
 /**
  * The Space detail destination: the space's header, its agents, the New agent button, and the picker it opens. An agent that
