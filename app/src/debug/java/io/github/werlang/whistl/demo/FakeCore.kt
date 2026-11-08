@@ -84,6 +84,53 @@ class FakeCore : DemoCore {
     override val clientKey: ClientPublicKey = FakeClientKey
 
     /**
+     * Adds a terminal to a demo machine, for the screenshot states that need one. The app never calls it.
+     *
+     * @param machineId the machine.
+     * @param terminal the terminal.
+     */
+    fun addTerminal(machineId: String, terminal: Terminal) {
+        state.addTerminal(machineId, terminal)
+    }
+
+    /**
+     * Adds a demo machine in a given connection state, for a screenshot state. The app never calls it.
+     *
+     * @param machine the machine.
+     * @param connection the state to show.
+     * @param password whether the machine is stored with password login.
+     */
+    fun addDemoMachine(machine: Machine, connection: ConnectionState, password: Boolean = false) {
+        state.addMachine(machine, connection, if (password) AuthMethod.Password else AuthMethod.Key)
+    }
+
+    /**
+     * Adds a demo space to a machine, for a screenshot state. The app never calls it.
+     *
+     * @param machineId the machine.
+     * @param id the space id.
+     * @param name the space name.
+     * @param folder the folder.
+     */
+    fun addDemoSpace(machineId: String, id: String, name: String, folder: String) {
+        state.editDocument(machineId) {
+            SpacesDocument(it.spaces + SpaceRecord(id = id, name = name, folder = folder, pinned = false, order = it.spaces.size))
+        }
+    }
+
+    /**
+     * Adds a demo agent to a machine for a screenshot state. The app never calls it.
+     *
+     * @param machineId the machine.
+     * @param address the terminal address.
+     * @param status the agent status, or `null` for a plain shell.
+     * @param cwd the folder.
+     */
+    fun addAgent(machineId: String, address: String, status: AgentStatus?, cwd: String) {
+        state.addAgent(machineId, address, status, cwd)
+    }
+
+    /**
      * Puts a machine into a connection state, as if its connection had reached it. The screenshot tests use it to show the
      * Machines states; the app never calls it.
      *
@@ -137,6 +184,8 @@ private fun scriptedConnection(host: String): ConnectionState = when (host) {
     "auth.demo" -> ConnectionState.Error(ErrorKind.AuthFailed)
     "unreach.demo" -> ConnectionState.Offline
     "slow.demo" -> ConnectionState.Connecting
+    "nocore.demo" -> ConnectionState.Error(ErrorKind.CoreMissing)
+    "refuse.demo" -> ConnectionState.Error(ErrorKind.ConnectionRefused)
     else -> ConnectionState.Connected(DEMO_HELLO)
 }
 
@@ -339,6 +388,25 @@ private class FakeState {
     fun editDocument(id: String, change: (SpacesDocument) -> SpacesDocument) {
         documents[id] = change(documents[id] ?: SpacesDocument.empty())
         publish()
+    }
+
+    /** Adds a terminal to a machine, for a screenshot state that needs one (phase 7 r6, row 11). */
+    @Synchronized
+    fun addTerminal(id: String, terminal: Terminal) {
+        terminals[id] = terminals[id].orEmpty() + terminal
+        publish()
+    }
+
+    /** Adds a demo agent to a machine, built the way the demo builds its own (phase 7 r6, row 11). */
+    fun addAgent(
+        id: String,
+        address: String,
+        status: AgentStatus?,
+        cwd: String,
+        state: TerminalState = TerminalState.Live,
+        name: String? = null,
+    ) {
+        addTerminal(id, demoTerminal(address, status, cwd, state = state, name = name))
     }
 
     /** Removes the terminals of a machine that match [predicate], and publishes. */
@@ -602,10 +670,17 @@ private class FakeAgents(private val state: FakeState) : AgentsRepository {
  * @return the resolution.
  */
 private fun demoResolution(folder: String): FolderResolution =
-    if (folder == DEMO_MISSING_FOLDER) FolderResolution.Unresolvable(UnresolvableReason.NotFound) else FolderResolution.Resolved(folder)
+    when (folder) {
+        DEMO_MISSING_FOLDER -> FolderResolution.Unresolvable(UnresolvableReason.NotFound)
+        DEMO_UNREADABLE_FOLDER -> FolderResolution.Unresolvable(UnresolvableReason.HomeUnreadable)
+        else -> FolderResolution.Resolved(folder)
+    }
 
 /** The folder of the demo's `docs` space, which the demo treats as missing on its machine. */
 private const val DEMO_MISSING_FOLDER: String = "/home/demo/docs"
+
+/** A folder whose home could not be read on its machine, for the unreadable-home state (phase 7 r6, row 11). */
+private const val DEMO_UNREADABLE_FOLDER: String = "/home/demo/unreadable"
 
 /**
  * The spaces of the demo. Edits follow the real repository's rules: an unknown space is reported first, then a write to an
