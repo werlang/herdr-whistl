@@ -66,9 +66,12 @@ class DefaultAgentsRepository(
     override val agents: StateFlow<List<MachineAgent>> = combine(terminals, spaces.groups(), machines.machines()) {
         byMachine, groups, list ->
         list.flatMap { machine ->
-            val spacesOfMachine = groups.firstOrNull { it.machineId == machine.id }?.spaces.orEmpty()
+            val group = groups.firstOrNull { it.machineId == machine.id }
+            val spacesOfMachine = group?.spaces.orEmpty()
             byMachine[machine.id].orEmpty().values.map { terminal ->
-                MachineAgent(machine.id, Agent(terminal), matchSpace(terminal, spacesOfMachine))
+                // Matched by cwd against the resolved path; a space that did not resolve never matches by cwd (SPEC §1).
+                val space = matchSpace(terminal, spacesOfMachine) { group?.resolvedPathOf(it) }
+                MachineAgent(machine.id, Agent(terminal), space)
             }
         }
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())
@@ -129,7 +132,9 @@ class DefaultAgentsRepository(
         val job = scope.launch {
             try {
                 val subscription = client.eventsSubscribe(null)
-                terminals.update { all -> all + (id to subscription.terminals.associateBy { it.address }) }
+                // Folder probes are not agents: the snapshot drops them as the events reducer does.
+                val agentsOnly = subscription.terminals.filterNot { it.isProbe() }
+                terminals.update { all -> all + (id to agentsOnly.associateBy { it.address }) }
                 subscription.events.collect { event -> onEvent(id, event) }
             } catch (e: TransportLost) {
                 lease.reportLost(client, e)

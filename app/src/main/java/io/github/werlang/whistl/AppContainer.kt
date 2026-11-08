@@ -23,6 +23,7 @@ import io.github.werlang.whistl.demo.DemoCores
 import io.github.werlang.whistl.platform.AndroidClock
 import io.github.werlang.whistl.platform.SharedPreferencesHostKeyStore
 import io.github.werlang.whistl.platform.SharedPreferencesMachineStore
+import io.github.werlang.whistl.platform.SharedPreferencesResolvedFolderCache
 import io.github.werlang.whistl.platform.SharedPreferencesSettingsStore
 import io.github.werlang.whistl.platform.SharedPreferencesSpacesCache
 import kotlinx.coroutines.CoroutineScope
@@ -92,6 +93,7 @@ private class LiveCore(context: Context, scope: CoroutineScope) {
         scope = scope,
         machines = machines,
         cache = SharedPreferencesSpacesCache(context),
+        folderCache = SharedPreferencesResolvedFolderCache(context),
         documentChanges = documentChanges,
         ids = spaceIdsFrom { random.nextBytes(it) },
     )

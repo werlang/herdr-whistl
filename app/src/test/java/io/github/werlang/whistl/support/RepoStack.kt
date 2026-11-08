@@ -46,6 +46,9 @@ class RepoStack(scope: TestScope) {
     /** The last document read per machine. */
     val cache = InMemorySpacesCache()
 
+    /** The resolved folder paths per machine. */
+    val folderCache = InMemoryResolvedFolderCache()
+
     /** Document-change notifications from the events channel. */
     val docChanges = DocumentChanges()
 
@@ -65,6 +68,7 @@ class RepoStack(scope: TestScope) {
         scope = scope.backgroundScope,
         machines = machines,
         cache = cache,
+        folderCache = folderCache,
         documentChanges = docChanges,
         ids = spaceIdsFrom { random.nextBytes(it) },
     )

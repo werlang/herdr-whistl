@@ -5,6 +5,7 @@ import io.github.werlang.whistl.core.ssh.HostKeyStore
 import io.github.werlang.whistl.core.ssh.PinnedHostKey
 import io.github.werlang.whistl.data.AuthMethod
 import io.github.werlang.whistl.data.MachineStore
+import io.github.werlang.whistl.data.ResolvedFolderCache
 import io.github.werlang.whistl.data.SettingsStore
 import io.github.werlang.whistl.data.SpacesCache
 import io.github.werlang.whistl.data.SpacesDocument
@@ -165,5 +166,42 @@ class SharedPreferencesSpacesCache(context: Context) : SpacesCache {
 
     private companion object {
         const val PREFS = "whistl.spaces"
+    }
+}
+
+/**
+ * The resolved folder paths per machine, as one JSON object per machine in private SharedPreferences: folder as typed to
+ * the absolute path the probe printed. They stay on this device and are not in the `whistl` document. A copy that no
+ * longer parses counts as absent.
+ *
+ * @param context any context; the application context is used.
+ */
+class SharedPreferencesResolvedFolderCache(context: Context) : ResolvedFolderCache {
+    private val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    override fun get(machineId: String, folder: String): String? = read(machineId)[folder]
+
+    override fun put(machineId: String, folder: String, path: String) {
+        val folders = read(machineId).toMutableMap()
+        folders[folder] = path
+        val obj = JsonObject(folders.mapValues { JsonPrimitive(it.value) })
+        prefs.edit().putString(key(machineId), Json.encodeToString(JsonObject.serializer(), obj)).apply()
+    }
+
+    private fun read(machineId: String): Map<String, String> {
+        val text = prefs.getString(key(machineId), null) ?: return emptyMap()
+        return try {
+            Json.parseToJsonElement(text).jsonObject.mapNotNull { (folder, value) ->
+                (value as? JsonPrimitive)?.takeIf { it.isString }?.let { folder to it.content }
+            }.toMap()
+        } catch (e: RuntimeException) {
+            emptyMap()
+        }
+    }
+
+    private fun key(machineId: String): String = "resolved.$machineId"
+
+    private companion object {
+        const val PREFS = "whistl.folders"
     }
 }
