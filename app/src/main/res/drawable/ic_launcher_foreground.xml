@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive launcher foreground: a prompt chevron in the SPEC §3 accent, inside the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#5EC2B7"
+        android:pathData="M34,28 L44,28 L64,54 L44,80 L34,80 L54,54 Z" />
+</vector>

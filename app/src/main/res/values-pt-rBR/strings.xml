@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Herdr Whistl</string>
+
+    <string name="destination_machines">Máquinas</string>
+    <string name="destination_spaces">Espaços</string>
+    <string name="destination_agents">Agentes</string>
+    <string name="destination_settings">Configurações</string>
+
+    <string name="machines_title">Máquinas</string>
+    <string name="machines_empty">Nenhuma máquina ainda. Adicione uma para começar a coordenar agentes.</string>
+    <string name="machines_add_content_description">Adicionar máquina</string>
+
+    <string name="spaces_placeholder">Os espaços aparecerão aqui.</string>
+    <string name="agents_placeholder">Os agentes aparecerão aqui.</string>
+    <string name="settings_placeholder">As configurações aparecerão aqui.</string>
+</resources>
