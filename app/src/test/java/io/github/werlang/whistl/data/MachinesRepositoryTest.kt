@@ -1,0 +1,395 @@
+package io.github.werlang.whistl.data
+
+import io.github.werlang.whistl.core.rpc.TransportLost
+import io.github.werlang.whistl.core.secure.SecretStore
+import io.github.werlang.whistl.core.ssh.HostKeyStore
+import io.github.werlang.whistl.core.ssh.KeyManager
+import io.github.werlang.whistl.core.ssh.PinnedHostKey
+import io.github.werlang.whistl.core.ssh.SshFingerprint
+import io.github.werlang.whistl.core.ssh.SshWire
+import io.github.werlang.whistl.domain.Rejection
+import io.github.werlang.whistl.support.FakeHostKeyStore
+import io.github.werlang.whistl.support.FakeMachineConnector
+import io.github.werlang.whistl.support.FakeSecretStore
+import io.github.werlang.whistl.support.InMemoryMachineStore
+import io.github.werlang.whistl.support.assertThrowsSuspend
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Connection lifecycle of [DefaultMachinesRepository] (SPEC §1, §2, §6), on virtual time. Each test records the
+ * emitted states with an unconfined collector, so no intermediate state is lost to `StateFlow` conflation.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class MachinesRepositoryTest {
+
+    /** A repository wired to fakes, running its coroutines on the test's background scope. */
+    internal class Harness(val scope: TestScope) {
+        val connector = FakeMachineConnector(scope.backgroundScope)
+        val store = InMemoryMachineStore()
+        val secrets: SecretStore = FakeSecretStore()
+        val hostKeys: HostKeyStore = FakeHostKeyStore()
+        private var counter = 0
+        val repo: MachinesRepository = DefaultMachinesRepository(
+            scope = scope.backgroundScope,
+            store = store,
+            secrets = secrets,
+            keys = KeyManager(secrets),
+            hostKeys = hostKeys,
+            connector = connector,
+            newId = { "m${++counter}" },
+        )
+
+        /**
+         * Adds the test machine. By default its host key is already pinned to the connector's default key, the way a
+         * machine the user has used before looks; pass `pinned = false` to start from trust on first use.
+         */
+        suspend fun addHomelab(pinned: Boolean = true): String {
+            val id = (repo.add(NewMachine("", "homelab.example", 22, "root")) as AddResult.Added).machine.id
+            if (pinned) hostKeys.pin(id, PinnedHostKey(SshWire.ED25519, connector.defaultKey))
+            return id
+        }
+
+        /** Records every state [id] emits from now on. */
+        fun record(id: String): MutableList<ConnectionState> {
+            val seen = mutableListOf<ConnectionState>()
+            scope.backgroundScope.launch(UnconfinedTestDispatcher(scope.testScheduler)) {
+                repo.observe(id).collect { seen += it }
+            }
+            return seen
+        }
+
+        /** Sessions open right now: opened minus closed. */
+        fun openSessions(): Int = connector.sessionsOpened - connector.sessionsClosed
+    }
+
+    /** Short names for a state sequence, so assertions read as the transition they describe. */
+    private fun List<ConnectionState>.kinds(): List<String> = map {
+        when (it) {
+            ConnectionState.Offline -> "Offline"
+            ConnectionState.Connecting -> "Connecting"
+            is ConnectionState.Connected -> "Connected"
+            is ConnectionState.Error -> "Error(${it.kind})"
+            is ConnectionState.HostKeyUnknown -> "HostKeyUnknown"
+            is ConnectionState.HostKeyChanged -> "HostKeyChanged"
+        }
+    }
+
+    /** offline → connecting → connected, with the core's hello in the state. */
+    @Test
+    fun connectsFromOfflineThroughConnectingToConnected() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        val seen = h.record(id)
+
+        val lease = h.repo.acquire(id)
+        runCurrent()
+
+        assertEquals(listOf("Offline", "Connecting", "Connected"), seen.kinds())
+        assertEquals("0.1.18", (seen.last() as ConnectionState.Connected).hello.version)
+        assertEquals(1, h.connector.connectCalls)
+        assertNotNull(lease.client())
+    }
+
+    /** A refused login is `Error(AuthFailed)`; the connector is not called again, even after a long virtual delay. */
+    @Test
+    fun authFailureIsErrorAndIsNotRetriedAutomatically() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.connector.script(FakeMachineConnector.Attempt.AuthRefused)
+        val seen = h.record(id)
+
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(listOf("Offline", "Connecting", "Error(AuthFailed)"), seen.kinds())
+
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+        assertEquals(listOf("Offline", "Connecting", "Error(AuthFailed)"), seen.kinds())
+    }
+
+    /**
+     * A changed host key blocks: the state is `HostKeyChanged`, the session never reaches `hello`, nothing is pinned
+     * over the old key, nothing retries after a long delay, and `confirmHostKey` is refused.
+     */
+    @Test
+    fun hostKeyChangedBlocksNeverConnectsNeverPinsNeverRetries() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        val pinned = SshWire.ed25519Blob(ByteArray(32) { 9 })
+        h.hostKeys.pin(id, PinnedHostKey(SshWire.ED25519, pinned))
+        val seen = h.record(id)
+
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(listOf("Offline", "Connecting", "HostKeyChanged"), seen.kinds())
+        assertEquals(
+            ConnectionState.HostKeyChanged(
+                SshWire.ED25519,
+                SshFingerprint.of(pinned),
+                SshFingerprint.of(h.connector.defaultKey),
+            ),
+            seen.last(),
+        )
+        assertEquals(0, h.connector.helloCalls)
+
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+
+        assertEquals(ConfirmResult.Blocked, h.repo.confirmHostKey(id))
+        runCurrent()
+        assertEquals(PinnedHostKey(SshWire.ED25519, pinned), h.hostKeys.pinned(id))
+        assertEquals(listOf("Offline", "Connecting", "HostKeyChanged"), seen.kinds())
+    }
+
+    /**
+     * An unknown host key waits for the user. `confirmHostKey` pins exactly the presented key and then connects.
+     */
+    @Test
+    fun hostKeyUnknownWaitsForConfirmationThenPinsAndConnects() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab(pinned = false)
+        val seen = h.record(id)
+
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(listOf("Offline", "Connecting", "HostKeyUnknown"), seen.kinds())
+        assertEquals(
+            ConnectionState.HostKeyUnknown(SshWire.ED25519, SshFingerprint.of(h.connector.defaultKey)),
+            seen.last(),
+        )
+        assertNull(h.hostKeys.pinned(id))
+
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+
+        assertEquals(ConfirmResult.Trusted, h.repo.confirmHostKey(id))
+        runCurrent()
+        assertEquals(PinnedHostKey(SshWire.ED25519, h.connector.defaultKey), h.hostKeys.pinned(id))
+        assertEquals(
+            listOf("Offline", "Connecting", "HostKeyUnknown", "Connecting", "Connected"),
+            seen.kinds(),
+        )
+        assertEquals(2, h.connector.connectCalls)
+    }
+
+    /**
+     * A session lost mid-session goes offline, and the retry runs exactly at the first backoff step (1 s), not before.
+     */
+    @Test
+    fun transportLostMidSessionGoesOfflineAndRetriesAtTheFirstBackoffStep() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        val seen = h.record(id)
+        h.repo.acquire(id)
+        runCurrent()
+
+        h.connector.lastSession!!.kill(TransportLost("events watchdog"))
+        runCurrent()
+        assertEquals("Offline", seen.kinds().last())
+
+        advanceTimeBy(999L)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+
+        advanceTimeBy(1L)
+        runCurrent()
+        assertEquals(2, h.connector.connectCalls)
+        assertEquals(
+            listOf("Offline", "Connecting", "Connected", "Offline", "Connecting", "Connected"),
+            seen.kinds(),
+        )
+    }
+
+    /**
+     * Failures to open back off 1 s, 2 s, then 4 s, and the third try succeeds. Each step is checked at its boundary.
+     */
+    @Test
+    fun failedOpensBackOffDoublingFromOneSecond() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.connector.script(
+            FakeMachineConnector.Attempt.Unreachable,
+            FakeMachineConnector.Attempt.Unreachable,
+            FakeMachineConnector.Attempt.Healthy,
+        )
+        val seen = h.record(id)
+
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+
+        advanceTimeBy(999L)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+        advanceTimeBy(1L)
+        runCurrent()
+        assertEquals(2, h.connector.connectCalls)
+
+        advanceTimeBy(1_999L)
+        runCurrent()
+        assertEquals(2, h.connector.connectCalls)
+        advanceTimeBy(1L)
+        runCurrent()
+        assertEquals(3, h.connector.connectCalls)
+        assertEquals("Connected", seen.kinds().last())
+    }
+
+    /** `UnsupportedGeneration` from `hello` is `Error(UnsupportedGeneration)`, and it is not retried. */
+    @Test
+    fun generationTwoIsAnErrorAndIsNotRetried() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.connector.script(FakeMachineConnector.Attempt.GenerationTwo)
+        val seen = h.record(id)
+
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(listOf("Offline", "Connecting", "Error(UnsupportedGeneration)"), seen.kinds())
+
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+        assertEquals(0, h.connector.sessionsOpened)
+    }
+
+    /** A machine can be confirmed only while a host key waits for it; otherwise nothing is pinned. */
+    @Test
+    fun confirmWithNothingPendingPinsNothing() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab(pinned = false)
+
+        assertEquals(ConfirmResult.NothingPending, h.repo.confirmHostKey(id))
+        assertNull(h.hostKeys.pinned(id))
+    }
+
+    /** Removing a machine closes its session and deletes its saved password and its pinned host key. */
+    @Test
+    fun removeClosesTheSessionAndDeletesSecretAndPin() = runTest {
+        val h = Harness(this)
+        val draft = h.repo.add(NewMachine("", "homelab.example", 22, "root"), password = "hunter2".toCharArray())
+        val id = (draft as AddResult.Added).machine.id
+        h.hostKeys.pin(id, PinnedHostKey(SshWire.ED25519, h.connector.defaultKey))
+        assertNotNull(h.secrets.get(DefaultMachinesRepository.passwordAlias(id)))
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(1, h.openSessions())
+
+        h.repo.remove(id)
+
+        assertEquals(0, h.openSessions())
+        assertEquals(1, h.connector.sessionsClosed)
+        assertNull(h.secrets.get(DefaultMachinesRepository.passwordAlias(id)))
+        assertNull(h.hostKeys.pinned(id))
+        assertFalse(h.repo.machines().value.any { it.id == id })
+    }
+
+    /** Validation rejects each bad field with its typed reason, and nothing is stored. */
+    @Test
+    fun addRejectsBadFieldsWithTypedReasons() = runTest {
+        val h = Harness(this)
+
+        assertEquals(
+            AddResult.Rejected(MachineField.Host, Rejection.BAD_FORMAT),
+            h.repo.add(NewMachine("", "-bad.example", 22, "root")),
+        )
+        assertEquals(
+            AddResult.Rejected(MachineField.Port, Rejection.OUT_OF_RANGE),
+            h.repo.add(NewMachine("", "homelab.example", 0, "root")),
+        )
+        assertEquals(
+            AddResult.Rejected(MachineField.Port, Rejection.OUT_OF_RANGE),
+            h.repo.add(NewMachine("", "homelab.example", 65536, "root")),
+        )
+        assertEquals(
+            AddResult.Rejected(MachineField.User, Rejection.BAD_CHARACTERS),
+            h.repo.add(NewMachine("", "homelab.example", 22, "evil;rm -rf")),
+        )
+        assertEquals(
+            AddResult.Rejected(MachineField.Password, Rejection.EMPTY),
+            h.repo.add(NewMachine("", "homelab.example", 22, "root"), password = CharArray(0)),
+        )
+        assertTrue(h.repo.machines().value.isEmpty())
+        assertTrue(h.store.list().isEmpty())
+    }
+
+    /** A blank name defaults to the first label of the host (SPEC §1). */
+    @Test
+    fun blankNameDefaultsToTheFirstHostLabel() = runTest {
+        val h = Harness(this)
+
+        val added = h.repo.add(NewMachine("  ", "homelab.example", 22, "root")) as AddResult.Added
+
+        assertEquals("homelab", added.machine.name)
+    }
+
+    /**
+     * A saved password goes only through `SecretStore`, under the documented alias. The stored machine record holds
+     * no secret, and the password value round-trips exactly.
+     */
+    @Test
+    fun savedPasswordIsStoredOnlyThroughSecretStore() = runTest {
+        val h = Harness(this)
+
+        val added = h.repo.add(NewMachine("web", "homelab.example", 22, "root"), password = "hunter2".toCharArray())
+            as AddResult.Added
+
+        assertEquals(
+            "hunter2",
+            String(h.secrets.get("machine.password.${added.machine.id}")!!, Charsets.UTF_8),
+        )
+        val stored = h.store.list().single()
+        assertEquals(AuthMethod.Password, stored.auth)
+        assertEquals(added.machine, stored.machine)
+    }
+
+    /** A machine added without a password logs in with the client key, and stores no password at all. */
+    @Test
+    fun keyLoginStoresNoPassword() = runTest {
+        val h = Harness(this)
+
+        val added = h.repo.add(NewMachine("web", "homelab.example", 22, "root")) as AddResult.Added
+
+        assertNull(h.secrets.get("machine.password.${added.machine.id}"))
+        assertEquals(AuthMethod.Key, h.store.list().single().auth)
+    }
+
+    /** An empty host is rejected as the host field, with [Rejection.EMPTY]. */
+    @Test
+    fun emptyHostIsRejectedAsTheHostField() = runTest {
+        val h = Harness(this)
+
+        assertEquals(
+            AddResult.Rejected(MachineField.Host, Rejection.EMPTY),
+            h.repo.add(NewMachine("web", "", 22, "root")),
+        )
+    }
+
+    /** Silence after an acquire and no failure: the lifecycle stays where it is. */
+    @Test
+    fun noEventsAreEmittedWithoutAChange() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        val seen = h.record(id)
+
+        advanceTimeBy(5_000L)
+        runCurrent()
+
+        assertEquals(listOf("Offline"), seen.kinds())
+        assertEquals(0, h.connector.connectCalls)
+    }
+}
