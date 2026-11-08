@@ -28,4 +28,8 @@ class FakeHostKeyStore : HostKeyStore {
     override fun pin(machineId: String, key: PinnedHostKey) {
         pins[machineId] = key
     }
+
+    override fun forget(machineId: String) {
+        pins.remove(machineId)
+    }
 }

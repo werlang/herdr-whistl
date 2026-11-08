@@ -24,6 +24,10 @@ class FakeLinePipe(private val onWrite: suspend FakeLinePipe.(String) -> Unit = 
     private val incoming = Channel<String>(Channel.UNLIMITED)
     private var closed = false
 
+    /** `true` once [close] has been called. */
+    val isClosed: Boolean
+        get() = closed
+
     /** Every line the client wrote, in order. */
     val written: MutableList<String> = mutableListOf()
 

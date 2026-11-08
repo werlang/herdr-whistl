@@ -1,5 +1,7 @@
 package io.github.werlang.whistl.core.ssh
 
+import io.github.werlang.whistl.core.rpc.AuthFailed
+import io.github.werlang.whistl.core.rpc.HcException
 import io.github.werlang.whistl.core.rpc.LinePipe
 import io.github.werlang.whistl.core.rpc.TransportLost
 import kotlinx.coroutines.CoroutineDispatcher
@@ -11,6 +13,7 @@ import net.schmizz.sshj.common.Ed25519KeyFactory
 import net.schmizz.sshj.common.KeyType
 import net.schmizz.sshj.connection.channel.direct.Session
 import net.schmizz.sshj.transport.verification.HostKeyVerifier
+import net.schmizz.sshj.userauth.UserAuthException
 import net.schmizz.sshj.userauth.keyprovider.KeyProvider
 import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
 import java.io.BufferedReader
@@ -64,8 +67,10 @@ class SshjTransport(
                 session = client
             } catch (e: IOException) {
                 runCatching { client.disconnect() }
-                gate.lastDecision?.takeUnless { it is HostKeyDecision.Trusted }?.let { throw HostKeyRefused(it) }
-                throw TransportLost("ssh connection or login failed")
+                gate.lastDecision?.takeUnless { it is HostKeyDecision.Trusted }?.let { decision ->
+                    throw HostKeyRefused(decision, gate.lastPresented.takeIf { decision is HostKeyDecision.Unknown })
+                }
+                throw openFailure(e)
             }
         }
     }
@@ -112,6 +117,20 @@ class SshjTransport(
             override fun getType(): KeyType = KeyType.ED25519
         }
     }
+}
+
+/**
+ * Maps a failure while connecting or logging in to the typed error the lifecycle needs.
+ *
+ * A login the server refused (sshj's [UserAuthException]) is [AuthFailed], which is not retried. Anything else is
+ * [TransportLost]. Messages name neither the host, the user nor any credential.
+ *
+ * @param e the failure sshj raised.
+ * @return the typed error to throw.
+ */
+internal fun openFailure(e: Throwable): HcException = when (e) {
+    is UserAuthException -> AuthFailed()
+    else -> TransportLost("ssh connection or login failed")
 }
 
 /**
