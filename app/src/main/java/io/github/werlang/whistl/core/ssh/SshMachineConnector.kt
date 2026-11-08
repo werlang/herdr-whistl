@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.core.ssh
 
+import io.github.werlang.whistl.core.rpc.CoreMissing
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.JsonRpcConnection
 import io.github.werlang.whistl.core.rpc.LinePipe
@@ -51,7 +52,14 @@ class SshMachineConnector(
             openEventsPipe = { transport.exec(SshTransport.HC_CONNECT_COMMAND) },
             scope = scope,
         )
-        val hello = client.hello()
+        val hello = try {
+            client.hello()
+        } catch (e: TransportLost) {
+            // The login worked, and the command ended before it answered. Exit status 127 is "command not found": herdr-core is not
+            // installed for this login. That is not a network failure, so it does not read as "could not reach the machine".
+            if (isCoreMissing(transport.hcExitStatus())) throw CoreMissing(e)
+            throw e
+        }
         return SshMachineSession(transport, client, hello, lost)
     }
 }

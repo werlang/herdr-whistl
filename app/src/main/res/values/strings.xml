@@ -136,6 +136,7 @@
     <string name="machine_issue_host_key_changed">host key changed</string>
     <string name="machine_issue_connection_refused">connection refused</string>
     <string name="machine_issue_internal">failed inside the app</string>
+    <string name="machine_issue_core_missing">herdr-core not found</string>
     <plurals name="machine_agents">
         <item quantity="one">%1$d agent</item>
         <item quantity="other">%1$d agents</item>
@@ -187,6 +188,7 @@
     <string name="error_unsupported_core">This machine runs an herdr-core protocol this app does not speak.</string>
     <string name="error_connection_refused">Nothing is listening on the SSH port of this machine. Start the SSH server, then retry.</string>
     <string name="error_internal">Connection failed inside the app, not on the network. This is a bug in the app; please report it.</string>
+    <string name="error_core_missing">The login works, but herdr-core (hc) is not installed for it on this machine. Install it for this login, then retry.</string>
     <string name="problem_host_empty">Enter a host name or an address.</string>
     <string name="problem_host_bad_characters">Use letters, digits, dots and hyphens, or an IPv6 address.</string>
     <string name="problem_host_bad_format">This is not a valid host name or address.</string>

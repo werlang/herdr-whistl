@@ -1,6 +1,7 @@
 package io.github.werlang.whistl.data
 
 import io.github.werlang.whistl.core.rpc.AuthFailed
+import io.github.werlang.whistl.core.rpc.CoreMissing
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.core.rpc.UnsupportedGeneration
@@ -295,6 +296,9 @@ class DefaultMachinesRepository(
             return
         } catch (e: UnsupportedGeneration) {
             finish(slot, generation, ConnectionState.Error(ErrorKind.UnsupportedGeneration))
+            return
+        } catch (e: CoreMissing) {
+            finish(slot, generation, ConnectionState.Error(ErrorKind.CoreMissing))
             return
         } catch (e: Throwable) {
             // Only a network failure retries on its own. A refused port or a failure inside the app is an error the user

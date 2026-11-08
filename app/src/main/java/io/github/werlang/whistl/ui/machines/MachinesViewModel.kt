@@ -53,6 +53,9 @@ enum class MachineIssue {
 
     /** The connection failed inside the app, not on the network. */
     Internal,
+
+    /** The login worked, but herdr-core is not installed for it on the machine. */
+    CoreMissing,
 }
 
 /**
@@ -410,6 +413,7 @@ internal fun classify(state: ConnectionState): Pair<MachineStatus, MachineIssue?
         ErrorKind.UnsupportedGeneration -> MachineIssue.UnsupportedCore
         ErrorKind.ConnectionRefused -> MachineIssue.ConnectionRefused
         ErrorKind.Internal -> MachineIssue.Internal
+        ErrorKind.CoreMissing -> MachineIssue.CoreMissing
     }
     is ConnectionState.HostKeyUnknown -> MachineStatus.Error to MachineIssue.HostKeyToConfirm
     is ConnectionState.HostKeyChanged -> MachineStatus.Error to MachineIssue.HostKeyChanged

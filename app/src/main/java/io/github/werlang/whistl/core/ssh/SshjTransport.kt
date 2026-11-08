@@ -111,6 +111,14 @@ internal interface ExecChannelPort {
     /** Where hc writes its diagnostics. Never shown or logged; it is read so the channel cannot fill up (phase 6 P0-3). */
     val stderr: InputStream
 
+    /**
+     * The command's exit status once it has ended, or `null` while it runs or when the channel gives none. A `127` means the
+     * shell could not find the command (herdr-core is not installed for this login).
+     *
+     * @return the exit status, or `null`.
+     */
+    fun exitStatus(): Int? = null
+
     /** Closes the channel and its session. */
     fun close()
 }
@@ -150,6 +158,10 @@ class SshjTransport internal constructor(
 
     @Volatile
     private var session: SshSessionPort? = null
+
+    /** The channel of the hc command: the first one opened, which carries the JSON-RPC connection (phase 7 r3). */
+    @Volatile
+    private var commandChannel: ExecChannelPort? = null
 
     /**
      * Connects, verifies the host key and authenticates. A second call does nothing. Any failure, or a cancellation, closes the
@@ -221,9 +233,17 @@ class SshjTransport internal constructor(
             } catch (e: IOException) {
                 throw TransportLost("could not start hc connect")
             }
+            if (commandChannel == null) commandChannel = channel
             SshjLinePipe(channel, io)
         }
     }
+
+    /**
+     * The exit status of the hc command, once it has ended: `127` when the shell could not find it.
+     *
+     * @return the exit status, or `null` while it runs or when none was given.
+     */
+    fun hcExitStatus(): Int? = commandChannel?.exitStatus()
 
     /** Disconnects the SSH session and so every channel on it. */
     override suspend fun close() {
@@ -292,6 +312,8 @@ private class SshjExecChannel(
     override val stdin: OutputStream get() = command.outputStream
     override val stdout: InputStream get() = command.inputStream
     override val stderr: InputStream get() = command.errorStream
+
+    override fun exitStatus(): Int? = command.exitStatus
 
     override fun close() {
         runCatching { command.close() }

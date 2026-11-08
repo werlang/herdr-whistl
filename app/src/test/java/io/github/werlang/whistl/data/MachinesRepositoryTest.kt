@@ -116,6 +116,27 @@ class MachinesRepositoryTest {
     }
 
     /**
+     * The login works but herdr-core is not installed for it (phase 7 r3): `Error(CoreMissing)`, not Offline. Before the fix the
+     * empty hc answer read as "could not reach the machine" and retried forever.
+     */
+    @Test
+    fun aMissingCoreIsErrorAndIsNotRetriedAutomatically() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.connector.script(FakeMachineConnector.Attempt.Fails(io.github.werlang.whistl.core.rpc.CoreMissing()))
+        val seen = h.record(id)
+
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(listOf("Offline", "Connecting", "Error(CoreMissing)"), seen.kinds())
+
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+        assertEquals(listOf("Offline", "Connecting", "Error(CoreMissing)"), seen.kinds())
+    }
+
+    /**
      * A failure inside the app (here an `IllegalStateException`) is `Error(Internal)`: not Offline, and not retried, since a
      * retry would repeat it (phase 7 r1c). Before the fix it was `Offline` with a retry, which read as "could not reach".
      */

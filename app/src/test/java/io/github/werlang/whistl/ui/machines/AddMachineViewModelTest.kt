@@ -361,6 +361,28 @@ class AddMachineViewModelTest {
         }
     }
 
+    /**
+     * A login that works without herdr-core on the machine gets its own stage, not Unreachable (phase 7 r3), and Retry tries again
+     * once the core is installed.
+     */
+    @Test
+    fun aMissingCoreGetsItsOwnStageAndRetryTriesAgain() = runTest {
+        machines.addAnswer = { draft ->
+            val machine = Machine("s-core", draft.name, draft.host, draft.port, draft.user)
+            machines.put(machine, ConnectionState.Error(ErrorKind.CoreMissing))
+            AddResult.Added(machine)
+        }
+        val vm = vm()
+        fill(vm, host = "core.demo")
+
+        vm.connect(null)
+        runCurrent()
+
+        assertEquals(AddStage.CoreMissing, vm.uiState.value.stage)
+        vm.retry()
+        assertEquals("s-core", machines.reconnected.last())
+    }
+
     /** An unreachable machine: the attempt starts, then goes offline, and the sheet shows Unreachable with Retry. */
     @Test
     fun anUnreachableMachineShowsUnreachableAfterItsAttempt() = runTest {

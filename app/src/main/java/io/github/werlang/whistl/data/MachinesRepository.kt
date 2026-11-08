@@ -79,6 +79,12 @@ enum class ErrorKind {
      * Not retried automatically: retrying repeats the same failure. Only the class name is logged.
      */
     Internal,
+
+    /**
+     * The login worked, but herdr-core (`hc`) is not installed for that login on the machine: the command was not found. Not retried
+     * automatically; the user installs it for the login, then retries.
+     */
+    CoreMissing,
 }
 
 /**

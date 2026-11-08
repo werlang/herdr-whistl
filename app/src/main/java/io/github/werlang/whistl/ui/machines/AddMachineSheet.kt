@@ -157,7 +157,7 @@ fun AddMachineSheet(
 
         AddStage.HostKeyUnknown -> PrimaryAction(R.string.add_trust, ADD_TRUST_TAG, true, false, onTrust)
         AddStage.HostKeyChanged -> PrimaryAction(R.string.machine_remove, ADD_REMOVE_TAG, true, true, onRemove)
-        AddStage.LoginRefused, AddStage.Unreachable, AddStage.ConnectionRefused, AddStage.Internal ->
+        AddStage.LoginRefused, AddStage.Unreachable, AddStage.ConnectionRefused, AddStage.Internal, AddStage.CoreMissing ->
             PrimaryAction(R.string.add_retry, ADD_RETRY_TAG, true, false, onRetry)
         AddStage.Connecting, AddStage.UnsupportedCore, AddStage.Connected, AddStage.Missing -> null
     }
@@ -540,6 +540,12 @@ private fun StagePanel(state: AddMachineUiState) {
 
         AddStage.Internal -> Text(
             text = stringResource(R.string.error_internal),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+
+        AddStage.CoreMissing -> Text(
+            text = stringResource(R.string.error_core_missing),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.error,
         )

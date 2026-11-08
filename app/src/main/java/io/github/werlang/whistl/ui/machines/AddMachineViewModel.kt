@@ -55,6 +55,9 @@ enum class AddStage {
     /** The connection failed inside the app, not on the network. Retry tries once more. */
     Internal,
 
+    /** The login worked, but herdr-core is not installed for it on the machine. Retry tries once more, after installing it. */
+    CoreMissing,
+
     /** The machine is connected: the sheet closes. */
     Connected,
 
@@ -453,6 +456,7 @@ class AddMachineViewModel(
                     ErrorKind.UnsupportedGeneration -> AddStage.UnsupportedCore
                     ErrorKind.ConnectionRefused -> AddStage.ConnectionRefused
                     ErrorKind.Internal -> AddStage.Internal
+                    ErrorKind.CoreMissing -> AddStage.CoreMissing
                 },
             )
         }
