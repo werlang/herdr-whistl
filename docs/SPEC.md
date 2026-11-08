@@ -179,6 +179,10 @@ Unknown fields are preserved on write (round-trip `JsonObject`).
 - Release build: R8 minify + resource shrinking, `debuggable=false`,
   cleartext disabled by network security config, `FLAG_SECURE` optional
   setting is out of scope.
+- SSH crypto provider: sshj uses the bundled BouncyCastle, under the name `BC`,
+  on every API level (`minSdk` stays 26). It is inserted at position 1, which
+  replaces the platform's own `BC`: a stripped copy with no X25519, so sshj's
+  key exchange (`curve25519-sha256`) cannot run on it (phase 7 r1c).
 - Connection failures are classified by their cause, not their message (see
   `core/ssh/FailureStage.kt`). Only a network failure is "could not reach the
   machine", and it goes offline with a retry. A refused port, a login refusal,
@@ -216,6 +220,6 @@ Codex…) and key glyphs (Esc, ↑) are not translated.
 
 ## 9. As built
 
-Implementation choices that this spec does not pin down (tilde resolution, BouncyCastle below API
-33, the recorded `terminal.interrupt` fixture, screenshot platform, release signing) are recorded
+Implementation choices that this spec does not pin down (tilde resolution, the bundled BouncyCastle
+as the SSH provider on every API level, the recorded `terminal.interrupt` fixture, screenshot platform, release signing) are recorded
 in `docs/IMPLEMENTATION-NOTES.md`. Contributions follow `CONTRIBUTING.md`.
