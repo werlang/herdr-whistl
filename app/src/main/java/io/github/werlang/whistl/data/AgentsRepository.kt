@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.data
 
+import io.github.werlang.whistl.core.log.Log
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.HcEvent
 import io.github.werlang.whistl.core.rpc.EventSubscription
@@ -9,10 +10,12 @@ import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.domain.Agent
 import io.github.werlang.whistl.domain.KnownAgent
 import io.github.werlang.whistl.domain.Terminal
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -116,6 +119,22 @@ class DefaultAgentsRepository(
     private val terminals = MutableStateFlow<Map<String, Map<String, Terminal>>>(emptyMap())
     private val watchers = ConcurrentHashMap<String, Job>()
     private val subscriptions = ConcurrentHashMap<String, Subscription>()
+
+    /** Failed subscription attempts in a row per machine: the backoff grows with it, and a healthy subscription clears it. */
+    private val retries = ConcurrentHashMap<String, Int>()
+
+    /** The retry scheduled for each machine after a failed subscription, so leaving Connected can cancel it (p7r8 item 3). */
+    private val resubscribes = ConcurrentHashMap<String, Job>()
+
+    private companion object {
+        const val TAG: String = "AgentsRepository"
+
+        /**
+         * How long a subscription must stay up before the retry count resets. A poison event that fails right after every snapshot
+         * then backs off instead of retrying each second (p7r8 item 4).
+         */
+        const val HEALTHY_AFTER_MS: Long = 30_000L
+    }
 
     /** One live events subscription: the client it was opened on, and the job that reads it. */
     private class Subscription(val client: HcClient, val job: Job)
@@ -225,13 +244,18 @@ class DefaultAgentsRepository(
                     val client = lease.client()
                     if (client != null) ensureSubscription(id, lease, client)
                 } else {
+                    // Not connected: no retry may run, and the agents leave the list. A subscription that failed while the machine
+                    // was connected kept them, so they are removed here too (p7r8 item 3).
+                    cancelResubscribe(id)
                     endSubscription(id)
+                    terminals.update { it - id }
                 }
             }
         } catch (e: NoSuchElementException) {
             return
         } finally {
             withContext(NonCancellable) {
+                cancelResubscribe(id)
                 endSubscription(id)
                 terminals.update { it - id }
                 lease.release()
@@ -247,26 +271,62 @@ class DefaultAgentsRepository(
         check(subscriptions[id] == null) { "one events subscription per machine at a time" }
         val job = scope.launch {
             var open: EventSubscription? = null
+            var retrying = false
             try {
                 val subscription = client.eventsSubscribe(null)
                 open = subscription
                 // Folder probes are not agents: the snapshot drops them as the events reducer does.
                 val agentsOnly = subscription.terminals.filterNot { it.isProbe() }
                 terminals.update { all -> all + (id to agentsOnly.associateBy { it.address }) }
-                subscription.events.collect { event -> onEvent(id, event) }
+                // The retry count resets only once the subscription has stayed up for a while (p7r8 item 4).
+                val healthy = launch {
+                    delay(HEALTHY_AFTER_MS)
+                    retries.remove(id)
+                }
+                try {
+                    subscription.events.collect { event -> onEvent(id, event) }
+                } finally {
+                    healthy.cancel()
+                }
             } catch (e: TransportLost) {
                 lease.reportLost(client, e)
             } catch (e: HcException) {
                 // The subscribe failed, or the channel reported an error: the session cannot serve events.
                 lease.reportLost(client, TransportLost("events channel failed: ${e::class.java.simpleName}"))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // An unexpected failure (a decode error, a bug) must not leave the list empty while the machine stays connected:
+                // the subscription is retried on the same client, and the last known terminals stay until it is (phase 7 r5).
+                retrying = true
+                Log.w(TAG, "events subscription failed: ${e::class.java.simpleName}")
+                scheduleResubscribe(id, lease, client)
             } finally {
                 // Cancelling this job (a new subscription, or the machine leaving Connected) must still close the connection
                 // before anything else opens one: the events channel is one per machine (phase 6 P0-6).
                 withContext(NonCancellable) { open?.close() }
-                terminals.update { it - id }
+                if (!retrying) terminals.update { it - id }
             }
         }
         subscriptions[id] = Subscription(client, job)
+    }
+
+    /**
+     * Retries the events subscription on [client] after a backoff of 1 s, doubling per failure up to 30 s. It runs only while
+     * the machine is still connected on that client (phase 7 r5 amendment U4).
+     */
+    private fun scheduleResubscribe(id: String, lease: MachineLease, client: HcClient) {
+        val attempt = retries.merge(id, 1, Int::plus) ?: 1
+        val delayMs = minOf(1_000L shl (attempt - 1).coerceAtMost(5), 30_000L)
+        resubscribes[id] = scope.launch {
+            delay(delayMs)
+            if (lease.client() === client) ensureSubscription(id, lease, client)
+        }
+    }
+
+    /** Cancels the retry scheduled for the machine, if one is pending. */
+    private fun cancelResubscribe(id: String) {
+        resubscribes.remove(id)?.cancel()
     }
 
     /** Stops the machine's subscription and waits until it has finished, so the next one never overlaps. */

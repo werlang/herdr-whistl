@@ -134,6 +134,9 @@
     <string name="machine_issue_unsupported_core">unsupported hc version</string>
     <string name="machine_issue_host_key">host key to confirm</string>
     <string name="machine_issue_host_key_changed">host key changed</string>
+    <string name="machine_issue_connection_refused">connection refused</string>
+    <string name="machine_issue_internal">failed inside the app</string>
+    <string name="machine_issue_core_missing">herdr-core not found</string>
     <plurals name="machine_agents">
         <item quantity="one">%1$d agent</item>
         <item quantity="other">%1$d agents</item>
@@ -142,7 +145,11 @@
     <string name="machine_installed">Installed: %1$s</string>
     <string name="machine_none_installed">No agents installed</string>
     <string name="machine_reconnect">Reconnect</string>
+    <string name="machine_edit">Edit machine</string>
     <string name="machine_remove">Remove machine</string>
+    <string name="edit_machine_title">Edit machine</string>
+    <string name="edit_save">Save</string>
+    <string name="edit_password_keep">Leave blank to keep the saved password.</string>
     <string name="machine_confirm_remove_title">Remove %1$s?</string>
     <string name="machine_confirm_remove_text">Its spaces leave the app. Agents keep running on the machine.</string>
     <string name="common_remove">Remove</string>
@@ -179,6 +186,9 @@
     <string name="error_login_refused">The machine refused the login. Check the key or the password, then retry.</string>
     <string name="error_unreachable">Could not reach the machine. The app keeps trying while this is open.</string>
     <string name="error_unsupported_core">This machine runs an herdr-core protocol this app does not speak.</string>
+    <string name="error_connection_refused">Nothing is listening on the SSH port of this machine. Start the SSH server, then retry.</string>
+    <string name="error_internal">Connection failed inside the app, not on the network. This is a bug in the app; please report it.</string>
+    <string name="error_core_missing">The login works, but herdr-core (hc) is not installed for it on this machine. Install it for this login, then retry.</string>
     <string name="problem_host_empty">Enter a host name or an address.</string>
     <string name="problem_host_bad_characters">Use letters, digits, dots and hyphens, or an IPv6 address.</string>
     <string name="problem_host_bad_format">This is not a valid host name or address.</string>
@@ -207,6 +217,7 @@
     <string name="space_unresolved_timeout">The machine did not answer the folder check in time.</string>
     <string name="space_unresolved_bad_output">The machine’s answer was not a folder path.</string>
     <string name="space_unresolved_no_home">The machine has no home folder to expand ~ with.</string>
+    <string name="space_unresolved_home_unreadable">Could not read the machine’s home folder just now. It is tried again the next time the space is read.</string>
     <string name="space_unresolved_invalid">The folder path is not valid: it is blank, or has a line break or a NUL character.</string>
     <string name="space_options">Space options</string>
     <string name="space_menu_pin">Pin to top</string>
@@ -223,6 +234,7 @@
     <string name="space_field_name">Name</string>
     <string name="space_create">Create space</string>
     <string name="space_machine_offline">This machine is offline. Connect it in Machines first.</string>
+    <string name="space_machine_missing">That machine is no longer added. Choose another one.</string>
     <string name="problem_space_folder_empty">Enter a folder, or leave it for ~.</string>
     <string name="problem_space_folder_bad">A folder cannot have a line break.</string>
     <string name="space_rename_title">Rename space</string>

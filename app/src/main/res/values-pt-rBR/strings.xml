@@ -137,6 +137,9 @@
     <string name="machine_issue_unsupported_core">versão do hc não suportada</string>
     <string name="machine_issue_host_key">chave do host a confirmar</string>
     <string name="machine_issue_host_key_changed">chave do host mudou</string>
+    <string name="machine_issue_connection_refused">conexão recusada</string>
+    <string name="machine_issue_internal">falhou dentro do app</string>
+    <string name="machine_issue_core_missing">herdr-core não encontrado</string>
     <plurals name="machine_agents">
         <item quantity="one">%1$d agente</item>
         <item quantity="many">%1$d agentes</item>
@@ -146,7 +149,11 @@
     <string name="machine_installed">Instalados: %1$s</string>
     <string name="machine_none_installed">Nenhum agente instalado</string>
     <string name="machine_reconnect">Reconectar</string>
+    <string name="machine_edit">Editar máquina</string>
     <string name="machine_remove">Remover máquina</string>
+    <string name="edit_machine_title">Editar máquina</string>
+    <string name="edit_save">Salvar</string>
+    <string name="edit_password_keep">Deixe em branco para manter a senha salva.</string>
     <string name="machine_confirm_remove_title">Remover %1$s?</string>
     <string name="machine_confirm_remove_text">Os spaces dela saem do app. Os agentes continuam rodando na máquina.</string>
     <string name="common_remove">Remover</string>
@@ -183,6 +190,9 @@
     <string name="error_login_refused">A máquina recusou o login. Confira a chave ou a senha e tente de novo.</string>
     <string name="error_unreachable">Não foi possível alcançar a máquina. O app continua tentando enquanto isto estiver aberto.</string>
     <string name="error_unsupported_core">Esta máquina roda um protocolo do herdr-core que este app não entende.</string>
+    <string name="error_connection_refused">Nada escuta na porta SSH desta máquina. Inicie o servidor SSH e tente de novo.</string>
+    <string name="error_internal">A conexão falhou dentro do app, não na rede. É um erro do app; por favor, informe.</string>
+    <string name="error_core_missing">O login funciona, mas o herdr-core (hc) não está instalado para ele nesta máquina. Instale-o para este login e tente de novo.</string>
     <string name="problem_host_empty">Digite um nome de host ou um endereço.</string>
     <string name="problem_host_bad_characters">Use letras, dígitos, pontos e hifens, ou um endereço IPv6.</string>
     <string name="problem_host_bad_format">Isto não é um nome de host ou endereço válido.</string>
@@ -211,6 +221,7 @@
     <string name="space_unresolved_timeout">A máquina não respondeu à verificação da pasta a tempo.</string>
     <string name="space_unresolved_bad_output">A resposta da máquina não é um caminho de pasta.</string>
     <string name="space_unresolved_no_home">A máquina não tem pasta home para expandir ~.</string>
+    <string name="space_unresolved_home_unreadable">Não foi possível ler a pasta home da máquina agora. Ela será lida de novo na próxima vez que o espaço for lido.</string>
     <string name="space_unresolved_invalid">O caminho da pasta não é válido: está em branco, ou tem quebra de linha ou caractere NUL.</string>
     <string name="space_options">Opções do space</string>
     <string name="space_menu_pin">Fixar no topo</string>
@@ -227,6 +238,7 @@
     <string name="space_field_name">Nome</string>
     <string name="space_create">Criar space</string>
     <string name="space_machine_offline">Esta máquina está offline. Conecte-a em Máquinas primeiro.</string>
+    <string name="space_machine_missing">Essa máquina não está mais adicionada. Escolha outra.</string>
     <string name="problem_space_folder_empty">Digite uma pasta, ou deixe para ~.</string>
     <string name="problem_space_folder_bad">Uma pasta não pode ter quebra de linha.</string>
     <string name="space_rename_title">Renomear space</string>

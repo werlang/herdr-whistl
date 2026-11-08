@@ -3,7 +3,9 @@ package io.github.werlang.whistl.demo
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.data.AddResult
+import io.github.werlang.whistl.data.AuthMethod
 import io.github.werlang.whistl.data.ClientPublicKey
+import io.github.werlang.whistl.data.EditResult
 import io.github.werlang.whistl.data.InstalledAgentsRepository
 import io.github.werlang.whistl.data.ErrorKind
 import io.github.werlang.whistl.domain.KnownAgent
@@ -57,6 +59,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import io.github.werlang.whistl.domain.Rejection
 import io.github.werlang.whistl.domain.Validation
 import io.github.werlang.whistl.domain.validateFolder
 import io.github.werlang.whistl.domain.validateHost
@@ -79,6 +82,53 @@ class FakeCore : DemoCore {
     override val installed: InstalledAgentsRepository = FakeInstalled(state)
 
     override val clientKey: ClientPublicKey = FakeClientKey
+
+    /**
+     * Adds a terminal to a demo machine, for the screenshot states that need one. The app never calls it.
+     *
+     * @param machineId the machine.
+     * @param terminal the terminal.
+     */
+    fun addTerminal(machineId: String, terminal: Terminal) {
+        state.addTerminal(machineId, terminal)
+    }
+
+    /**
+     * Adds a demo machine in a given connection state, for a screenshot state. The app never calls it.
+     *
+     * @param machine the machine.
+     * @param connection the state to show.
+     * @param password whether the machine is stored with password login.
+     */
+    fun addDemoMachine(machine: Machine, connection: ConnectionState, password: Boolean = false) {
+        state.addMachine(machine, connection, if (password) AuthMethod.Password else AuthMethod.Key)
+    }
+
+    /**
+     * Adds a demo space to a machine, for a screenshot state. The app never calls it.
+     *
+     * @param machineId the machine.
+     * @param id the space id.
+     * @param name the space name.
+     * @param folder the folder.
+     */
+    fun addDemoSpace(machineId: String, id: String, name: String, folder: String) {
+        state.editDocument(machineId) {
+            SpacesDocument(it.spaces + SpaceRecord(id = id, name = name, folder = folder, pinned = false, order = it.spaces.size))
+        }
+    }
+
+    /**
+     * Adds a demo agent to a machine for a screenshot state. The app never calls it.
+     *
+     * @param machineId the machine.
+     * @param address the terminal address.
+     * @param status the agent status, or `null` for a plain shell.
+     * @param cwd the folder.
+     */
+    fun addAgent(machineId: String, address: String, status: AgentStatus?, cwd: String) {
+        state.addAgent(machineId, address, status, cwd)
+    }
 
     /**
      * Puts a machine into a connection state, as if its connection had reached it. The screenshot tests use it to show the
@@ -134,6 +184,8 @@ private fun scriptedConnection(host: String): ConnectionState = when (host) {
     "auth.demo" -> ConnectionState.Error(ErrorKind.AuthFailed)
     "unreach.demo" -> ConnectionState.Offline
     "slow.demo" -> ConnectionState.Connecting
+    "nocore.demo" -> ConnectionState.Error(ErrorKind.CoreMissing)
+    "refuse.demo" -> ConnectionState.Error(ErrorKind.ConnectionRefused)
     else -> ConnectionState.Connected(DEMO_HELLO)
 }
 
@@ -174,6 +226,7 @@ private class FakeState {
     val blockedFlow = MutableStateFlow(0)
 
     private val connections = LinkedHashMap<String, MutableStateFlow<ConnectionState>>()
+    private val auths = LinkedHashMap<String, AuthMethod>()
     private val documents = LinkedHashMap<String, SpacesDocument>()
     private val terminals = LinkedHashMap<String, List<Terminal>>()
     private val outputs = LinkedHashMap<String, MutableList<String>>()
@@ -247,9 +300,28 @@ private class FakeState {
 
     /** Adds a machine with the given connection state, and publishes. */
     @Synchronized
-    fun addMachine(machine: Machine, connection: ConnectionState = ConnectionState.Offline) {
+    fun addMachine(machine: Machine, connection: ConnectionState = ConnectionState.Offline, auth: AuthMethod = AuthMethod.Key) {
         machineList.value = machineList.value + machine
         connections[machine.id] = MutableStateFlow(connection)
+        auths[machine.id] = auth
+        publish()
+    }
+
+    /** The login method a machine was stored with. */
+    @Synchronized
+    fun authOf(id: String): AuthMethod = auths[id] ?: throw NoSuchElementException("no machine with id $id")
+
+    /**
+     * Replaces a machine's settings in place: same id, same position in the list, same connection flow (phase 7 P2, demo).
+     *
+     * @param machine the edited machine.
+     * @param auth its login method.
+     */
+    @Synchronized
+    fun replaceMachine(machine: Machine, auth: AuthMethod) {
+        if (machine.id !in connections) throw NoSuchElementException("no machine with id ${machine.id}")
+        machineList.value = machineList.value.map { if (it.id == machine.id) machine else it }
+        auths[machine.id] = auth
         publish()
     }
 
@@ -272,6 +344,7 @@ private class FakeState {
     fun removeMachine(id: String) {
         machineList.value = machineList.value.filterNot { it.id == id }
         connections.remove(id)
+        auths.remove(id)
         documents.remove(id)
         terminals.remove(id)
         installedByMachine.remove(id)
@@ -315,6 +388,25 @@ private class FakeState {
     fun editDocument(id: String, change: (SpacesDocument) -> SpacesDocument) {
         documents[id] = change(documents[id] ?: SpacesDocument.empty())
         publish()
+    }
+
+    /** Adds a terminal to a machine, for a screenshot state that needs one (phase 7 r6, row 11). */
+    @Synchronized
+    fun addTerminal(id: String, terminal: Terminal) {
+        terminals[id] = terminals[id].orEmpty() + terminal
+        publish()
+    }
+
+    /** Adds a demo agent to a machine, built the way the demo builds its own (phase 7 r6, row 11). */
+    fun addAgent(
+        id: String,
+        address: String,
+        status: AgentStatus?,
+        cwd: String,
+        state: TerminalState = TerminalState.Live,
+        name: String? = null,
+    ) {
+        addTerminal(id, demoTerminal(address, status, cwd, state = state, name = name))
     }
 
     /** Removes the terminals of a machine that match [predicate], and publishes. */
@@ -461,7 +553,7 @@ private class FakeMachines(private val state: FakeState) : MachinesRepository {
             is Validation.Invalid -> return AddResult.Rejected(MachineField.Name, r.reason)
         }
         val machine = Machine(id = state.nextMachineId(), name = name, host = host, port = port, user = user)
-        state.addMachine(machine, ConnectionState.Offline)
+        state.addMachine(machine, ConnectionState.Offline, if (password == null) AuthMethod.Key else AuthMethod.Password)
         attempts.launch {
             state.setConnectionIfKnown(machine.id, ConnectionState.Connecting)
             delay(DEMO_ATTEMPT_MS)
@@ -484,6 +576,60 @@ private class FakeMachines(private val state: FakeState) : MachinesRepository {
         if (current !is ConnectionState.Offline && current !is ConnectionState.Error) return
         state.setConnection(id, ConnectionState.Connecting)
         state.setConnection(id, scriptedConnection(state.hostOf(id)))
+    }
+
+    override fun authOf(id: String): AuthMethod = state.authOf(id)
+
+    /**
+     * Edit machine in the demo, following the repository's rules as far as a fake can (phase 7 P2): a name-only edit only
+     * changes the stored machine; a user, port or login change reconnects, unless a host-key decision is pending; a host change
+     * starts a new connection to the new host, so its scripted outcome (for example the unknown key) shows.
+     */
+    override suspend fun edit(id: String, draft: NewMachine, auth: AuthMethod, password: CharArray?): EditResult {
+        val before = machines().value.firstOrNull { it.id == id } ?: throw NoSuchElementException("no machine with id $id")
+        if (auth == AuthMethod.Password && password != null && password.isEmpty()) {
+            return EditResult.Rejected(MachineField.Password, Rejection.EMPTY)
+        }
+        if (auth == AuthMethod.Password && password == null && state.authOf(id) != AuthMethod.Password) {
+            return EditResult.Rejected(MachineField.Password, Rejection.EMPTY)
+        }
+        val host = when (val r = validateHost(draft.host)) {
+            is Validation.Valid -> r.value.text
+            is Validation.Invalid -> return EditResult.Rejected(MachineField.Host, r.reason)
+        }
+        val port = when (val r = validatePort(draft.port)) {
+            is Validation.Valid -> r.value
+            is Validation.Invalid -> return EditResult.Rejected(MachineField.Port, r.reason)
+        }
+        val user = when (val r = validateUser(draft.user)) {
+            is Validation.Valid -> r.value
+            is Validation.Invalid -> return EditResult.Rejected(MachineField.User, r.reason)
+        }
+        val name = when (val r = validateMachineName(draft.name.ifBlank { host.substringBefore('.') })) {
+            is Validation.Valid -> r.value
+            is Validation.Invalid -> return EditResult.Rejected(MachineField.Name, r.reason)
+        }
+        val machine = Machine(id = id, name = name, host = host, port = port, user = user)
+        val previousAuth = state.authOf(id)
+        state.replaceMachine(machine, auth)
+        val current = state.connectionOf(id).value
+        when {
+            host != before.host -> {
+                state.setConnection(id, ConnectionState.Connecting)
+                state.setConnection(id, scriptedConnection(host))
+            }
+
+            current is ConnectionState.HostKeyUnknown || current is ConnectionState.HostKeyChanged -> Unit
+
+            before.user != user || before.port != port || (auth == AuthMethod.Password && password != null) ||
+                auth != previousAuth -> {
+                state.setConnection(id, ConnectionState.Connecting)
+                state.setConnection(id, scriptedConnection(host))
+            }
+
+            else -> Unit
+        }
+        return EditResult.Saved(machine)
     }
 
     override suspend fun confirmHostKey(id: String): ConfirmResult = when (state.connectionOf(id).value) {
@@ -524,10 +670,17 @@ private class FakeAgents(private val state: FakeState) : AgentsRepository {
  * @return the resolution.
  */
 private fun demoResolution(folder: String): FolderResolution =
-    if (folder == DEMO_MISSING_FOLDER) FolderResolution.Unresolvable(UnresolvableReason.NotFound) else FolderResolution.Resolved(folder)
+    when (folder) {
+        DEMO_MISSING_FOLDER -> FolderResolution.Unresolvable(UnresolvableReason.NotFound)
+        DEMO_UNREADABLE_FOLDER -> FolderResolution.Unresolvable(UnresolvableReason.HomeUnreadable)
+        else -> FolderResolution.Resolved(folder)
+    }
 
 /** The folder of the demo's `docs` space, which the demo treats as missing on its machine. */
 private const val DEMO_MISSING_FOLDER: String = "/home/demo/docs"
+
+/** A folder whose home could not be read on its machine, for the unreadable-home state (phase 7 r6, row 11). */
+private const val DEMO_UNREADABLE_FOLDER: String = "/home/demo/unreadable"
 
 /**
  * The spaces of the demo. Edits follow the real repository's rules: an unknown space is reported first, then a write to an

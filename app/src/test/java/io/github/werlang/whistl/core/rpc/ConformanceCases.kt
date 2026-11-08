@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.core.rpc
 
+import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.KnownAgents
 import io.github.werlang.whistl.domain.TerminalState
 import io.github.werlang.whistl.support.FakeLinePipe
@@ -45,6 +46,33 @@ object ConformanceCases {
             assertEquals("0.1.18", hello.version)
             assertEquals("laptop", hello.coreName)
             assertTrue("events" in hello.features)
+        },
+
+        // Recorded from the live core (phase 7 r5 amendment U4): a plain shell, a Claude Code agent (status is an object),
+        // a finished terminal and a killed one. No screen text: the `screen` value is the mode only.
+        ConformanceCase(
+            "events.subscribe | events_snapshot_agent_status.json",
+            "events.subscribe",
+            "events_snapshot_agent_status.json",
+        ) {
+            val sub = clientWith(events = FakeLinePipe.replaying(Fixtures.load("events_snapshot_agent_status.json")))
+                .eventsSubscribe(null)
+            val byAddress = sub.terminals.associateBy { it.address }
+            assertEquals(4, sub.terminals.size)
+            assertEquals(0, sub.skippedTerminals)
+            assertEquals(AgentStatus.Idle, byAddress.getValue("t3s").status)
+            assertEquals(TerminalState.Live, byAddress.getValue("t40").state)
+            assertNull(byAddress.getValue("t40").status)
+            assertEquals(TerminalState.Finished, byAddress.getValue("t3y").state)
+            assertEquals(TerminalState.Finished, byAddress.getValue("t3z").state)
+        },
+
+        ConformanceCase("terminal.list | terminal_list_agent_status.json", "terminal.list", "terminal_list_agent_status.json") {
+            val list = clientWith(command = FakeLinePipe.replaying(Fixtures.load("terminal_list_agent_status.json")))
+                .terminalList()
+            assertEquals(listOf("t3s", "t40"), list.terminals.map { it.address })
+            assertEquals(AgentStatus.Idle, list.terminals.first().status)
+            assertEquals(0, list.skippedTerminals)
         },
 
         ConformanceCase("terminal.list | list_by_label.json", "terminal.list", "list_by_label.json") {

@@ -2,13 +2,17 @@ package io.github.werlang.whistl.data
 
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.TerminalState
+import io.github.werlang.whistl.support.FakeLinePipe
+import io.github.werlang.whistl.support.RecordingLog
 import io.github.werlang.whistl.support.FakeMachineConnector
 import io.github.werlang.whistl.support.RepoStack
+import io.github.werlang.whistl.support.requestIdOf
 import io.github.werlang.whistl.support.dataOf
 import io.github.werlang.whistl.support.eventLine
 import io.github.werlang.whistl.support.eventsSnapshot
 import io.github.werlang.whistl.support.snapshotPipe
 import io.github.werlang.whistl.support.spaceJson
+import io.github.werlang.whistl.support.withId
 import io.github.werlang.whistl.support.spacesDocJson
 import io.github.werlang.whistl.support.terminalJson
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -24,6 +28,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 
 /**
@@ -33,6 +38,10 @@ import org.junit.Test
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AgentsRepositoryTest {
+    /** Reaches the warning for a failed events subscription; the recording sink replaces the Android logger (phase 7 r6). */
+    @get:Rule
+    val log = RecordingLog()
+
 
     /** A stack with one connected machine seeded with [terminals]. */
     private suspend fun TestScope.connected(terminals: List<JsonObject> = emptyList()): Pair<RepoStack, String> {
@@ -373,6 +382,67 @@ class AgentsRepositoryTest {
         assertTrue(h.agents.agents.value.isEmpty())
     }
 
+    /**
+     * P7R8 item 3: an event that fails keeps the agents while the machine is connected, and a retry is pending. When the machine
+     * then goes offline, its agents leave the list and the pending retry never runs.
+     */
+    @Test
+    fun aMachineThatGoesOfflineAfterAFailedEventLosesItsAgentsAndNoRetryRuns() = runTest {
+        val h = RepoStack(this, docChanges = FailingDocumentChanges())
+        h.connector.eventsPipeFactory = { snapshotPipe(eventsSnapshot(1, listOf(terminalJson("t1")))) }
+        h.addMachine()
+        runCurrent()
+        assertEquals(listOf("t1"), h.addresses())
+
+        h.pushEvent(docEvent())
+        runCurrent()
+        assertEquals("the agents stay while the machine is still connected", listOf("t1"), h.addresses())
+
+        // The machine retries on its own after a network loss; every retry fails, so it stays offline for the whole test.
+        repeat(20) { h.connector.script(FakeMachineConnector.Attempt.Unreachable) }
+        h.connector.lastSession!!.kill()
+        runCurrent()
+        val subscriptions = h.connector.eventsPipes.size
+        advanceTimeBy(60_000L)
+        runCurrent()
+
+        assertTrue("an offline machine's agents are gone: ${h.addresses()}", h.addresses().isEmpty())
+        assertEquals("no retry ran while the machine was offline", subscriptions, h.connector.eventsPipes.size)
+    }
+
+    /**
+     * P7R8 item 4: an event that fails right after every snapshot backs off, with delays of 1 s, 2 s and 4 s, instead of
+     * re-subscribing each second. The retry count resets only after a subscription has stayed up for a while.
+     */
+    @Test
+    fun aPoisonEventAfterEverySnapshotBacksOffInsteadOfRetryingEachSecond() = runTest {
+        val h = RepoStack(this, docChanges = FailingDocumentChanges())
+        h.connector.eventsPipeFactory = {
+            FakeLinePipe { line ->
+                push(withId(eventsSnapshot(1, listOf(terminalJson("t1"))), requestIdOf(line)))
+                push(docEvent())
+            }
+        }
+        h.addMachine()
+        runCurrent()
+        advanceTimeBy(10_000L)
+        runCurrent()
+
+        // Subscriptions at 0 s, 1 s, 3 s and 7 s. Re-subscribing each second would open 11 by 10 s.
+        assertEquals(4, h.connector.eventsPipes.size)
+        assertEquals(listOf("t1"), h.addresses())
+    }
+
+    /** A document-change hub whose announcement fails, as an unexpected error in the event handling does. */
+    private class FailingDocumentChanges : DocumentChanges() {
+        override fun notifyChanged(machineId: String) {
+            error("announcing the document change failed")
+        }
+    }
+
+    /** A `doc` event on the events channel: the `whistl` document changed. */
+    private fun docEvent(): String = eventLine("doc", null, 2, dataOf("name" to JsonPrimitive("whistl"), "version" to JsonPrimitive(2)))
+
     /** Each agent carries its machine and its matched space: label, then cwd, then "No space". */
     @Test
     fun agentsCarryTheirMatchedSpace() = runTest {
@@ -495,5 +565,27 @@ class AgentsRepositoryTest {
 
         assertEquals(2, h.agents.agents.value.size)
         assertEquals(1, h.agents.blockedCount.value)
+    }
+
+    /**
+     * A subscription that fails with an unexpected error (here the answer to `events.subscribe` is a number, not a snapshot)
+     * keeps the machine connected and is retried on the same client, so the agents come back without a reconnect (phase 7 r5
+     * amendment U4). Before this, the failure emptied the list, and nothing resubscribed while the machine stayed connected.
+     */
+    @Test
+    fun aSubscriptionErrorIsRetriedWhileConnected() = runTest {
+        val h = RepoStack(this)
+        val answers = ArrayDeque(
+            listOf(FakeLinePipe { line -> push(withId(JsonObject(mapOf("jsonrpc" to JsonPrimitive("2.0"), "result" to JsonPrimitive(7))), requestIdOf(line))) }),
+        )
+        h.connector.eventsPipeFactory = { answers.removeFirstOrNull() ?: snapshotPipe(eventsSnapshot(2, listOf(terminalJson("t1")))) }
+        h.addMachine()
+        runCurrent()
+        assertEquals(emptyList<String>(), h.addresses())
+
+        advanceTimeBy(1_500)
+        runCurrent()
+
+        assertEquals(listOf("t1"), h.addresses())
     }
 }

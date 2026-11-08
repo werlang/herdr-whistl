@@ -1,16 +1,13 @@
 package io.github.werlang.whistl.data
 
 import io.github.werlang.whistl.core.rpc.HcEvent
-import io.github.werlang.whistl.core.rpc.ResponseJson
-import io.github.werlang.whistl.core.rpc.SubscribeWire
 import io.github.werlang.whistl.core.rpc.TerminalEventKind
-import io.github.werlang.whistl.core.rpc.TerminalWire
-import io.github.werlang.whistl.core.rpc.toDomain
+import io.github.werlang.whistl.core.rpc.decodeTerminals
+import io.github.werlang.whistl.core.rpc.statusOf
 import io.github.werlang.whistl.domain.Agent
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.Terminal
 import io.github.werlang.whistl.domain.TerminalState
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -100,7 +97,7 @@ object AgentEventReducer {
         val updated = when (event.kind) {
             TerminalEventKind.Keep -> current.copy(keep = data.boolean("keep") ?: current.keep)
             TerminalEventKind.Title -> current.copy(title = data.string("title") ?: current.title)
-            TerminalEventKind.Status -> current.copy(status = AgentStatus.fromWire(data.string("status")))
+            TerminalEventKind.Status -> current.copy(status = AgentStatus.fromWire(statusOf(data["status"])))
             TerminalEventKind.Turn -> current.copy(turn = data.long("turn") ?: current.turn)
             TerminalEventKind.Finished -> current.copy(
                 state = TerminalState.Finished,
@@ -125,26 +122,16 @@ object AgentEventReducer {
     }
 
     /** The terminal from a `created` event's full object, or `null` when the object does not decode. */
-    private fun createdTerminal(address: String, data: JsonObject): Terminal? = try {
-        ResponseJson.decodeFromJsonElement(TerminalWire.serializer(), data).toDomain().copy(address = address)
-    } catch (e: SerializationException) {
-        null
-    }
+    private fun createdTerminal(address: String, data: JsonObject): Terminal? =
+        decodeTerminals(listOf(data)).terminals.firstOrNull()?.copy(address = address)
 
     /**
      * The terminals of a `missed` snapshot, keyed by address, decoded with the subscribe result's wire type (phase 6 P0-5). `null`
      * when the event carries no `terminals` array, or it does not decode: then nothing changes.
      */
     private fun snapshotOf(data: JsonObject): Map<String, Terminal>? {
-        if (data["terminals"] !is JsonArray) return null
-        return try {
-            ResponseJson.decodeFromJsonElement(SubscribeWire.serializer(), data)
-                .terminals
-                .map { it.toDomain() }
-                .associateBy { it.address }
-        } catch (e: SerializationException) {
-            null
-        }
+        val entries = data["terminals"] as? JsonArray ?: return null
+        return decodeTerminals(entries.toList()).terminals.associateBy { it.address }
     }
 
     private fun JsonObject.string(key: String): String? =

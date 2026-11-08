@@ -36,6 +36,12 @@ class FakeCoreDoc(initialValue: JsonObject? = null, initialVersion: Long = 1) {
     /** The home directory `machine.exec` reports for `printenv HOME`. */
     var home: String = "/home/u"
 
+    /**
+     * How many of the next `printenv HOME` reads fail: a timeout with no output, as a probe that did not run cleanly answers. The
+     * read after them answers [home] again.
+     */
+    var homeProbeFailures: Int = 0
+
     /** Folders `terminal.run` cannot start a probe in: hc answers `spawn_failed`. */
     val missingFolders: MutableSet<String> = mutableSetOf()
 
@@ -362,6 +368,20 @@ class FakeCoreDoc(initialValue: JsonObject? = null, initialVersion: Long = 1) {
     private fun machineExec(params: JsonObject): JsonObject? {
         val argv = params["argv"]?.jsonArray?.map { it.jsonPrimitive.content }
         if (argv != listOf("printenv", "HOME")) return null
+        if (homeProbeFailures > 0) {
+            homeProbeFailures--
+            return reply(
+                mapOf<String, JsonElement>(
+                    "code" to JsonPrimitive(124),
+                    "ms" to JsonPrimitive(1),
+                    "signal" to JsonNull,
+                    "stderr" to JsonPrimitive(""),
+                    "stdout" to JsonPrimitive(""),
+                    "timed_out" to JsonPrimitive(true),
+                    "truncated" to JsonPrimitive(false),
+                ),
+            )
+        }
         val stdout = java.util.Base64.getEncoder().encodeToString("$home\n".toByteArray(Charsets.UTF_8))
         return reply(
             mapOf<String, JsonElement>(

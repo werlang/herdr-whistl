@@ -52,10 +52,15 @@ const val MENU_RECONNECT_TAG: String = "menu-reconnect"
 /** The test tag of the Remove machine row of the card menu. */
 const val MENU_REMOVE_TAG: String = "menu-remove"
 
+/** The test tag of the Edit machine row of the card menu. */
+const val MENU_EDIT_TAG: String = "menu-edit"
+
 /**
- * The card menu (SPEC §2.1): Reconnect, which is off while the machine is connecting, and Remove machine, which asks first.
+ * The card menu (SPEC §2.1): Edit machine (phase 7 P2), Reconnect, which is off while the machine is connecting, and Remove
+ * machine, which asks first.
  *
  * @param menu the machine.
+ * @param onEdit called to open the Edit machine sheet.
  * @param onReconnect called to restart the connection.
  * @param onRemove called to ask for the removal.
  * @param onDismiss called when the sheet closes.
@@ -64,6 +69,7 @@ const val MENU_REMOVE_TAG: String = "menu-remove"
 @Composable
 fun MachineMenuSheet(
     menu: MachineMenu,
+    onEdit: () -> Unit = {},
     onReconnect: () -> Unit,
     onRemove: () -> Unit,
     onDismiss: () -> Unit,
@@ -78,6 +84,11 @@ fun MachineMenuSheet(
                 color = LocalWhistlTokens.current.muted,
             )
             Spacer(Modifier.size(8.dp))
+            SheetRow(
+                text = stringResource(R.string.machine_edit),
+                modifier = Modifier.testTag(MENU_EDIT_TAG),
+                onClick = onEdit,
+            )
             SheetRow(
                 text = stringResource(R.string.machine_reconnect),
                 enabled = menu.reconnectEnabled,

@@ -66,6 +66,9 @@ import io.github.werlang.whistl.ui.theme.WhistlTerminalText
 /** The test tag of the Agent screen, so a navigation test can see that it opened. */
 const val AGENT_SCREEN_TAG: String = "agent-screen"
 
+/** The test tag of the terminal output: its lines are separate semantics nodes inside it (phase 7 r6, row 13). */
+const val AGENT_OUTPUT_TAG: String = "agent-output"
+
 /** The test tag of the Agent screen's options sheet (Interrupt, Stop and remove). */
 const val AGENT_MENU_SHEET_TAG: String = "agent-menu-sheet"
 
@@ -214,7 +217,10 @@ private fun AgentHeader(state: AgentUiState, onBack: () -> Unit, onOptions: () -
             }
             StatusLabel(
                 label = stringResource(statusLabelRes(state.statusLabel)),
-                color = if (state.statusLabel == AgentStatusLabel.Finished) LocalWhistlTokens.current.idle else statusColor(state.status),
+                color = when (state.statusLabel) {
+                    AgentStatusLabel.Finished, AgentStatusLabel.Offline -> LocalWhistlTokens.current.idle
+                    else -> statusColor(state.status)
+                },
             )
         }
         IconButton(onClick = onOptions, modifier = Modifier.size(MinTouchTarget)) {
@@ -229,21 +235,27 @@ private fun TerminalOutput(state: AgentUiState, modifier: Modifier) {
     val scroll = rememberScrollState()
     val description = stringResource(R.string.agent_terminal_description)
     LaunchedEffect(state.screenText) { scroll.scrollTo(scroll.maxValue) }
-    Box(
+    val size = fontSizeFor(state.fontSize)
+    // One text per line: a screen reader moves line by line, not through one node holding the whole buffer. The container keeps
+    // its description and does not replace the lines (phase 7 r6, row 13). The look is the same as one text block.
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .background(LocalWhistlTokens.current.terminal)
             .verticalScroll(scroll)
             .padding(12.dp)
+            .testTag(AGENT_OUTPUT_TAG)
             .semantics { contentDescription = description },
     ) {
-        Text(
-            text = state.screenText,
-            fontFamily = WhistlMono,
-            fontSize = fontSizeFor(state.fontSize),
-            lineHeight = fontSizeFor(state.fontSize) * 1.4f,
-            color = WhistlTerminalText,
-        )
+        state.screenText.split('\n').forEach { line ->
+            Text(
+                text = line,
+                fontFamily = WhistlMono,
+                fontSize = size,
+                lineHeight = size * 1.4f,
+                color = WhistlTerminalText,
+            )
+        }
     }
 }
 
@@ -453,4 +465,5 @@ private fun statusLabelRes(label: AgentStatusLabel): Int = when (label) {
     AgentStatusLabel.Error -> R.string.status_error
     AgentStatusLabel.Plain -> R.string.status_plain
     AgentStatusLabel.Finished -> R.string.status_finished
+    AgentStatusLabel.Offline -> R.string.machine_status_offline
 }

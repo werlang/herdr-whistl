@@ -46,8 +46,14 @@ enum class UnresolvableReason {
      */
     BadOutput,
 
-    /** The folder starts with `~`, and the machine's home directory could not be read. */
+    /** The folder starts with `~`, and the machine reported no usable home directory. */
     NoHome,
+
+    /**
+     * The folder starts with `~`, and the home directory could not be read this time (the read did not run cleanly). It is not kept:
+     * the next read of the space tries again.
+     */
+    HomeUnreadable,
 
     /** The folder is blank, or holds a line break or a NUL character. It is never probed (phase 6 P0-9). */
     Invalid,
@@ -130,19 +136,34 @@ class FolderResolver(
 ) {
     private val mutex = Mutex()
     private val results = HashMap<String, FolderResolution>()
-    private var homeRead = false
-    private var home: String? = null
+    private var home: HomeRead? = null
+
+    /**
+     * What the home-directory read found: the path, a machine that reported no usable HOME, or a read that did not run cleanly.
+     * Only the first two are kept for the connection; a failed read is tried again on the next folder (phase 7 r3, row 4).
+     */
+    private sealed interface HomeRead {
+        data class Found(val path: String) : HomeRead
+
+        data object Missing : HomeRead
+
+        data object Failed : HomeRead
+    }
 
     /**
      * Resolves [folder] on this connection.
      *
      * @param folder the folder exactly as typed in the space.
-     * @return the resolution; the same one on every later call on this connection.
+     * @return the resolution; the same one on every later call on this connection, except that a folder whose home directory
+     *   could not be read this time is resolved again on the next call.
      * @throws TransportLost when the connection is lost during the probe. Nothing is remembered for [folder] then.
      */
     suspend fun resolve(folder: String): FolderResolution = mutex.withLock {
         results[folder] ?: compute(folder).also { result ->
-            results[folder] = result
+            // A home directory that could not be read this time is not a verdict: the next call reads it again.
+            if (result !is FolderResolution.Unresolvable || result.reason != UnresolvableReason.HomeUnreadable) {
+                results[folder] = result
+            }
             if (result is FolderResolution.Resolved) cache.put(machineId, folder, result.path)
         }
     }
@@ -155,28 +176,37 @@ class FolderResolver(
             return FolderResolution.Unresolvable(UnresolvableReason.UnsupportedTilde)
         }
         val target = if (tilde) {
-            val home = homeDirectory() ?: return FolderResolution.Unresolvable(UnresolvableReason.NoHome)
-            expandTilde(folder, home)
+            when (val read = homeDirectory()) {
+                is HomeRead.Found -> expandTilde(folder, read.path)
+                HomeRead.Missing -> return FolderResolution.Unresolvable(UnresolvableReason.NoHome)
+                HomeRead.Failed -> return FolderResolution.Unresolvable(UnresolvableReason.HomeUnreadable)
+            }
         } else {
             folder
         }
         return probe(target)
     }
 
-    /** Reads the home directory with a constant argv, once per connection. A failure is remembered as no home. */
-    private suspend fun homeDirectory(): String? {
-        if (!homeRead) {
-            homeRead = true
-            home = try {
-                val exec = client.machineExec(PRINTENV_HOME)
-                if (exec.code == 0 && !exec.timedOut) lastNonBlankLine(exec.stdout)?.takeIf { it.startsWith("/") } else null
-            } catch (e: TransportLost) {
-                throw e
-            } catch (e: HcException) {
-                null
+    /**
+     * Reads the home directory with a constant argv. A clean answer is kept for the connection: a path, or a machine that reports no
+     * usable HOME (`printenv` exits 1 when the variable is not set). A read that did not run cleanly (a timeout, another exit code,
+     * a failed call) is [HomeRead.Failed], and is not kept, because the machine did not say there is no home.
+     */
+    private suspend fun homeDirectory(): HomeRead {
+        home?.let { return it }
+        val read = try {
+            val exec = client.machineExec(PRINTENV_HOME)
+            when {
+                exec.timedOut || (exec.code != 0 && exec.code != PRINTENV_UNSET) -> HomeRead.Failed
+                else -> lastNonBlankLine(exec.stdout)?.takeIf { it.startsWith("/") }?.let { HomeRead.Found(it) } ?: HomeRead.Missing
             }
+        } catch (e: TransportLost) {
+            throw e
+        } catch (e: HcException) {
+            HomeRead.Failed
         }
-        return home
+        if (read !is HomeRead.Failed) home = read
+        return read
     }
 
     /** Runs the probe in [cwd], waits for it, reads its answer, and removes it. */
@@ -265,6 +295,9 @@ class FolderResolver(
 
         /** The home-directory read. A constant argv. */
         private val PRINTENV_HOME: List<String> = listOf("printenv", "HOME")
+
+        /** The exit code of `printenv` when the variable is not set: a machine that has no HOME, not a failed read. */
+        private const val PRINTENV_UNSET: Int = 1
 
         /**
          * `~` or `~/...` with [home] substituted. Trailing slashes on [home] are dropped first, so a home of `/` gives `/x`.

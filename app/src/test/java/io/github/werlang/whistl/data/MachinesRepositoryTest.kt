@@ -2,6 +2,7 @@ package io.github.werlang.whistl.data
 
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.core.secure.SecretStore
+import io.github.werlang.whistl.core.ssh.ECONNREFUSED_ERRNO
 import io.github.werlang.whistl.core.ssh.HostKeyStore
 import io.github.werlang.whistl.core.ssh.KeyManager
 import io.github.werlang.whistl.core.ssh.PinnedHostKey
@@ -10,9 +11,16 @@ import io.github.werlang.whistl.core.ssh.SshWire
 import io.github.werlang.whistl.domain.Rejection
 import io.github.werlang.whistl.support.FakeHostKeyStore
 import io.github.werlang.whistl.support.FakeMachineConnector
+import io.github.werlang.whistl.support.FakeMachineConnector.Attempt
 import io.github.werlang.whistl.support.FakeSecretStore
 import io.github.werlang.whistl.support.InMemoryMachineStore
 import io.github.werlang.whistl.support.assertThrowsSuspend
+import net.schmizz.sshj.common.SSHRuntimeException
+import java.io.IOException
+import java.net.ConnectException
+import java.net.UnknownHostException
+import java.security.NoSuchAlgorithmException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -24,6 +32,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -41,6 +50,9 @@ class MachinesRepositoryTest {
         val secrets: SecretStore = FakeSecretStore()
         val hostKeys: HostKeyStore = FakeHostKeyStore()
         private var counter = 0
+
+        /** What the repository reported for failures inside the app. Each entry must hold class names only. */
+        val internalReports = mutableListOf<String>()
         val repo: MachinesRepository = DefaultMachinesRepository(
             scope = scope.backgroundScope,
             store = store,
@@ -49,6 +61,8 @@ class MachinesRepositoryTest {
             hostKeys = hostKeys,
             connector = connector,
             newId = { "m${++counter}" },
+            errnoOf = { if (it is ConnectException) ECONNREFUSED_ERRNO else null },
+            reportInternal = { internalReports += it },
         )
 
         /**
@@ -100,6 +114,107 @@ class MachinesRepositoryTest {
         assertEquals("0.1.18", (seen.last() as ConnectionState.Connected).hello.version)
         assertEquals(1, h.connector.connectCalls)
         assertNotNull(lease.client())
+    }
+
+    /**
+     * The login works but herdr-core is not installed for it (phase 7 r3): `Error(CoreMissing)`, not Offline. Before the fix the
+     * empty hc answer read as "could not reach the machine" and retried forever.
+     */
+    @Test
+    fun aMissingCoreIsErrorAndIsNotRetriedAutomatically() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.connector.script(FakeMachineConnector.Attempt.Fails(io.github.werlang.whistl.core.rpc.CoreMissing()))
+        val seen = h.record(id)
+
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(listOf("Offline", "Connecting", "Error(CoreMissing)"), seen.kinds())
+
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+        assertEquals(listOf("Offline", "Connecting", "Error(CoreMissing)"), seen.kinds())
+    }
+
+    /**
+     * A failure inside the app (here an `IllegalStateException`) is `Error(Internal)`: not Offline, and not retried, since a
+     * retry would repeat it (phase 7 r1c). Before the fix it was `Offline` with a retry, which read as "could not reach".
+     */
+    @Test
+    fun internalFailureIsErrorAndIsNotRetriedAutomatically() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.connector.script(FakeMachineConnector.Attempt.Fails(IllegalStateException("provider broke")))
+        val seen = h.record(id)
+
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(listOf("Offline", "Connecting", "Error(Internal)"), seen.kinds())
+        assertEquals(listOf("connection failed inside the app: IllegalStateException"), h.internalReports)
+
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+        assertEquals(listOf("Offline", "Connecting", "Error(Internal)"), seen.kinds())
+    }
+
+    /** The failure sshj raises for a missing key-exchange algorithm, as the transport wraps it, is still `Error(Internal)`. */
+    @Test
+    fun providerFailureWrappedByTheTransportIsInternal() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.connector.script(FakeMachineConnector.Attempt.Fails(TransportLost("ssh connection or login failed", sshjProviderFailure())))
+        val seen = h.record(id)
+
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(listOf("Offline", "Connecting", "Error(Internal)"), seen.kinds())
+        assertEquals(1, h.connector.connectCalls)
+        assertEquals(
+            listOf("connection failed inside the app: TransportLost <- IOException <- SSHRuntimeException <- NoSuchAlgorithmException"),
+            h.internalReports,
+        )
+    }
+
+    /** Nothing listens on the port (`ECONNREFUSED`): `Error(ConnectionRefused)`, not retried automatically. */
+    @Test
+    fun refusedPortIsErrorAndIsNotRetriedAutomatically() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.connector.script(FakeMachineConnector.Attempt.Fails(ConnectException("refused")))
+        val seen = h.record(id)
+
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(listOf("Offline", "Connecting", "Error(ConnectionRefused)"), seen.kinds())
+
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+    }
+
+    /** A network failure (here an unknown host) stays `Offline` and retries on its own, as before. */
+    @Test
+    fun networkFailureIsOfflineAndRetriesOnItsOwn() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.connector.script(FakeMachineConnector.Attempt.Fails(UnknownHostException("homelab")))
+        val seen = h.record(id)
+
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(listOf("Offline", "Connecting", "Offline"), seen.kinds())
+
+        advanceTimeBy(10 * 60_000L)
+        runCurrent()
+        assertEquals(2, h.connector.connectCalls)
+        assertEquals(listOf("Offline", "Connecting", "Offline", "Connecting", "Connected"), seen.kinds())
+    }
+
+    /** The chain sshj produces when the key exchange asks the `BC` provider for a missing algorithm (phase 7 r1c). */
+    private fun sshjProviderFailure(): Throwable = IOException("key exchange failed").apply {
+        initCause(SSHRuntimeException("key exchange failed").apply { initCause(NoSuchAlgorithmException("X25519")) })
     }
 
     /** A refused login is `Error(AuthFailed)`; the connector is not called again, even after a long virtual delay. */
@@ -414,5 +529,383 @@ class MachinesRepositoryTest {
 
         assertEquals(listOf("Offline"), seen.kinds())
         assertEquals(0, h.connector.connectCalls)
+    }
+
+    // ---- Edit machine (phase 7 P2). Rules R1–R4 are in MachinesRepository.edit; each has its own test below. ----
+
+    /** R1: a name-only edit is stored in place; the pinned key and the live session are not touched. */
+    @Test
+    fun r1NameOnlyKeepsThePinnedKeyAndTheSession() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.repo.acquire(id)
+        runCurrent()
+        val pinned = h.hostKeys.pinned(id)
+        val opened = h.connector.sessionsOpened
+
+        val result = h.repo.edit(id, NewMachine("renamed", "homelab.example", 22, "root"), AuthMethod.Key)
+
+        assertEquals("renamed", (result as EditResult.Saved).machine.name)
+        assertEquals("renamed", h.repo.machines().value.single().name)
+        assertSame(pinned, h.hostKeys.pinned(id))
+        assertEquals(opened, h.connector.sessionsOpened)
+        assertEquals(0, h.connector.sessionsClosed)
+        assertEquals(1, h.connector.connectCalls)
+        assertTrue(h.repo.observe(id).value is ConnectionState.Connected)
+    }
+
+    /** R2: a user or port change keeps the pinned key, closes the session and reconnects with the new settings. */
+    @Test
+    fun r2UserOrPortChangeKeepsThePinnedKeyAndReconnects() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.repo.acquire(id)
+        runCurrent()
+        val pinned = h.hostKeys.pinned(id)
+
+        h.repo.edit(id, NewMachine("", "homelab.example", 2222, "admin"), AuthMethod.Key)
+        runCurrent()
+
+        assertSame(pinned, h.hostKeys.pinned(id))
+        assertEquals(1, h.connector.sessionsClosed)
+        assertEquals(2, h.connector.connectCalls)
+        assertEquals(2222, h.repo.machines().value.single().port)
+        assertEquals("admin", h.repo.machines().value.single().user)
+        assertTrue(h.repo.observe(id).value is ConnectionState.Connected)
+    }
+
+    /**
+     * P7R8 item 1: a key that is pending on the old port is forgotten when the port changes. The new port presents its own key,
+     * and that is the key the card offers and Trust pins.
+     */
+    @Test
+    fun aPendingKeyIsForgottenWhenThePortChanges() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab(pinned = false)
+        h.repo.acquire(id)
+        runCurrent()
+        assertEquals(
+            ConnectionState.HostKeyUnknown(SshWire.ED25519, SshFingerprint.of(h.connector.defaultKey)),
+            h.repo.observe(id).value,
+        )
+
+        val newPortKey = SshWire.ed25519Blob(ByteArray(32) { 2 })
+        // The restart and the connection after Trust both present the new port's key.
+        h.connector.script(Attempt.PresentKey(newPortKey), Attempt.PresentKey(newPortKey))
+        h.repo.edit(id, NewMachine("", "homelab.example", 2222, "root"), AuthMethod.Key)
+        runCurrent()
+
+        assertEquals(
+            ConnectionState.HostKeyUnknown(SshWire.ED25519, SshFingerprint.of(newPortKey)),
+            h.repo.observe(id).value,
+        )
+        assertNull(h.hostKeys.pinned(id))
+        assertEquals(ConfirmResult.Trusted, h.repo.confirmHostKey(id))
+        runCurrent()
+        assertEquals(PinnedHostKey(SshWire.ED25519, newPortKey), h.hostKeys.pinned(id))
+        assertTrue(h.repo.observe(id).value is ConnectionState.Connected)
+    }
+
+    /**
+     * P7R8 item 1: a changed key stays blocked when the port changes. The restart compares the new port's key with the pin: a
+     * different key is blocked again, and nothing is re-pinned.
+     */
+    @Test
+    fun aChangedKeyStaysBlockedAfterAPortChangeAndIsNeverRepinned() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab(pinned = false)
+        val pinned = SshWire.ed25519Blob(ByteArray(32) { 9 })
+        h.hostKeys.pin(id, PinnedHostKey(SshWire.ED25519, pinned))
+        h.repo.acquire(id)
+        runCurrent()
+        assertTrue(h.repo.observe(id).value is ConnectionState.HostKeyChanged)
+        val connectsBefore = h.connector.connectCalls
+
+        h.repo.edit(id, NewMachine("", "homelab.example", 2222, "root"), AuthMethod.Key)
+        runCurrent()
+
+        assertEquals(connectsBefore + 1, h.connector.connectCalls)
+        assertEquals(
+            ConnectionState.HostKeyChanged(
+                SshWire.ED25519,
+                SshFingerprint.of(pinned),
+                SshFingerprint.of(h.connector.defaultKey),
+            ),
+            h.repo.observe(id).value,
+        )
+        assertEquals(0, h.connector.helloCalls)
+        assertEquals(PinnedHostKey(SshWire.ED25519, pinned), h.hostKeys.pinned(id))
+    }
+
+    /** P7R8 item 1: a changed key on the old port connects on the new port when the new port presents the pinned key. */
+    @Test
+    fun aChangedKeyClearsWhenTheNewPortPresentsThePinnedKey() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab(pinned = false)
+        val pinned = SshWire.ed25519Blob(ByteArray(32) { 9 })
+        h.hostKeys.pin(id, PinnedHostKey(SshWire.ED25519, pinned))
+        h.repo.acquire(id)
+        runCurrent()
+        assertTrue(h.repo.observe(id).value is ConnectionState.HostKeyChanged)
+
+        h.connector.script(Attempt.PresentKey(pinned))
+        h.repo.edit(id, NewMachine("", "homelab.example", 2222, "root"), AuthMethod.Key)
+        runCurrent()
+
+        assertTrue(h.repo.observe(id).value is ConnectionState.Connected)
+        assertEquals(PinnedHostKey(SshWire.ED25519, pinned), h.hostKeys.pinned(id))
+    }
+
+    /**
+     * P7R8 item 1: a pending key is kept when only the user changes. The same port presents the same key, so no restart runs
+     * and Trust still pins the key that was shown.
+     */
+    @Test
+    fun aPendingKeyStaysPendingWhenOnlyTheUserChanges() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab(pinned = false)
+        h.repo.acquire(id)
+        runCurrent()
+        val connectsBefore = h.connector.connectCalls
+
+        h.repo.edit(id, NewMachine("", "homelab.example", 22, "admin"), AuthMethod.Key)
+        runCurrent()
+
+        assertEquals(connectsBefore, h.connector.connectCalls)
+        assertEquals(
+            ConnectionState.HostKeyUnknown(SshWire.ED25519, SshFingerprint.of(h.connector.defaultKey)),
+            h.repo.observe(id).value,
+        )
+        assertEquals(ConfirmResult.Trusted, h.repo.confirmHostKey(id))
+        runCurrent()
+        assertEquals(PinnedHostKey(SshWire.ED25519, h.connector.defaultKey), h.hostKeys.pinned(id))
+    }
+
+    /** R2: a login-method change to password reconnects and keeps the pinned key; the saved password is stored. */
+    @Test
+    fun r2LoginMethodChangeToPasswordReconnectsAndKeepsThePin() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.repo.acquire(id)
+        runCurrent()
+        val pinned = h.hostKeys.pinned(id)
+
+        h.repo.edit(id, NewMachine("", "homelab.example", 22, "root"), AuthMethod.Password, "secret".toCharArray())
+        runCurrent()
+
+        assertSame(pinned, h.hostKeys.pinned(id))
+        assertEquals(2, h.connector.connectCalls)
+        assertEquals(AuthMethod.Password, h.repo.authOf(id))
+        assertEquals("secret", String(h.secrets.get(DefaultMachinesRepository.passwordAlias(id))!!))
+    }
+
+    /** R3: a host change forgets the pin, and the next connection shows the new host's key for confirmation. */
+    @Test
+    fun r3HostChangeForgetsThePinAndRequiresFirstConfirmation() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        val newKey = SshWire.ed25519Blob(ByteArray(32) { 9 })
+        h.repo.acquire(id)
+        runCurrent()
+        assertTrue(h.repo.observe(id).value is ConnectionState.Connected)
+
+        // The new host presents its own key on the next connection.
+        h.connector.script(FakeMachineConnector.Attempt.PresentKey(newKey))
+        h.repo.edit(id, NewMachine("", "new.example", 22, "root"), AuthMethod.Key)
+        runCurrent()
+
+        assertNull(h.hostKeys.pinned(id))
+        val unknown = h.repo.observe(id).value as ConnectionState.HostKeyUnknown
+        assertEquals(SshFingerprint.of(newKey), unknown.fingerprint)
+
+        // After Trust the same host presents the same key again: the connection goes through.
+        h.connector.script(FakeMachineConnector.Attempt.PresentKey(newKey))
+        assertEquals(ConfirmResult.Trusted, h.repo.confirmHostKey(id))
+        runCurrent()
+        assertTrue(h.repo.observe(id).value is ConnectionState.Connected)
+        assertTrue(h.hostKeys.pinned(id)!!.blob.contentEquals(newKey))
+    }
+
+    /**
+     * R3, cancelled: the confirmation is not given. The machine keeps the new host, has no pinned key, and has no session. It
+     * stays in the host-key state until the user trusts the key, or removes the machine (the decision stated in the report).
+     */
+    @Test
+    fun r3CancelledConfirmationLeavesTheNewHostWithoutAPinOrASession() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.repo.acquire(id)
+        runCurrent()
+
+        h.connector.script(FakeMachineConnector.Attempt.PresentKey(SshWire.ed25519Blob(ByteArray(32) { 9 })))
+        h.repo.edit(id, NewMachine("", "new.example", 22, "root"), AuthMethod.Key)
+        runCurrent()
+
+        assertEquals("new.example", h.repo.machines().value.single().host)
+        assertNull(h.hostKeys.pinned(id))
+        assertEquals(0, h.openSessions())
+        assertTrue(h.repo.observe(id).value is ConnectionState.HostKeyUnknown)
+    }
+
+    /** R4: an edit keeps the machine's id and the machine count, so its spaces (keyed by id) stay with it. */
+    @Test
+    fun r4EditKeepsTheIdAndTheMachineCount() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.repo.acquire(id)
+        runCurrent()
+
+        h.repo.edit(id, NewMachine("box", "other.example", 22, "root"), AuthMethod.Key)
+        runCurrent()
+
+        assertEquals(1, h.repo.machines().value.size)
+        assertEquals(id, h.repo.machines().value.single().id)
+    }
+
+    /** A rejected edit changes nothing: the stored machine, the pin and the connections stay as they were. */
+    @Test
+    fun aRejectedEditChangesNothing() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        val before = h.repo.machines().value.single()
+
+        val result = h.repo.edit(id, NewMachine("", "", 22, "root"), AuthMethod.Key)
+
+        assertEquals(EditResult.Rejected(MachineField.Host, Rejection.EMPTY), result)
+        assertEquals(before, h.repo.machines().value.single())
+        assertEquals(0, h.connector.connectCalls)
+    }
+
+    /** Switching to password login with no password, and none saved, is rejected; a blank password on a saved one keeps it. */
+    @Test
+    fun aPasswordIsRequiredOnlyWhenNoneIsSaved() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+
+        val needsOne = h.repo.edit(id, NewMachine("", "homelab.example", 22, "root"), AuthMethod.Password, null)
+        assertEquals(EditResult.Rejected(MachineField.Password, Rejection.EMPTY), needsOne)
+        assertEquals(AuthMethod.Key, h.repo.authOf(id))
+
+        h.repo.edit(id, NewMachine("", "homelab.example", 22, "root"), AuthMethod.Password, "first".toCharArray())
+        val kept = h.repo.edit(id, NewMachine("", "homelab.example", 22, "root"), AuthMethod.Password, null)
+        assertEquals(EditResult.Saved(h.repo.machines().value.single()), kept)
+        assertEquals("first", String(h.secrets.get(DefaultMachinesRepository.passwordAlias(id))!!))
+
+        h.repo.edit(id, NewMachine("", "homelab.example", 22, "root"), AuthMethod.Password, "second".toCharArray())
+        assertEquals("second", String(h.secrets.get(DefaultMachinesRepository.passwordAlias(id))!!))
+
+        h.repo.edit(id, NewMachine("", "homelab.example", 22, "root"), AuthMethod.Key, null)
+        assertNull(h.secrets.get(DefaultMachinesRepository.passwordAlias(id)))
+    }
+
+    /**
+     * P2 follow-up: an attempt to the old host is in flight (held inside connect, before its host key is checked) when an edit
+     * changes the host. The old attempt then completes with a refusal carrying the old host's key. That refusal must not reach
+     * the slot: the state never shows the old key, and confirming the new host pins the new key, never the old one.
+     */
+    @Test
+    fun aStaleRefusalFromTheOldHostCannotLeakItsKeyIntoTheNewHost() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab(pinned = false)
+        val oldKey = SshWire.ed25519Blob(ByteArray(32) { 7 })
+        val newKey = SshWire.ed25519Blob(ByteArray(32) { 9 })
+        val release = CompletableDeferred<Unit>()
+        h.connector.script(
+            FakeMachineConnector.Attempt.Suspended(release, FakeMachineConnector.Attempt.PresentKey(oldKey), beforeHostKey = true),
+            FakeMachineConnector.Attempt.PresentKey(newKey),
+        )
+        val seen = h.record(id)
+        h.repo.acquire(id)
+        runCurrent()
+
+        h.repo.edit(id, NewMachine("", "new.example", 22, "root"), AuthMethod.Key)
+        runCurrent()
+        assertEquals(SshFingerprint.of(newKey), (h.repo.observe(id).value as ConnectionState.HostKeyUnknown).fingerprint)
+
+        release.complete(Unit)
+        runCurrent()
+
+        val oldFingerprint = SshFingerprint.of(oldKey)
+        assertTrue("the old key was shown: ${seen.kinds()}", seen.none { it is ConnectionState.HostKeyUnknown && it.fingerprint == oldFingerprint })
+        assertEquals(SshFingerprint.of(newKey), (h.repo.observe(id).value as ConnectionState.HostKeyUnknown).fingerprint)
+        h.connector.script(FakeMachineConnector.Attempt.PresentKey(newKey))
+        assertEquals(ConfirmResult.Trusted, h.repo.confirmHostKey(id))
+        runCurrent()
+        assertTrue(h.hostKeys.pinned(id)!!.blob.contentEquals(newKey))
+    }
+
+    /**
+     * P2 follow-up, the late success: an attempt to the old host passes its host-key check against the old pin, is held before its
+     * session opens, and the edit then changes the host. When the old attempt completes, its session must be closed, not adopted:
+     * the slot stays on the new host's state, and no session stays open.
+     */
+    @Test
+    fun aLateSuccessOfTheOldHostIsClosedNotAdopted() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab(pinned = true)
+        val newKey = SshWire.ed25519Blob(ByteArray(32) { 9 })
+        val release = CompletableDeferred<Unit>()
+        h.connector.script(
+            FakeMachineConnector.Attempt.Suspended(release, FakeMachineConnector.Attempt.Healthy, beforeHostKey = false),
+            FakeMachineConnector.Attempt.PresentKey(newKey),
+        )
+        h.repo.acquire(id)
+        runCurrent()
+
+        h.repo.edit(id, NewMachine("", "new.example", 22, "root"), AuthMethod.Key)
+        runCurrent()
+        assertTrue(h.repo.observe(id).value is ConnectionState.HostKeyUnknown)
+
+        release.complete(Unit)
+        runCurrent()
+
+        assertTrue("the old session was adopted: ${h.repo.observe(id).value}", h.repo.observe(id).value is ConnectionState.HostKeyUnknown)
+        assertEquals(0, h.openSessions())
+        assertNull(h.hostKeys.pinned(id))
+    }
+
+    /**
+     * Reconnect on a connected machine restarts the session (phase 7 r5 amendment U2): the old session closes, the state goes
+     * Connecting and then Connected again, and one new connection is made. Before the fix Reconnect was a no-op here.
+     */
+    @Test
+    fun reconnectWhileConnectedClosesTheSessionAndConnectsAgain() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        val lease = h.repo.acquire(id)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+        val seen = h.record(id)
+
+        h.repo.reconnect(id)
+        runCurrent()
+
+        assertEquals(2, h.connector.connectCalls)
+        assertEquals(1, h.connector.sessionsClosed)
+        assertEquals(1, h.openSessions())
+        assertEquals(listOf("Connected", "Connecting", "Connected"), seen.kinds())
+        assertNotNull(lease.client())
+    }
+
+    /**
+     * Reconnect while offline makes one immediate attempt, not a wait for the next backoff (phase 7 r5 amendment U2): the
+     * scheduled retry is replaced, and the attempt runs without advancing virtual time.
+     */
+    @Test
+    fun reconnectWhileOfflineMakesOneImmediateAttempt() = runTest {
+        val h = Harness(this)
+        val id = h.addHomelab()
+        h.connector.script(FakeMachineConnector.Attempt.Unreachable)
+        val lease = h.repo.acquire(id)
+        runCurrent()
+        assertEquals(1, h.connector.connectCalls)
+        val seen = h.record(id)
+
+        h.repo.reconnect(id)
+        runCurrent()
+
+        assertEquals(2, h.connector.connectCalls)
+        assertEquals(listOf("Offline", "Connecting", "Connected"), seen.kinds())
+        assertNotNull(lease.client())
     }
 }

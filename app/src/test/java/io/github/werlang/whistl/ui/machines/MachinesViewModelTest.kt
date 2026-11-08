@@ -92,6 +92,9 @@ class MachinesViewModelTest {
             ConnectionState.Offline to (MachineStatus.Offline to null),
             ConnectionState.Error(ErrorKind.AuthFailed) to (MachineStatus.Error to MachineIssue.LoginRefused),
             ConnectionState.Error(ErrorKind.UnsupportedGeneration) to (MachineStatus.Error to MachineIssue.UnsupportedCore),
+            ConnectionState.Error(ErrorKind.ConnectionRefused) to (MachineStatus.Error to MachineIssue.ConnectionRefused),
+            ConnectionState.Error(ErrorKind.Internal) to (MachineStatus.Error to MachineIssue.Internal),
+            ConnectionState.Error(ErrorKind.CoreMissing) to (MachineStatus.Error to MachineIssue.CoreMissing),
             ConnectionState.HostKeyUnknown("ssh-ed25519", "SHA256:new") to (MachineStatus.Error to MachineIssue.HostKeyToConfirm),
             ConnectionState.HostKeyChanged("ssh-ed25519", "SHA256:old", "SHA256:new") to
                 (MachineStatus.Error to MachineIssue.HostKeyChanged),
@@ -359,5 +362,37 @@ class MachinesViewModelTest {
         runCurrent()
 
         assertEquals(MachinesProblem.MachineMissing, vm.state.value.problem)
+    }
+
+    /** Edit machine opens its sheet for the machine, the card menu closes, and each Edit gets a new session number. */
+    @Test
+    fun editOpensTheSheetForItsMachineAndClosesTheMenu() {
+        val machines = ScriptedMachines()
+        machines.put(machine("m1"), ConnectionState.Offline)
+        val vm = model(machines)
+        vm.openMenu("m1")
+
+        vm.openEdit("m1")
+        val first = present(vm.state.value.edit)
+        assertEquals("m1", first.machineId)
+        assertNull(vm.state.value.menu)
+
+        vm.closeEdit()
+        assertNull(vm.state.value.edit)
+        vm.openEdit("m1")
+        assertTrue(present(vm.state.value.edit).session > first.session)
+    }
+
+    /** While the Edit sheet is open, a card's host-key sheet waits, as it does for the Add sheet. */
+    @Test
+    fun theHostKeySheetWaitsWhileTheEditSheetIsOpen() {
+        val machines = ScriptedMachines()
+        machines.put(machine("m1"), ConnectionState.HostKeyUnknown("ssh-ed25519", "SHA256:x"))
+        val vm = model(machines)
+        assertNotNull(vm.state.value.hostKey)
+
+        vm.openEdit("m1")
+
+        assertNull(vm.state.value.hostKey)
     }
 }

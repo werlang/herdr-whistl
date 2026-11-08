@@ -32,8 +32,35 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    SSH key mode shows this device's public key with a Copy button and the
    hint "add it to ~/.ssh/authorized_keys". Connect → first-connection
    host-key confirmation (algorithm + SHA256 fingerprint) → Trust and connect →
-   detection of installed agents. Card menu: Reconnect, Remove (confirm; spaces
-   of that machine leave the app, agents keep running there).
+   detection of installed agents. Card menu: Edit machine, Reconnect, Remove
+   (confirm; spaces of that machine leave the app, agents keep running there).
+   Reconnect restarts the session: a connected machine's session is closed and
+   connected again (connecting → connected); an offline machine makes one
+   immediate attempt (phase 7 r5).
+   **Edit machine** (phase 7 P2) opens the Add machine sheet prefilled with the
+   stored name, host, user, port and login method, titled "Edit machine", with
+   Save in place of Connect. The saved password is never shown: a blank password
+   field keeps the saved one. Save is enabled only when a field differs from the
+   stored machine, and disabled again when it is typed back. Four rules, as
+   implemented in `MachinesRepository.edit`:
+   - **R1, name only:** stored in place. The pinned host key and the live session
+     are not touched.
+   - **R2, user, port, login method or a new password:** the pinned host key is
+     kept (same host, same key). The session closes and reconnects with the new
+     settings when the machine is held. A machine waiting for a host-key decision,
+     or blocked by a changed key, keeps that state until the user decides. A port
+     change is the exception: the new port presents its own key, so the connection
+     starts again and that key is compared with the pin. A pending key is asked
+     again, a changed key is blocked again, and nothing is re-pinned (phase 7 r8).
+   - **R3, host:** the pinned host key is forgotten and the session closes. The
+     next connection goes through first-connection confirmation again, with the
+     new host's fingerprint. The old host's fingerprint is never compared with, or
+     saved for, the new host. A changed-key block is cleared, since its key was the
+     old host's. Cancelling the confirmation leaves the new host with no pin and no
+     session, in the host-key state until the user trusts the key or removes the
+     machine.
+   - **R4, identity:** the machine keeps its id and the machine count is unchanged,
+     so its spaces (keyed by machine id) stay listed under it.
 2. **Spaces** — grouped by machine, pinned first, then user order. Row: name,
    status dots per agent, "waiting" badge if any agent is blocked,
    `N agents · folder`. Offline machine → group subtitle "offline", rows dimmed.
@@ -50,8 +77,13 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    screen, a one-line status bar `[machine] space · agent    status`, then a
    horizontally scrolling **shortcut key bar**, then a text field + Send.
    Typed text is sent to the terminal (Send = text + Enter). `Ctrl` is a
-   sticky modifier: armed, the next key or first typed character is sent with
-   Ctrl. Menu: Interrupt (Ctrl+C), Stop and remove.
+   sticky modifier: armed, the next bar key is sent with Ctrl (`ctrl+<key>`).
+   Typing only inserts and keeps Ctrl armed. Send never applies Ctrl: the text
+   goes out plainly and clears the latch (phase 7 r5 amendment U3). Menu:
+   Interrupt (Ctrl+C), Stop and remove. While the machine has no connection
+   (offline or connecting), the screen keeps the agent's last known status and
+   space and its status bar says `offline`; it says `finished` only when the
+   core reported the program finished (phase 7 r7).
 6. **Settings** — General: Language (System / English / Português), terminal
    font size (S/M/L), theme (System / Dark / Light). Shortcut keys: list in bar
    order with move up / move down / remove, "Add key" sheet listing the keys
@@ -131,10 +163,25 @@ backs Compose previews, screenshot tests and a debug-only "demo mode".
   with `type` ∈ created, lost, restarted, keep, finished, removed, status,
   turn, title, labels, size, doc; `heartbeat` every 15 s; `missed` + new
   snapshot if the subscriber fell behind. No heartbeat for 40 s ⇒ connection dead.
+  A failed subscription on a connected machine is retried on the same connection,
+  with a backoff from 1 s doubling to 30 s; the backoff resets only after the
+  subscription has stayed up for 30 s. When the machine leaves `Connected`, its
+  agents leave the list and a pending retry is cancelled (phase 7 r8).
 - `terminal.list {labels?, all?}` → `{terminals, machines, hidden_finished}`.
 - `terminal.run {argv, cwd, labels, keep?, no_parent:true, no_notify:true}` →
   Terminal (has `address`). The app always passes `no_parent` and `no_notify`.
-- `terminal.read {terminal, lines}` → `{text, complete, how}`.
+- `terminal.read {terminal, lines}` → `{text, complete, how}`: plain text, no
+  colour and no cell attributes. Colour and live resize are **not supported in
+  v0.1.x**: they need `terminal.attach` (a raw framed stream with cols/rows and
+  resize notifications) and a VT emulator, a phase of its own (report F1).
+- `terminal.run` has no size parameter in hc 0.1.14 (`rpc.discover`); every
+  terminal is created at the core's 200×120. The app cannot size it.
+- `terminal.list` and `events.subscribe` decode each terminal entry on its own:
+  an entry that does not decode is skipped and counted (class name in the log),
+  the others are kept. `status` is a string, or for an agent the object
+  `{"app":"claude-code","state":"idle"}`; the app reads its `state` (phase 7
+  r5 U4). Fixtures: `events_snapshot_agent_status.json`,
+  `terminal_list_agent_status.json`.
 - `terminal.send {terminal, text}` pastes text and presses Enter.
 - `terminal.keys {terminal, keys:["ctrl+c","up","enter","esc","tab",…]}`.
 - `terminal.interrupt`, `terminal.kill`, `terminal.rm`, `terminal.label`.
@@ -179,8 +226,28 @@ Unknown fields are preserved on write (round-trip `JsonObject`).
 - Release build: R8 minify + resource shrinking, `debuggable=false`,
   cleartext disabled by network security config, `FLAG_SECURE` optional
   setting is out of scope.
+- SSH crypto provider: sshj uses the bundled BouncyCastle, under the name `BC`,
+  on every API level (`minSdk` stays 26). It is inserted at position 1, which
+  replaces the platform's own `BC`: a stripped copy with no X25519, so sshj's
+  key exchange (`curve25519-sha256`) cannot run on it (phase 7 r1c).
+- Connection failures are classified by their cause, not their message (see
+  `core/ssh/FailureStage.kt`). Only a network failure is "could not reach the
+  machine", and it goes offline with a retry. A refused port, a login refusal,
+  an unsupported core and a failure inside the app are errors that do not retry
+  on their own. A failure inside the app is never shown as "could not reach".
+- A missing `hc` on the login (the `hc` channel exits with status 127, "command
+  not found") is `CoreMissing`: "herdr-core not found", an error with no automatic
+  retry, and the install hint (phase 7 r3). The status is read after a bounded
+  wait of 2 s, since it can arrive after the end of the stream (phase 7 r8).
+- A failed `printenv HOME` probe for a space is `HomeUnreadable` ("Could not read
+  the machine’s home folder just now. It is tried again the next time the space
+  is read."): it is not remembered for the connection, so the next read tries again. Only a real empty HOME is "no home", which is kept for the
+  connection (phase 7 r4).
 - Logs: a `Log` wrapper that is a no-op in release; never log terminal text,
-  hosts or credentials.
+  hosts or credentials. Because release logs nothing, a release build cannot
+  diagnose a failure inside the SSH stack: the failure stage the user sees is the
+  only signal there. The internal-failure log line holds class names only, in
+  debug builds.
 
 ## 7. i18n
 
@@ -208,6 +275,6 @@ Codex…) and key glyphs (Esc, ↑) are not translated.
 
 ## 9. As built
 
-Implementation choices that this spec does not pin down (tilde resolution, BouncyCastle below API
-33, the recorded `terminal.interrupt` fixture, screenshot platform, release signing) are recorded
+Implementation choices that this spec does not pin down (tilde resolution, the bundled BouncyCastle
+as the SSH provider on every API level, the recorded `terminal.interrupt` fixture, screenshot platform, release signing) are recorded
 in `docs/IMPLEMENTATION-NOTES.md`. Contributions follow `CONTRIBUTING.md`.

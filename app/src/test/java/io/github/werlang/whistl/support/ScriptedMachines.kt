@@ -4,9 +4,11 @@ import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.data.AddResult
 import io.github.werlang.whistl.data.AgentsRepository
+import io.github.werlang.whistl.data.AuthMethod
 import io.github.werlang.whistl.data.ClientPublicKey
 import io.github.werlang.whistl.data.ConfirmResult
 import io.github.werlang.whistl.data.ConnectionState
+import io.github.werlang.whistl.data.EditResult
 import io.github.werlang.whistl.data.InstalledAgentsRepository
 import io.github.werlang.whistl.data.MachineAgent
 import io.github.werlang.whistl.data.MachineLease
@@ -65,15 +67,35 @@ class ScriptedMachines : MachinesRepository {
     /** What [add] answers; `null` for the default, which adds the machine offline. */
     var addAnswer: ((NewMachine) -> AddResult)? = null
 
+    /** The edits [edit] received, in order. */
+    val edits = mutableListOf<EditCall>()
+
+    /** What [edit] answers; `null` for the default, which saves the edit and keeps the id. */
+    var editAnswer: ((EditCall) -> EditResult)? = null
+
+    private val auths = mutableMapOf<String, AuthMethod>()
+
+    /**
+     * One call to [edit], as the view model made it.
+     *
+     * @property id the machine.
+     * @property draft the values as typed.
+     * @property auth the login method after the edit.
+     * @property passwordGiven whether a new password was given.
+     */
+    data class EditCall(val id: String, val draft: NewMachine, val auth: AuthMethod, val passwordGiven: Boolean)
+
     /**
      * Puts a machine in the list, in a state.
      *
      * @param machine the machine.
      * @param state its state.
+     * @param auth how the machine logs in.
      */
-    fun put(machine: Machine, state: ConnectionState) {
+    fun put(machine: Machine, state: ConnectionState, auth: AuthMethod = AuthMethod.Key) {
         list.update { it + machine }
         states[machine.id] = MutableStateFlow(state)
+        auths[machine.id] = auth
     }
 
     /**
@@ -87,6 +109,23 @@ class ScriptedMachines : MachinesRepository {
     }
 
     override fun machines(): StateFlow<List<Machine>> = list
+
+    override fun authOf(id: String): AuthMethod = auths[id] ?: throw NoSuchElementException("no machine with id $id")
+
+    override suspend fun edit(id: String, draft: NewMachine, auth: AuthMethod, password: CharArray?): EditResult {
+        if (!states.containsKey(id)) throw NoSuchElementException("no machine with id $id")
+        val call = EditCall(id, draft, auth, password != null)
+        edits += call
+        val answer = editAnswer?.invoke(call) ?: EditResult.Saved(
+            Machine(id = id, name = draft.name, host = draft.host, port = draft.port, user = draft.user),
+        )
+        if (answer is EditResult.Saved) {
+            // As the real repository does: the stored machine takes the edited values, under the same id.
+            list.update { current -> current.map { if (it.id == id) answer.machine else it } }
+            auths[id] = auth
+        }
+        return answer
+    }
 
     override fun observe(id: String): StateFlow<ConnectionState> =
         states[id] ?: throw NoSuchElementException("no machine with id $id")
@@ -102,7 +141,7 @@ class ScriptedMachines : MachinesRepository {
             port = draft.port,
             user = draft.user,
         )
-        put(machine, ConnectionState.Offline)
+        put(machine, ConnectionState.Offline, if (password == null) AuthMethod.Key else AuthMethod.Password)
         return AddResult.Added(machine)
     }
 

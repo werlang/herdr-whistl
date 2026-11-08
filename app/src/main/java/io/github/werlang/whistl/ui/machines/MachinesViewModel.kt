@@ -47,6 +47,15 @@ enum class MachineIssue {
 
     /** The machine presented a key other than the trusted one. */
     HostKeyChanged,
+
+    /** Nothing listens on the SSH port of the machine (the host answered). */
+    ConnectionRefused,
+
+    /** The connection failed inside the app, not on the network. */
+    Internal,
+
+    /** The login worked, but herdr-core is not installed for it on the machine. */
+    CoreMissing,
 }
 
 /**
@@ -155,6 +164,7 @@ enum class MachinesProblem {
  * @property hostKey the host-key sheet to show, or `null`.
  * @property addSession the Add machine sheet's session, or `null` when it is closed. A new session is a new form.
  * @property problem the problem the last action reported, or `null`.
+ * @property edit the Edit machine sheet, or `null` when it is closed.
  */
 data class MachinesUiState(
     val cards: List<MachineCard>,
@@ -163,13 +173,23 @@ data class MachinesUiState(
     val hostKey: HostKeyPrompt?,
     val addSession: Int?,
     val problem: MachinesProblem? = null,
+    val edit: EditSession? = null,
 )
+
+/**
+ * One Edit machine session: the machine, and a session number so a new session starts with a fresh form.
+ *
+ * @property machineId the machine being edited.
+ * @property session the session number.
+ */
+data class EditSession(val machineId: String, val session: Int)
 
 /** The sheets the Machines screen can have open, and what the user dismissed. */
 private data class Sheets(
     val menuFor: String? = null,
     val removeFor: String? = null,
     val addSession: Int? = null,
+    val editFor: EditSession? = null,
     val dismissed: Map<String, ConnectionState> = emptyMap(),
     val problem: MachinesProblem? = null,
 )
@@ -224,7 +244,7 @@ class MachinesViewModel(
                 reconnectEnabled = state !is ConnectionState.Connecting,
             )
         }
-        val hostKeyPrompt = if (open.menuFor != null || open.removeFor != null || open.addSession != null) {
+        val hostKeyPrompt = if (open.menuFor != null || open.removeFor != null || open.addSession != null || open.editFor != null) {
             null
         } else {
             list.firstNotNullOfOrNull { machine ->
@@ -240,6 +260,7 @@ class MachinesViewModel(
             hostKey = hostKeyPrompt,
             addSession = open.addSession,
             problem = open.problem,
+            edit = open.editFor,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, MachinesUiState(emptyList(), null, null, null, null))
 
@@ -338,6 +359,20 @@ class MachinesViewModel(
         sheets.value = sheets.value.copy(addSession = null)
     }
 
+    /**
+     * Opens the Edit machine sheet for a machine, prefilled with its stored values (phase 7 P2). The card menu closes.
+     *
+     * @param id the machine.
+     */
+    fun openEdit(id: String) {
+        sheets.value = sheets.value.copy(menuFor = null, editFor = EditSession(id, nextSession++), problem = null)
+    }
+
+    /** Closes the Edit machine sheet. */
+    fun closeEdit() {
+        sheets.value = sheets.value.copy(editFor = null)
+    }
+
     /** The machine's connection state, or `null` when the machine is no longer added. */
     private fun connectionOf(id: String): ConnectionState? = try {
         machines.observe(id).value
@@ -376,6 +411,9 @@ internal fun classify(state: ConnectionState): Pair<MachineStatus, MachineIssue?
     is ConnectionState.Error -> MachineStatus.Error to when (state.kind) {
         ErrorKind.AuthFailed -> MachineIssue.LoginRefused
         ErrorKind.UnsupportedGeneration -> MachineIssue.UnsupportedCore
+        ErrorKind.ConnectionRefused -> MachineIssue.ConnectionRefused
+        ErrorKind.Internal -> MachineIssue.Internal
+        ErrorKind.CoreMissing -> MachineIssue.CoreMissing
     }
     is ConnectionState.HostKeyUnknown -> MachineStatus.Error to MachineIssue.HostKeyToConfirm
     is ConnectionState.HostKeyChanged -> MachineStatus.Error to MachineIssue.HostKeyChanged

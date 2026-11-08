@@ -1,10 +1,13 @@
 package io.github.werlang.whistl.data
 
 import io.github.werlang.whistl.core.rpc.AuthFailed
+import io.github.werlang.whistl.core.rpc.CoreMissing
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.core.rpc.UnsupportedGeneration
 import io.github.werlang.whistl.core.secure.SecretStore
+import io.github.werlang.whistl.core.log.Log
+import io.github.werlang.whistl.core.ssh.FailureStage
 import io.github.werlang.whistl.core.ssh.HostKeyDecision
 import io.github.werlang.whistl.core.ssh.HostKeyGate
 import io.github.werlang.whistl.core.ssh.HostKeyPolicy
@@ -12,6 +15,9 @@ import io.github.werlang.whistl.core.ssh.HostKeyRefused
 import io.github.werlang.whistl.core.ssh.HostKeyStore
 import io.github.werlang.whistl.core.ssh.KeyManager
 import io.github.werlang.whistl.core.ssh.MachineConnector
+import io.github.werlang.whistl.core.ssh.androidErrno
+import io.github.werlang.whistl.core.ssh.classChain
+import io.github.werlang.whistl.core.ssh.failureStage
 import io.github.werlang.whistl.core.ssh.MachineSession
 import io.github.werlang.whistl.core.ssh.PresentedHostKey
 import io.github.werlang.whistl.core.ssh.SshAuth
@@ -42,7 +48,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Transitions:
  * - first [acquire]: `Offline` → `Connecting` → `Connected`, or one of the other states below.
- * - [ConnectionState.Error] with `AuthFailed` or `UnsupportedGeneration`: no automatic retry. A later [acquire] tries once.
+ * - [ConnectionState.Error] with `AuthFailed`, `UnsupportedGeneration`, `ConnectionRefused` or `Internal`: no automatic retry.
+ *   A later [acquire] tries once. Only a network failure (see [failureStage]) goes to `Offline` with a retry.
  * - `HostKeyUnknown`: waits for [confirmHostKey], which pins the presented key and connects.
  * - `HostKeyChanged`: blocks. Nothing connects, nothing retries, and no method pins over it. Only [remove] leaves it.
  * - a lost session (`TransportLost` on open, on a call, or reported by the events watchdog): `Offline`, the dead session
@@ -69,6 +76,8 @@ class DefaultMachinesRepository(
     private val hostKeys: HostKeyStore,
     private val connector: MachineConnector,
     private val newId: () -> String = { UUID.randomUUID().toString() },
+    private val errnoOf: (Throwable) -> Int? = ::androidErrno,
+    private val reportInternal: (String) -> Unit = { Log.w("Machines", it) },
 ) : MachinesRepository {
     private val policy = HostKeyPolicy(hostKeys)
     private val lock = Mutex()
@@ -85,26 +94,14 @@ class DefaultMachinesRepository(
     override fun observe(id: String): StateFlow<ConnectionState> = slotFor(id).state.asStateFlow()
 
     override suspend fun add(draft: NewMachine, password: CharArray?): AddResult {
-        val host = when (val r = validateHost(draft.host)) {
-            is Validation.Valid -> r.value
-            is Validation.Invalid -> return AddResult.Rejected(MachineField.Host, r.reason)
-        }
-        val port = when (val r = validatePort(draft.port)) {
-            is Validation.Valid -> r.value
-            is Validation.Invalid -> return AddResult.Rejected(MachineField.Port, r.reason)
-        }
-        val user = when (val r = validateUser(draft.user)) {
-            is Validation.Valid -> r.value
-            is Validation.Invalid -> return AddResult.Rejected(MachineField.User, r.reason)
-        }
-        val name = when (val r = validateMachineName(draft.name.ifBlank { defaultName(host.text) })) {
-            is Validation.Valid -> r.value
-            is Validation.Invalid -> return AddResult.Rejected(MachineField.Name, r.reason)
+        val checked = when (val c = checkDraft(draft)) {
+            is DraftCheck.Invalid -> return AddResult.Rejected(c.field, c.reason)
+            is DraftCheck.Valid -> c
         }
         if (password != null && password.isEmpty()) return AddResult.Rejected(MachineField.Password, Rejection.EMPTY)
 
         val id = newId()
-        val machine = Machine(id = id, name = name, host = host.text, port = port, user = user)
+        val machine = Machine(id = id, name = checked.name, host = checked.host, port = checked.port, user = checked.user)
         val stored = StoredMachine(machine, if (password == null) AuthMethod.Key else AuthMethod.Password)
         lock.withLock {
             if (password != null) {
@@ -120,8 +117,7 @@ class DefaultMachinesRepository(
     override suspend fun remove(id: String) {
         lock.withLock {
             val slot = slots.remove(id) ?: return
-            slot.job?.cancel()
-            slot.job = null
+            cancelAttempt(slot)
             slot.holders = 0
             val dying = slot.session
             slot.session = null
@@ -144,15 +140,88 @@ class DefaultMachinesRepository(
         return Lease(id)
     }
 
+    /**
+     * Reconnect (SPEC §2). A connected session is closed and connected again: the user taps it because the session feels
+     * stale, so it is never a silent no-op (phase 7 r5 amendment U2). Otherwise one immediate attempt starts, when the state
+     * allows one. Connecting and the host-key states are left alone.
+     */
     override suspend fun reconnect(id: String) {
         lock.withLock {
             val slot = slotFor(id)
-            if (slot.holders == 0 || !canConnect(slot.state.value)) return
-            slot.job?.cancel()
-            slot.job = null
+            if (slot.holders == 0) return
+            if (slot.state.value is ConnectionState.Connected) {
+                cancelAttempt(slot)
+                slot.attempt = 0
+                val dying = slot.session
+                slot.session = null
+                dying?.close()
+                slot.state.value = ConnectionState.Connecting
+                startAttempt(slot, delayMillis = 0L)
+                return
+            }
+            if (!canConnect(slot.state.value)) return
+            cancelAttempt(slot)
             slot.attempt = 0
             startAttempt(slot, delayMillis = 0L)
         }
+    }
+
+    override fun authOf(id: String): AuthMethod = slotFor(id).stored.auth
+
+    override suspend fun edit(id: String, draft: NewMachine, auth: AuthMethod, password: CharArray?): EditResult {
+        val current = slotFor(id).stored
+        val checked = when (val c = checkDraft(draft)) {
+            is DraftCheck.Invalid -> return EditResult.Rejected(c.field, c.reason)
+            is DraftCheck.Valid -> c
+        }
+        if (auth == AuthMethod.Password && password != null && password.isEmpty()) {
+            return EditResult.Rejected(MachineField.Password, Rejection.EMPTY)
+        }
+        // No password given and none saved: switching to password login has nothing to log in with.
+        if (auth == AuthMethod.Password && password == null && current.auth != AuthMethod.Password) {
+            return EditResult.Rejected(MachineField.Password, Rejection.EMPTY)
+        }
+        val machine = Machine(id = id, name = checked.name, host = checked.host, port = checked.port, user = checked.user)
+        val stored = StoredMachine(machine, auth)
+        lock.withLock {
+            val slot = slotFor(id)
+            val before = slot.stored
+            if (auth == AuthMethod.Password && password != null) {
+                secrets.put(passwordAlias(id), String(password).toByteArray(Charsets.UTF_8))
+            }
+            if (auth == AuthMethod.Key) secrets.delete(passwordAlias(id))
+            store.put(stored)
+            slot.stored = stored
+            when {
+                machine.host != before.machine.host -> {
+                    // Rule R3: the pin belongs to the old host. Forget it, and connect again so the new host is confirmed.
+                    hostKeys.forget(id)
+                    slot.pendingKey = null
+                    restartConnection(slot)
+                }
+
+                machine.port != before.machine.port -> {
+                    // Rule R2, port: the same host, so the pin stays. A host-key decision was made for the old port, though, so a
+                    // pending key is forgotten and the connection starts again: the new port presents its own key (a first
+                    // connection asks again), and a changed key is compared with the pin, never re-pinned (p7r8 item 1).
+                    slot.pendingKey = null
+                    restartConnection(slot)
+                }
+
+                machine.user != before.machine.user || auth != before.auth ||
+                    (auth == AuthMethod.Password && password != null) -> {
+                    // Rule R2: the same host, so the pin stays. A machine that waits for a host-key decision keeps that state.
+                    when (slot.state.value) {
+                        is ConnectionState.HostKeyUnknown, is ConnectionState.HostKeyChanged -> Unit
+                        else -> restartConnection(slot)
+                    }
+                }
+
+                else -> Unit // Rule R1: the name only. Nothing else is touched, and the session stays as it is.
+            }
+            publishList()
+        }
+        return EditResult.Saved(machine)
     }
 
     override suspend fun confirmHostKey(id: String): ConfirmResult = lock.withLock {
@@ -216,8 +285,7 @@ class DefaultMachinesRepository(
             val slot = slots[id] ?: return
             if (slot.holders > 0) slot.holders--
             if (slot.holders > 0) return
-            slot.job?.cancel()
-            slot.job = null
+            cancelAttempt(slot)
             slot.attempt = 0
             val dying = slot.session
             slot.session = null
@@ -229,28 +297,52 @@ class DefaultMachinesRepository(
         }
     }
 
-    /** One connection attempt, from start to a stable state. Runs in a job owned by the slot. */
-    private suspend fun attempt(slot: Slot) {
-        lock.withLock { slot.state.value = ConnectionState.Connecting }
+    /**
+     * One connection attempt, from start to a stable state. Runs in a job owned by the slot, and writes to the slot only while
+     * [generation] is still the slot's: an attempt that was superseded (a host change, a release, a removal) may still finish
+     * its blocking connect, but it cannot change the state or keep its session (phase 7 P2 follow-up).
+     *
+     * @param slot the machine's slot.
+     * @param generation the slot's generation when the attempt was started.
+     */
+    private suspend fun attempt(slot: Slot, generation: Long) {
+        lock.withLock { if (slot.generation == generation) slot.state.value = ConnectionState.Connecting }
         val gate = HostKeyGate(policy, slot.machine.id)
         val session = try {
             connector.connect(slot.machine, resolveAuth(slot.stored), gate)
         } catch (e: CancellationException) {
             throw e
         } catch (e: HostKeyRefused) {
-            onHostKeyRefused(slot, e)
+            onHostKeyRefused(slot, generation, e)
             return
         } catch (e: AuthFailed) {
-            finish(slot, ConnectionState.Error(ErrorKind.AuthFailed))
+            finish(slot, generation, ConnectionState.Error(ErrorKind.AuthFailed))
             return
         } catch (e: UnsupportedGeneration) {
-            finish(slot, ConnectionState.Error(ErrorKind.UnsupportedGeneration))
+            finish(slot, generation, ConnectionState.Error(ErrorKind.UnsupportedGeneration))
+            return
+        } catch (e: CoreMissing) {
+            finish(slot, generation, ConnectionState.Error(ErrorKind.CoreMissing))
             return
         } catch (e: Throwable) {
-            onOffline(slot)
+            // Only a network failure retries on its own. A refused port or a failure inside the app is an error the user
+            // acts on (phase 7 r1c): retrying would repeat it, and the app's own failure must not read as "unreachable".
+            when (failureStage(e, errnoOf)) {
+                FailureStage.Unreachable -> onOffline(slot, generation)
+                FailureStage.Refused -> finish(slot, generation, ConnectionState.Error(ErrorKind.ConnectionRefused))
+                FailureStage.Internal -> {
+                    reportInternal("connection failed inside the app: ${classChain(e)}")
+                    finish(slot, generation, ConnectionState.Error(ErrorKind.Internal))
+                }
+            }
             return
         }
         lock.withLock {
+            if (slot.generation != generation) {
+                // Superseded while its connect was blocked: the session it opened belongs to the old settings, so it is closed.
+                session.close()
+                return
+            }
             slot.job = null
             if (slot.holders == 0) {
                 // Released while connecting: nothing may stay open.
@@ -265,8 +357,10 @@ class DefaultMachinesRepository(
         }
     }
 
-    private suspend fun onHostKeyRefused(slot: Slot, refused: HostKeyRefused) {
+    private suspend fun onHostKeyRefused(slot: Slot, generation: Long, refused: HostKeyRefused) {
         lock.withLock {
+            // A refusal from a superseded attempt is about the old host: it must not reach the slot or its pending key.
+            if (slot.generation != generation) return
             slot.job = null
             when (val decision = refused.decision) {
                 is HostKeyDecision.Unknown -> {
@@ -292,15 +386,17 @@ class DefaultMachinesRepository(
         }
     }
 
-    private suspend fun finish(slot: Slot, state: ConnectionState) {
+    private suspend fun finish(slot: Slot, generation: Long, state: ConnectionState) {
         lock.withLock {
+            if (slot.generation != generation) return
             slot.job = null
             slot.state.value = state
         }
     }
 
-    private suspend fun onOffline(slot: Slot) {
+    private suspend fun onOffline(slot: Slot, generation: Long) {
         lock.withLock {
+            if (slot.generation != generation) return
             slot.job = null
             slot.state.value = ConnectionState.Offline
             scheduleRetry(slot)
@@ -329,10 +425,21 @@ class DefaultMachinesRepository(
 
     /** Starts the slot's attempt after [delayMillis], unless a lease is no longer held. Call with the lock held. */
     private fun startAttempt(slot: Slot, delayMillis: Long) {
+        val generation = slot.generation
         slot.job = scope.launch {
             if (delayMillis > 0L) delay(delayMillis)
-            attempt(slot)
+            attempt(slot, generation)
         }
+    }
+
+    /**
+     * Supersedes the slot's attempt: its generation moves on, so whatever the attempt still returns is ignored, and its job is
+     * cancelled. Call with the lock held.
+     */
+    private fun cancelAttempt(slot: Slot) {
+        slot.generation++
+        slot.job?.cancel()
+        slot.job = null
     }
 
     /** Schedules the next retry with backoff while any lease is held. Call with the lock held. */
@@ -347,6 +454,41 @@ class DefaultMachinesRepository(
 
     private fun publishList() {
         machineList.value = store.list().map { it.machine }
+    }
+
+    /** The rules every add and edit share: host, port, user and display name, with the default name filled in. */
+    private fun checkDraft(draft: NewMachine): DraftCheck {
+        val host = when (val r = validateHost(draft.host)) {
+            is Validation.Valid -> r.value
+            is Validation.Invalid -> return DraftCheck.Invalid(MachineField.Host, r.reason)
+        }
+        val port = when (val r = validatePort(draft.port)) {
+            is Validation.Valid -> r.value
+            is Validation.Invalid -> return DraftCheck.Invalid(MachineField.Port, r.reason)
+        }
+        val user = when (val r = validateUser(draft.user)) {
+            is Validation.Valid -> r.value
+            is Validation.Invalid -> return DraftCheck.Invalid(MachineField.User, r.reason)
+        }
+        val name = when (val r = validateMachineName(draft.name.ifBlank { defaultName(host.text) })) {
+            is Validation.Valid -> r.value
+            is Validation.Invalid -> return DraftCheck.Invalid(MachineField.Name, r.reason)
+        }
+        return DraftCheck.Valid(name = name, host = host.text, port = port, user = user)
+    }
+
+    /**
+     * Ends the session and any attempt, and starts a new attempt when a lease is held. The state goes to `Offline` first, so
+     * a stale connected or connecting state does not stay on screen. Call with the lock held.
+     */
+    private suspend fun restartConnection(slot: Slot) {
+        cancelAttempt(slot)
+        slot.attempt = 0
+        val dying = slot.session
+        slot.session = null
+        dying?.close()
+        slot.state.value = ConnectionState.Offline
+        if (slot.holders > 0) startAttempt(slot, delayMillis = 0L)
     }
 
     private fun resolveAuth(stored: StoredMachine): SshAuth = when (stored.auth) {
@@ -368,8 +510,14 @@ class DefaultMachinesRepository(
         is ConnectionState.HostKeyUnknown, is ConnectionState.HostKeyChanged -> false
     }
 
+    /** The checked values of an add or an edit, or the field that failed. */
+    private sealed interface DraftCheck {
+        data class Valid(val name: String, val host: String, val port: Int, val user: String) : DraftCheck
+        data class Invalid(val field: MachineField, val reason: Rejection) : DraftCheck
+    }
+
     /** Per-machine bookkeeping. Every field is read and written under [lock] except the observable state. */
-    private class Slot(val stored: StoredMachine) {
+    private class Slot(var stored: StoredMachine) {
         val machine: Machine get() = stored.machine
         val state = MutableStateFlow<ConnectionState>(ConnectionState.Offline)
 
@@ -379,6 +527,12 @@ class DefaultMachinesRepository(
         var job: Job? = null
         var attempt: Int = 0
         var pendingKey: PresentedHostKey? = null
+
+        /**
+         * Counts the slot's superseded attempts. An attempt writes only while its generation is the current one, so a result that
+         * arrives after a host change, a release or a removal is ignored (phase 7 P2 follow-up).
+         */
+        var generation: Long = 0L
     }
 
     companion object {

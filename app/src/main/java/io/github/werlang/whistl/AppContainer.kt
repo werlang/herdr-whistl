@@ -1,7 +1,6 @@
 package io.github.werlang.whistl
 
 import android.content.Context
-import android.os.Build
 import io.github.werlang.whistl.core.secure.KeystoreSecretStore
 import io.github.werlang.whistl.core.ssh.CryptoProviders
 import io.github.werlang.whistl.core.ssh.JavaSecurityRegistry
@@ -106,8 +105,8 @@ internal class KeyPublicKey(private val keys: KeyManager) : ClientPublicKey {
  */
 private class LiveCore(context: Context, scope: CoroutineScope) {
     init {
-        // Before any SSH use: below API 33 sshj needs BouncyCastle as its provider (SPEC §6, phase 4 decision 2).
-        CryptoProviders.install(Build.VERSION.SDK_INT, JavaSecurityRegistry)
+        // Before any SSH use: sshj needs the bundled BouncyCastle as its provider on every API level (SPEC §6, phase 7 r1c).
+        CryptoProviders.install(JavaSecurityRegistry)
     }
 
     private val secrets = KeystoreSecretStore(context)

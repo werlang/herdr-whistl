@@ -27,7 +27,9 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.werlang.whistl.AppContainer
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.data.ConnectionState
+import io.github.werlang.whistl.data.ErrorKind
 import io.github.werlang.whistl.demo.FakeCore
+import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.HelloResult
 import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.ui.machines.ADD_AUTH_PASSWORD_TAG
@@ -38,8 +40,10 @@ import io.github.werlang.whistl.ui.machines.ADD_NAME_TAG
 import io.github.werlang.whistl.ui.machines.ADD_PASSWORD_TAG
 import io.github.werlang.whistl.ui.machines.ADD_REMOVE_TAG
 import io.github.werlang.whistl.ui.machines.ADD_TRUST_TAG
+import io.github.werlang.whistl.ui.machines.ADD_RETRY_TAG
 import io.github.werlang.whistl.ui.machines.ADD_USER_TAG
 import io.github.werlang.whistl.ui.machines.MACHINE_MENU_SHEET_TAG
+import io.github.werlang.whistl.ui.machines.MENU_EDIT_TAG
 import io.github.werlang.whistl.ui.machines.MENU_REMOVE_TAG
 import io.github.werlang.whistl.ui.machines.REMOVE_MACHINE_SHEET_TAG
 import io.github.werlang.whistl.ui.settings.ADD_KEY_SHEET_TAG
@@ -109,6 +113,9 @@ enum class ShotScreen(val slug: String) {
     /** A machine's card menu. */
     MachineMenu("machine-menu"),
 
+    /** The Edit machine sheet of the demo's first machine, prefilled from it (phase 7 P2). */
+    EditMachine("edit-machine"),
+
     /** The confirmation before a machine is removed. */
     RemoveMachineConfirm("remove-machine-confirm"),
 
@@ -153,6 +160,48 @@ enum class ShotScreen(val slug: String) {
 
     /** A machine's host key nobody has confirmed, shown as the card's sheet on the Machines list. */
     MachineHostKeySheet("host-key-card-unknown"),
+
+    /** The Agents list filtered to the agents that are working. */
+    AgentsWorking("agents-working"),
+
+    /** The Agents list filtered to the idle agents. */
+    AgentsIdle("agents-idle"),
+
+    /** The Agents list with no agent on any machine: the empty state. */
+    AgentsEmpty("agents-empty"),
+
+    /** The Agent screen of a finished terminal: read-only, with the finished notice. */
+    AgentFinished("agent-finished"),
+
+    /** The Agent screen of an agent on an offline machine: the offline notice. */
+    AgentOffline("agent-offline"),
+
+    /** The Add machine sheet while the connection is being made. */
+    AddMachineConnecting("add-machine-connecting"),
+
+    /** The Add machine sheet after the login was refused. */
+    AddMachineRefused("add-machine-refused"),
+
+    /** The Add machine sheet when the login works but herdr-core is not installed for it. */
+    AddMachineCoreMissing("add-machine-core-missing"),
+
+    /** The Add machine sheet when nothing listens on the SSH port. */
+    AddMachineConnectionRefused("add-machine-connection-refused"),
+
+    /** The Machines list with one machine in each problem state: core missing, connection refused, login refused, offline. */
+    MachinesIssues("machines-issues"),
+
+    /** The Edit machine sheet of a machine saved with a password: the saved-password hint shows. */
+    EditMachinePassword("edit-machine-password"),
+
+    /** The Space detail of a space with no agents. */
+    SpaceDetailEmpty("space-detail-empty"),
+
+    /** The Space detail of a space that is no longer on its machine. */
+    SpaceDetailMissing("space-detail-missing"),
+
+    /** The Spaces list with a space whose home folder could not be read: its unresolved-home text. */
+    SpacesUnresolvedHome("spaces-unresolved-home"),
 }
 
 /**
@@ -201,13 +250,22 @@ fun ShotScreen.route(): String = when (this) {
     ShotScreen.Settings, ShotScreen.AddKeySheet -> Routes.SETTINGS
     ShotScreen.Machines, ShotScreen.MachinesEmpty, ShotScreen.MachinesLong, ShotScreen.AddMachineKey,
     ShotScreen.AddMachinePassword, ShotScreen.HostKeyUnknown, ShotScreen.HostKeyChanged, ShotScreen.MachineMenu,
-    ShotScreen.RemoveMachineConfirm,
+    ShotScreen.RemoveMachineConfirm, ShotScreen.EditMachine,
     -> Routes.MACHINES
     ShotScreen.SpaceDetail, ShotScreen.NewAgentPicker -> Routes.space("mac", "sp_web")
     ShotScreen.SpaceDetailOffline -> Routes.space("lab", "sp_lab")
     ShotScreen.AgentMenu -> Routes.agent("mac", "t-working")
     ShotScreen.LicencesSheet -> Routes.SETTINGS
     ShotScreen.MachineHostKeySheet -> Routes.MACHINES
+    ShotScreen.AgentsWorking, ShotScreen.AgentsIdle, ShotScreen.AgentsEmpty -> Routes.AGENTS
+    ShotScreen.AgentFinished -> Routes.agent("mac", "t-finished")
+    ShotScreen.AgentOffline -> Routes.agent("lab", "t-lab")
+    ShotScreen.AddMachineConnecting, ShotScreen.AddMachineRefused, ShotScreen.AddMachineCoreMissing,
+    ShotScreen.AddMachineConnectionRefused, ShotScreen.MachinesIssues, ShotScreen.EditMachinePassword,
+    -> Routes.MACHINES
+    ShotScreen.SpaceDetailEmpty -> Routes.space("mac", "sp_empty")
+    ShotScreen.SpaceDetailMissing -> Routes.space("mac", "sp_missing")
+    ShotScreen.SpacesUnresolvedHome -> Routes.SPACES
     ShotScreen.Spaces, ShotScreen.SpacesEmpty, ShotScreen.SpacesLong, ShotScreen.NewSpace, ShotScreen.NewSpaceNoMachine,
     ShotScreen.SpaceMenu, ShotScreen.RenameSpace, ShotScreen.CloseSpaceConfirm,
     -> Routes.SPACES
@@ -221,8 +279,10 @@ fun ShotScreen.route(): String = when (this) {
  */
 fun ShotScreen.sheetTag(): String? = when (this) {
     ShotScreen.AddKeySheet -> ADD_KEY_SHEET_TAG
-    ShotScreen.AddMachineKey, ShotScreen.AddMachinePassword, ShotScreen.HostKeyUnknown, ShotScreen.HostKeyChanged ->
-        ADD_MACHINE_SHEET_TAG
+    ShotScreen.AddMachineKey, ShotScreen.AddMachinePassword, ShotScreen.HostKeyUnknown, ShotScreen.HostKeyChanged,
+    ShotScreen.EditMachine, ShotScreen.AddMachineConnecting, ShotScreen.AddMachineRefused,
+    ShotScreen.AddMachineCoreMissing, ShotScreen.AddMachineConnectionRefused, ShotScreen.EditMachinePassword,
+    -> ADD_MACHINE_SHEET_TAG
 
     ShotScreen.MachineMenu -> MACHINE_MENU_SHEET_TAG
     ShotScreen.RemoveMachineConfirm -> REMOVE_MACHINE_SHEET_TAG
@@ -252,6 +312,7 @@ fun ShotScreen.expectedText(): String {
         ShotScreen.Settings -> app.getString(R.string.settings_title)
         ShotScreen.AddKeySheet -> app.getString(R.string.settings_add_key)
         ShotScreen.Machines, ShotScreen.MachinesEmpty, ShotScreen.MachinesLong -> app.getString(R.string.machines_title)
+        ShotScreen.EditMachine -> app.getString(R.string.edit_machine_title)
         ShotScreen.AddMachineKey, ShotScreen.AddMachinePassword, ShotScreen.HostKeyUnknown, ShotScreen.HostKeyChanged ->
             app.getString(R.string.add_machine_title)
 
@@ -268,6 +329,18 @@ fun ShotScreen.expectedText(): String {
         ShotScreen.AgentMenu -> app.getString(R.string.agent_interrupt)
         ShotScreen.LicencesSheet -> app.getString(R.string.licenses_title)
         ShotScreen.MachineHostKeySheet -> app.getString(R.string.add_host_key_title, "build")
+        ShotScreen.AgentsWorking, ShotScreen.AgentsIdle, ShotScreen.AgentsEmpty -> app.getString(R.string.agents_title)
+        ShotScreen.AgentFinished -> app.getString(R.string.agent_notice_finished)
+        ShotScreen.AgentOffline -> app.getString(R.string.agent_notice_offline, "lab")
+        ShotScreen.AddMachineConnecting, ShotScreen.AddMachineRefused, ShotScreen.AddMachineCoreMissing,
+        ShotScreen.AddMachineConnectionRefused,
+        -> app.getString(R.string.add_machine_title)
+
+        ShotScreen.MachinesIssues -> app.getString(R.string.machines_title)
+        ShotScreen.EditMachinePassword -> app.getString(R.string.edit_machine_title)
+        ShotScreen.SpaceDetailEmpty -> app.getString(R.string.space_detail_empty_title)
+        ShotScreen.SpaceDetailMissing -> app.getString(R.string.space_detail_missing)
+        ShotScreen.SpacesUnresolvedHome -> app.getString(R.string.destination_spaces)
     }
 }
 
@@ -301,6 +374,36 @@ private fun ShotScreen.seed(core: FakeCore, container: AppContainer) {
             "build",
             ConnectionState.HostKeyUnknown("ssh-ed25519", "SHA256:q8V3mZp1kT0rN7wLx2cY4bH6sJ9dF5gA3eU8iO0pQ1w"),
         )
+        ShotScreen.AgentsEmpty -> clearMachines(container)
+        ShotScreen.AgentOffline -> core.addAgent("lab", "t-lab", AgentStatus.Idle, "/srv/lab")
+        ShotScreen.SpaceDetailEmpty -> core.addDemoSpace("mac", "sp_empty", "empty", "/home/demo/empty")
+        ShotScreen.SpacesUnresolvedHome -> core.addDemoSpace("mac", "sp_home", "home", "/home/demo/unreadable")
+        ShotScreen.MachinesIssues -> {
+            clearMachines(container)
+            core.addDemoMachine(
+                Machine(id = "nocore", name = "nocore", host = "nocore.lan", port = 22, user = "ci"),
+                ConnectionState.Error(ErrorKind.CoreMissing),
+            )
+            core.addDemoMachine(
+                Machine(id = "refuse", name = "refuse", host = "refuse.lan", port = 22, user = "ci"),
+                ConnectionState.Error(ErrorKind.ConnectionRefused),
+            )
+            core.addDemoMachine(
+                Machine(id = "auth", name = "auth", host = "auth.lan", port = 22, user = "ci"),
+                ConnectionState.Error(ErrorKind.AuthFailed),
+            )
+            core.addDemoMachine(Machine(id = "lab", name = "lab", host = "lab.local", port = 22, user = "demo"), ConnectionState.Offline)
+        }
+
+        ShotScreen.EditMachinePassword -> {
+            clearMachines(container)
+            core.addDemoMachine(
+                Machine(id = "pw", name = "pw", host = "pw.lan", port = 22, user = "pi"),
+                ConnectionState.Offline,
+                password = true,
+            )
+        }
+
         else -> Unit
     }
 }
@@ -422,11 +525,48 @@ abstract class ScreenHarness {
         val app = RuntimeEnvironment.getApplication()
         when (screen) {
             ShotScreen.AgentsNeedsYou -> clickByText(app.getString(R.string.agents_filter_needs_you))
+            ShotScreen.AgentsWorking -> clickByText(app.getString(R.string.agents_filter_working))
+            ShotScreen.AgentsIdle -> clickByText(app.getString(R.string.agents_filter_idle))
+            ShotScreen.AddMachineConnecting -> {
+                openAddMachine()
+                typeHostAndUser(host = "slow.demo", user = "ci", name = "build")
+                composeRule.onNodeWithTag(ADD_CONNECT_TAG, useUnmergedTree = true).performClick()
+                composeRule.waitForIdle()
+            }
+
+            ShotScreen.AddMachineRefused -> {
+                openAddMachine()
+                typeHostAndUser(host = "auth.demo", user = "ci", name = "build")
+                connectAndWait(ADD_RETRY_TAG)
+            }
+
+            ShotScreen.AddMachineCoreMissing -> {
+                openAddMachine()
+                typeHostAndUser(host = "nocore.demo", user = "ci", name = "build")
+                connectAndWait(ADD_RETRY_TAG)
+            }
+
+            ShotScreen.AddMachineConnectionRefused -> {
+                openAddMachine()
+                typeHostAndUser(host = "refuse.demo", user = "ci", name = "build")
+                connectAndWait(ADD_RETRY_TAG)
+            }
+
+            ShotScreen.EditMachinePassword -> {
+                openMachineMenu()
+                composeRule.onNodeWithTag(MENU_EDIT_TAG, useUnmergedTree = true).performClick()
+            }
+
             ShotScreen.AddKeySheet -> clickByText(app.getString(R.string.settings_add_key), scroll = true)
             ShotScreen.MachineMenu -> openMachineMenu()
             ShotScreen.RemoveMachineConfirm -> {
                 openMachineMenu()
                 composeRule.onNodeWithTag(MENU_REMOVE_TAG, useUnmergedTree = true).performClick()
+            }
+
+            ShotScreen.EditMachine -> {
+                openMachineMenu()
+                composeRule.onNodeWithTag(MENU_EDIT_TAG, useUnmergedTree = true).performClick()
             }
 
             ShotScreen.AddMachineKey -> {
