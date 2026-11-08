@@ -120,11 +120,20 @@ class DefaultAgentsRepository(
     private val watchers = ConcurrentHashMap<String, Job>()
     private val subscriptions = ConcurrentHashMap<String, Subscription>()
 
-    /** Failed subscription attempts in a row per machine: the backoff grows with it, and a good snapshot clears it. */
+    /** Failed subscription attempts in a row per machine: the backoff grows with it, and a healthy subscription clears it. */
     private val retries = ConcurrentHashMap<String, Int>()
+
+    /** The retry scheduled for each machine after a failed subscription, so leaving Connected can cancel it (p7r8 item 3). */
+    private val resubscribes = ConcurrentHashMap<String, Job>()
 
     private companion object {
         const val TAG: String = "AgentsRepository"
+
+        /**
+         * How long a subscription must stay up before the retry count resets. A poison event that fails right after every snapshot
+         * then backs off instead of retrying each second (p7r8 item 4).
+         */
+        const val HEALTHY_AFTER_MS: Long = 30_000L
     }
 
     /** One live events subscription: the client it was opened on, and the job that reads it. */
@@ -235,13 +244,18 @@ class DefaultAgentsRepository(
                     val client = lease.client()
                     if (client != null) ensureSubscription(id, lease, client)
                 } else {
+                    // Not connected: no retry may run, and the agents leave the list. A subscription that failed while the machine
+                    // was connected kept them, so they are removed here too (p7r8 item 3).
+                    cancelResubscribe(id)
                     endSubscription(id)
+                    terminals.update { it - id }
                 }
             }
         } catch (e: NoSuchElementException) {
             return
         } finally {
             withContext(NonCancellable) {
+                cancelResubscribe(id)
                 endSubscription(id)
                 terminals.update { it - id }
                 lease.release()
@@ -261,11 +275,19 @@ class DefaultAgentsRepository(
             try {
                 val subscription = client.eventsSubscribe(null)
                 open = subscription
-                retries.remove(id)
                 // Folder probes are not agents: the snapshot drops them as the events reducer does.
                 val agentsOnly = subscription.terminals.filterNot { it.isProbe() }
                 terminals.update { all -> all + (id to agentsOnly.associateBy { it.address }) }
-                subscription.events.collect { event -> onEvent(id, event) }
+                // The retry count resets only once the subscription has stayed up for a while (p7r8 item 4).
+                val healthy = launch {
+                    delay(HEALTHY_AFTER_MS)
+                    retries.remove(id)
+                }
+                try {
+                    subscription.events.collect { event -> onEvent(id, event) }
+                } finally {
+                    healthy.cancel()
+                }
             } catch (e: TransportLost) {
                 lease.reportLost(client, e)
             } catch (e: HcException) {
@@ -296,10 +318,15 @@ class DefaultAgentsRepository(
     private fun scheduleResubscribe(id: String, lease: MachineLease, client: HcClient) {
         val attempt = retries.merge(id, 1, Int::plus) ?: 1
         val delayMs = minOf(1_000L shl (attempt - 1).coerceAtMost(5), 30_000L)
-        scope.launch {
+        resubscribes[id] = scope.launch {
             delay(delayMs)
             if (lease.client() === client) ensureSubscription(id, lease, client)
         }
+    }
+
+    /** Cancels the retry scheduled for the machine, if one is pending. */
+    private fun cancelResubscribe(id: String) {
+        resubscribes.remove(id)?.cancel()
     }
 
     /** Stops the machine's subscription and waits until it has finished, so the next one never overlaps. */

@@ -163,6 +163,10 @@ backs Compose previews, screenshot tests and a debug-only "demo mode".
   with `type` ∈ created, lost, restarted, keep, finished, removed, status,
   turn, title, labels, size, doc; `heartbeat` every 15 s; `missed` + new
   snapshot if the subscriber fell behind. No heartbeat for 40 s ⇒ connection dead.
+  A failed subscription on a connected machine is retried on the same connection,
+  with a backoff from 1 s doubling to 30 s; the backoff resets only after the
+  subscription has stayed up for 30 s. When the machine leaves `Connected`, its
+  agents leave the list and a pending retry is cancelled (phase 7 r8).
 - `terminal.list {labels?, all?}` → `{terminals, machines, hidden_finished}`.
 - `terminal.run {argv, cwd, labels, keep?, no_parent:true, no_notify:true}` →
   Terminal (has `address`). The app always passes `no_parent` and `no_notify`.

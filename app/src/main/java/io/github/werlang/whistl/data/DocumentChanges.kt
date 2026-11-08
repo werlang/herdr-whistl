@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.asSharedFlow
  * publish changes here, spaces listen. A change with no listener is dropped, which is fine: a listener re-reads the
  * document when it starts.
  */
-class DocumentChanges {
+open class DocumentChanges {
     private val events = MutableSharedFlow<String>(extraBufferCapacity = BUFFER)
 
     /** The machine ids whose `whistl` document changed, one emission per `doc` event. */
@@ -22,7 +22,7 @@ class DocumentChanges {
      *
      * @param machineId the machine id.
      */
-    fun notifyChanged(machineId: String) {
+    open fun notifyChanged(machineId: String) {
         events.tryEmit(machineId)
     }
 

@@ -25,8 +25,9 @@ import kotlin.random.Random
  * test replaces [FakeMachineConnector.eventsPipeFactory].
  *
  * @param scope the test scope; its background scope runs every repository coroutine.
+ * @param docChanges the document-change hub both repositories share; a test passes one whose announcement fails.
  */
-class RepoStack(scope: TestScope) {
+class RepoStack(scope: TestScope, val docChanges: DocumentChanges = DocumentChanges()) {
     private var counter = 0
     private val random = Random(7)
 
@@ -50,9 +51,6 @@ class RepoStack(scope: TestScope) {
 
     /** The resolved folder paths per machine. */
     val folderCache = InMemoryResolvedFolderCache()
-
-    /** Document-change notifications from the events channel. */
-    val docChanges = DocumentChanges()
 
     /** The machines repository under test. */
     val machines: MachinesRepository = DefaultMachinesRepository(
