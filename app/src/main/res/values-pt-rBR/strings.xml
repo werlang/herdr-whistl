@@ -250,4 +250,6 @@
         <item quantity="many">%1$d agentes serão encerrados.</item>
         <item quantity="other">%1$d agentes serão encerrados.</item>
     </plurals>
+    <string name="machines_problem_missing">Essa máquina não está mais adicionada. Nada foi alterado.</string>
+    <string name="add_machine_missing">Essa máquina não está mais adicionada. Feche esta janela e adicione-a de novo.</string>
 </resources>

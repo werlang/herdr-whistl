@@ -292,4 +292,19 @@ class AgentViewModelTest {
 
         assertEquals(AgentStatusLabel.NeedsYou, vm.state.value.statusLabel)
     }
+
+    /**
+     * Phase 6 P0-2, call site `terminals.open` in the Agent view model: a machine that is no longer added makes the open throw.
+     * The screen must show the terminal as gone and offer no typing, and the view model must not crash.
+     */
+    @Test
+    fun openingATerminalOfAnUnknownMachineShowsItAsGone() = runTest {
+        val h = RepoStack(this)
+        val settings = DefaultSettingsRepository(InMemorySettingsStore())
+        val vm = AgentViewModel(h.terminals, h.agents, h.machines, settings, "no-such-machine", "t1")
+        runCurrent()
+
+        assertEquals(AgentNotice.Gone, vm.state.value.notice)
+        assertFalse("nothing can be typed into a terminal that is gone", vm.state.value.canType)
+    }
 }

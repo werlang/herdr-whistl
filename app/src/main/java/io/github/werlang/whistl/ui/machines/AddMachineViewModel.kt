@@ -48,6 +48,9 @@ enum class AddStage {
 
     /** The machine is connected: the sheet closes. */
     Connected,
+
+    /** The machine is no longer added (removed elsewhere, or never stored): nothing can be done with it. Close shows (phase 6 P0-2). */
+    Missing,
 }
 
 /**
@@ -221,13 +224,25 @@ class AddMachineViewModel(
     fun trust() {
         if (state.value.stage != AddStage.HostKeyUnknown) return
         val id = state.value.machineId ?: return
-        viewModelScope.launch { machines.confirmHostKey(id) }
+        viewModelScope.launch {
+            try {
+                machines.confirmHostKey(id)
+            } catch (e: NoSuchElementException) {
+                missing()
+            }
+        }
     }
 
     /** Retry: tries the connection once more after a refused login or an unreachable machine. */
     fun retry() {
         val id = state.value.machineId ?: return
-        viewModelScope.launch { machines.reconnect(id) }
+        viewModelScope.launch {
+            try {
+                machines.reconnect(id)
+            } catch (e: NoSuchElementException) {
+                missing()
+            }
+        }
     }
 
     /** Remove machine: forgets the machine that was added, from the changed-key stage. The sheet closes. */
@@ -259,9 +274,22 @@ class AddMachineViewModel(
     /** Follows the new machine's connection state until the sheet closes. */
     private fun follow(id: String) {
         observer?.cancel()
-        observer = viewModelScope.launch {
-            machines.observe(id).collect { connection -> apply(connection) }
+        // observe() throws for a machine that is no longer added: the sheet says so rather than failing (phase 6 P0-2).
+        val connection = try {
+            machines.observe(id)
+        } catch (e: NoSuchElementException) {
+            missing()
+            return
         }
+        observer = viewModelScope.launch {
+            connection.collect { state -> apply(state) }
+        }
+    }
+
+    /** The machine is no longer added: the sheet shows that, and stops following it. */
+    private fun missing() {
+        observer?.cancel()
+        state.value = state.value.copy(stage = AddStage.Missing)
     }
 
     /** Maps a connection state to the sheet's stage. */

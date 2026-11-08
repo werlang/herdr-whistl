@@ -333,4 +333,32 @@ class MachinesViewModelTest {
 
         assertEquals(before, vm.state.value.cards)
     }
+
+    /**
+     * Phase 6 P0-2, call site `observe` in the Machines view model's trust: a machine that is no longer added shows the problem
+     * on the screen, and nothing crashes.
+     */
+    @Test
+    fun trustOfAMachineThatIsNotThereShowsMissing() = runTest {
+        val vm = model(ScriptedMachines())
+
+        vm.trust("no-such-machine")
+        runCurrent()
+
+        assertEquals(MachinesProblem.MachineMissing, vm.state.value.problem)
+    }
+
+    /**
+     * Phase 6 P0-2, call site `reconnect` in the Machines view model: a reconnect for a machine that is no longer added shows the
+     * problem on the screen, and nothing crashes.
+     */
+    @Test
+    fun reconnectOfAMachineThatIsNotThereShowsMissing() = runTest {
+        val vm = model(ScriptedMachines())
+
+        vm.reconnect("no-such-machine")
+        runCurrent()
+
+        assertEquals(MachinesProblem.MachineMissing, vm.state.value.problem)
+    }
 }

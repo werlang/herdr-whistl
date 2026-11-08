@@ -244,4 +244,6 @@
         <item quantity="one">Its %1$d agent will be stopped.</item>
         <item quantity="other">Its %1$d agents will be stopped.</item>
     </plurals>
+    <string name="machines_problem_missing">That machine is no longer added. Nothing was changed.</string>
+    <string name="add_machine_missing">That machine is no longer added. Close this sheet and add it again.</string>
 </resources>

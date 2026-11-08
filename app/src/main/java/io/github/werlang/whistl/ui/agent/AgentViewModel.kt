@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /** Why the screen cannot type or send, or why the last action did not go through. */
@@ -128,6 +129,8 @@ private data class Interaction(
     val ctrlArmed: Boolean = false,
     val lastKey: String? = null,
     val refusal: AgentNotice? = null,
+    /** Set when the terminal could not be opened: the machine or the terminal is no longer there (phase 6 P0-2). */
+    val unavailable: Boolean = false,
     val menuOpen: Boolean = false,
     val confirmStop: Boolean = false,
     val closed: Boolean = false,
@@ -186,7 +189,14 @@ class AgentViewModel(
 
     init {
         viewModelScope.launch {
-            handle.value = terminals.open(machineId, address)
+            // open() throws NoSuchElementException for a machine that is no longer added. The screen shows that, rather than
+            // crashing the app (phase 6 P0-2).
+            handle.value = try {
+                terminals.open(machineId, address)
+            } catch (e: NoSuchElementException) {
+                interaction.update { it.copy(unavailable = true) }
+                null
+            }
         }
     }
 
@@ -327,6 +337,7 @@ class AgentViewModel(
         val terminal = current?.agent?.terminal
         val live = terminal?.state == TerminalState.Live
         val derived = when {
+            own.unavailable -> AgentNotice.Gone
             output.reach == TerminalReach.Offline -> AgentNotice.Offline
             output.reach == TerminalReach.Gone || terminal == null -> AgentNotice.Gone
             !live -> AgentNotice.Finished

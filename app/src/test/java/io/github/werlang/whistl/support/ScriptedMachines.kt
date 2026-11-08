@@ -139,6 +139,7 @@ class ScriptedMachines : MachinesRepository {
     }
 
     override suspend fun reconnect(id: String) {
+        observe(id)
         reconnected += id
     }
 }

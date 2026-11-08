@@ -12,6 +12,7 @@ import io.github.werlang.whistl.support.RecordingClipboard
 import io.github.werlang.whistl.support.ScriptedMachines
 import io.github.werlang.whistl.support.testHello
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -380,5 +381,66 @@ class AddMachineViewModelTest {
         assertTrue(vm.uiState.value.closed)
         assertTrue(machines.removed.isEmpty())
         assertNull(machines.removed.firstOrNull())
+    }
+
+    /**
+     * Phase 6 P0-2, call site `observe` in the Add machine view model: a machine the add returned but that is not stored shows the
+     * sheet's Missing stage, and nothing crashes.
+     */
+    @Test
+    fun followingAMachineThatIsNotThereShowsMissing() = runTest {
+        machines.addAnswer = { draft -> AddResult.Added(Machine("ghost", draft.name, draft.host, draft.port, draft.user)) }
+        val vm = vm()
+        fill(vm)
+
+        vm.connect(null)
+
+        assertEquals(AddStage.Missing, vm.uiState.value.stage)
+    }
+
+    /**
+     * Phase 6 P0-2, call site `reconnect` in the Add machine view model: Retry after the machine was removed shows the Missing
+     * stage.
+     */
+    @Test
+    fun retryAfterTheMachineWasRemovedShowsMissing() = runTest {
+        machines.addAnswer = { draft ->
+            val machine = Machine("s-gone-later", draft.name, draft.host, draft.port, draft.user)
+            machines.put(machine, ConnectionState.Error(ErrorKind.AuthFailed))
+            AddResult.Added(machine)
+        }
+        val vm = vm()
+        fill(vm, host = "auth.demo")
+        vm.connect(null)
+        assertEquals(AddStage.LoginRefused, vm.uiState.value.stage)
+        machines.remove("s-gone-later")
+
+        vm.retry()
+        runCurrent()
+
+        assertEquals(AddStage.Missing, vm.uiState.value.stage)
+    }
+
+    /**
+     * Phase 6 P0-2, call site `confirmHostKey` in the Add machine view model: Trust after the machine was removed shows the Missing
+     * stage.
+     */
+    @Test
+    fun trustAfterTheMachineWasRemovedShowsMissing() = runTest {
+        machines.addAnswer = { draft ->
+            val machine = Machine("s-key-gone", draft.name, draft.host, draft.port, draft.user)
+            machines.put(machine, ConnectionState.HostKeyUnknown("ssh-ed25519", "SHA256:new"))
+            AddResult.Added(machine)
+        }
+        val vm = vm()
+        fill(vm, host = "unknown.demo")
+        vm.connect(null)
+        assertEquals(AddStage.HostKeyUnknown, vm.uiState.value.stage)
+        machines.remove("s-key-gone")
+
+        vm.trust()
+        runCurrent()
+
+        assertEquals(AddStage.Missing, vm.uiState.value.stage)
     }
 }

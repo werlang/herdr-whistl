@@ -142,6 +142,14 @@ sealed interface HostKeyPrompt {
 }
 
 /**
+ * A problem the Machines screen reports instead of failing (phase 6 P0-2): the machine a request named is no longer added.
+ */
+enum class MachinesProblem {
+    /** The machine is no longer added: the action could not be done. */
+    MachineMissing,
+}
+
+/**
  * What the Machines screen shows.
  *
  * @property cards one card per machine, in the order the user added them.
@@ -149,6 +157,7 @@ sealed interface HostKeyPrompt {
  * @property confirmRemove the machine whose removal is being confirmed, or `null`.
  * @property hostKey the host-key sheet to show, or `null`.
  * @property addSession the Add machine sheet's session, or `null` when it is closed. A new session is a new form.
+ * @property problem the problem the last action reported, or `null`.
  */
 data class MachinesUiState(
     val cards: List<MachineCard>,
@@ -156,6 +165,7 @@ data class MachinesUiState(
     val confirmRemove: MachineMenu?,
     val hostKey: HostKeyPrompt?,
     val addSession: Int?,
+    val problem: MachinesProblem? = null,
 )
 
 /** The sheets the Machines screen can have open, and what the user dismissed. */
@@ -164,6 +174,7 @@ private data class Sheets(
     val removeFor: String? = null,
     val addSession: Int? = null,
     val dismissed: Map<String, ConnectionState> = emptyMap(),
+    val problem: MachinesProblem? = null,
 )
 
 /**
@@ -231,6 +242,7 @@ class MachinesViewModel(
             confirmRemove = open.removeFor?.let { id -> list.firstOrNull { it.id == id }?.let { menuOf(it, connection[it.id]) } },
             hostKey = hostKeyPrompt,
             addSession = open.addSession,
+            problem = open.problem,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, MachinesUiState(emptyList(), null, null, null, null))
 
@@ -240,7 +252,7 @@ class MachinesViewModel(
      * @param id the machine.
      */
     fun openMenu(id: String) {
-        sheets.value = sheets.value.copy(menuFor = id)
+        sheets.value = sheets.value.copy(menuFor = id, problem = null)
     }
 
     /** Closes the card menu. */
@@ -254,8 +266,14 @@ class MachinesViewModel(
      * @param id the machine.
      */
     fun reconnect(id: String) {
-        sheets.value = sheets.value.copy(menuFor = null)
-        viewModelScope.launch { machines.reconnect(id) }
+        sheets.value = sheets.value.copy(menuFor = null, problem = null)
+        viewModelScope.launch {
+            try {
+                machines.reconnect(id)
+            } catch (e: NoSuchElementException) {
+                reportMissing()
+            }
+        }
     }
 
     /**
@@ -289,8 +307,19 @@ class MachinesViewModel(
      * @param id the machine.
      */
     fun trust(id: String) {
-        if (machines.observe(id).value !is ConnectionState.HostKeyUnknown) return
-        viewModelScope.launch { machines.confirmHostKey(id) }
+        val state = connectionOf(id)
+        if (state == null) {
+            reportMissing()
+            return
+        }
+        if (state !is ConnectionState.HostKeyUnknown) return
+        viewModelScope.launch {
+            try {
+                machines.confirmHostKey(id)
+            } catch (e: NoSuchElementException) {
+                reportMissing()
+            }
+        }
     }
 
     /**
@@ -304,12 +333,23 @@ class MachinesViewModel(
 
     /** Opens the Add machine sheet with a new, empty form. */
     fun openAdd() {
-        sheets.value = sheets.value.copy(addSession = nextSession++)
+        sheets.value = sheets.value.copy(addSession = nextSession++, problem = null)
     }
 
     /** Closes the Add machine sheet. */
     fun closeAdd() {
         sheets.value = sheets.value.copy(addSession = null)
+    }
+
+    /** The machine's connection state, or `null` when the machine is no longer added. */
+    private fun connectionOf(id: String): ConnectionState? = try {
+        machines.observe(id).value
+    } catch (e: NoSuchElementException) {
+        null
+    }
+
+    private fun reportMissing() {
+        sheets.value = sheets.value.copy(problem = MachinesProblem.MachineMissing)
     }
 
     private fun menuOf(machine: io.github.werlang.whistl.domain.Machine, state: ConnectionState?): MachineMenu = MachineMenu(

@@ -77,6 +77,14 @@ fun MachinesScreen(
                 modifier = Modifier.semantics { heading() },
             )
         }
+        state.problem?.let {
+            Text(
+                text = stringResource(R.string.machines_problem_missing),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
+            )
+        }
         if (state.cards.isEmpty()) {
             EmptyMachines(Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         } else {
