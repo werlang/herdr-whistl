@@ -15,4 +15,7 @@ interface DemoCore {
 
     /** The spaces to show. */
     val spaces: SpacesRepository
+
+    /** The terminals the Agent screen opens, with static demo output. */
+    val terminals: TerminalRepository
 }

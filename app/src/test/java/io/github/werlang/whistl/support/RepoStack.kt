@@ -8,6 +8,8 @@ import io.github.werlang.whistl.data.AgentsRepository
 import io.github.werlang.whistl.data.DefaultAgentsRepository
 import io.github.werlang.whistl.data.DefaultMachinesRepository
 import io.github.werlang.whistl.data.DefaultSpacesRepository
+import io.github.werlang.whistl.data.DefaultTerminalRepository
+import io.github.werlang.whistl.data.TerminalRepository
 import io.github.werlang.whistl.data.DocumentChanges
 import io.github.werlang.whistl.data.MachinesRepository
 import io.github.werlang.whistl.data.NewMachine
@@ -80,6 +82,9 @@ class RepoStack(scope: TestScope) {
         spaces = spaces,
         documentChanges = docChanges,
     )
+
+    /** The terminal repository under test: the Agent screen's reads and actions. */
+    val terminals: TerminalRepository = DefaultTerminalRepository(scope = scope.backgroundScope, machines = machines)
 
     init {
         connector.commandReply = core::handle

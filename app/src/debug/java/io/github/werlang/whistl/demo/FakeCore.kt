@@ -35,6 +35,14 @@ import io.github.werlang.whistl.domain.HelloResult
 import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.domain.Terminal
 import io.github.werlang.whistl.domain.TerminalState
+import io.github.werlang.whistl.data.TerminalAction
+import io.github.werlang.whistl.data.TerminalHandle
+import io.github.werlang.whistl.data.TerminalReach
+import io.github.werlang.whistl.data.TerminalRepository
+import io.github.werlang.whistl.data.TerminalScreen
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import io.github.werlang.whistl.domain.Validation
 import io.github.werlang.whistl.domain.validateFolder
 import io.github.werlang.whistl.domain.validateHost
@@ -42,9 +50,6 @@ import io.github.werlang.whistl.domain.validateMachineName
 import io.github.werlang.whistl.domain.validatePort
 import io.github.werlang.whistl.domain.validateSpaceName
 import io.github.werlang.whistl.domain.validateUser
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * An in-memory [DemoCore] for the debug build only. It is seeded like the design prototype: a connected `mac` with spaces
@@ -60,6 +65,7 @@ class FakeCore : DemoCore {
     override val machines: MachinesRepository = FakeMachines(state)
     override val agents: AgentsRepository = FakeAgents(state)
     override val spaces: SpacesRepository = FakeSpaces(state)
+    override val terminals: TerminalRepository = FakeTerminals(state)
 }
 
 private val MAC_MACHINE = Machine(id = "mac", name = "mac", host = "mac.local", port = 22, user = "demo")
@@ -94,6 +100,7 @@ private class FakeState {
     private val connections = LinkedHashMap<String, MutableStateFlow<ConnectionState>>()
     private val documents = LinkedHashMap<String, SpacesDocument>()
     private val terminals = LinkedHashMap<String, List<Terminal>>()
+    private val outputs = LinkedHashMap<String, MutableList<String>>()
     private var machineCounter = 0
     private var spaceCounter = 0L
 
@@ -109,13 +116,36 @@ private class FakeState {
             listOf(SpaceRecord(id = "sp_lab", name = "lab", folder = "/srv/lab", pinned = false, order = 0)),
         )
         terminals[MAC_MACHINE.id] = listOf(
-            demoTerminal("t-idle", AgentStatus.Idle, cwd = "/home/demo/web"),
-            demoTerminal("t-working", AgentStatus.Working, cwd = "/home/demo/elsewhere", labels = mapOf(Agent.SPACE_LABEL to "sp_api")),
-            demoTerminal("t-done", AgentStatus.Done, cwd = "/home/demo/api"),
-            demoTerminal("t-blocked", AgentStatus.Blocked, cwd = "/home/demo/web"),
-            demoTerminal("t-error", AgentStatus.Error, cwd = "/tmp"),
-            demoTerminal("t-plain", null, cwd = "/home/demo/notes"),
-            demoTerminal("t-finished", AgentStatus.Blocked, cwd = "/home/demo/docs", state = TerminalState.Finished),
+            demoTerminal("t-idle", AgentStatus.Idle, cwd = "/home/demo/web", name = "opencode"),
+            demoTerminal("t-working", AgentStatus.Working, cwd = "/home/demo/elsewhere", labels = mapOf(Agent.SPACE_LABEL to "sp_api"), name = "claude"),
+            demoTerminal("t-done", AgentStatus.Done, cwd = "/home/demo/api", name = "claude"),
+            demoTerminal("t-blocked", AgentStatus.Blocked, cwd = "/home/demo/web", name = "codex"),
+            demoTerminal("t-error", AgentStatus.Error, cwd = "/tmp", name = "gemini"),
+            demoTerminal("t-plain", null, cwd = "/home/demo/notes", name = "shell"),
+            demoTerminal("t-finished", AgentStatus.Blocked, cwd = "/home/demo/docs", state = TerminalState.Finished, name = "codex"),
+        )
+        outputs["t-working"] = mutableListOf(
+            "> update the compose file to 10.10",
+            "● Reading docker-compose.yml",
+            "  - image: jellyfin/jellyfin:10.9.11",
+            "  + image: jellyfin/jellyfin:10.10.3",
+            "● Running docker compose pull jellyfin",
+        )
+        outputs["t-blocked"] = mutableListOf(
+            "> review the restore script",
+            "● Read restore.sh (84 lines)",
+            "Run ./restore.sh --dry-run?",
+            "1. Yes",
+            "2. No",
+        )
+        outputs["t-idle"] = mutableListOf(
+            "demo@lab:/home/demo/web$ uptime",
+            " 14:02:11 up 41 days,  3:12,  load average: 0.31, 0.28, 0.25",
+        )
+        outputs["t-done"] = mutableListOf(
+            "> review the README",
+            "● Read README.md and CONTRIBUTING.md",
+            "✓ Fixed 3 broken links and the install section.",
         )
         addMachine(MAC_MACHINE, ConnectionState.Connected(DEMO_HELLO))
         addMachine(LAB_MACHINE, ConnectionState.Offline)
@@ -180,6 +210,20 @@ private class FakeState {
         publish()
     }
 
+    /** The terminal with [address] on machine [id], or `null`. */
+    @Synchronized
+    fun terminal(id: String, address: String): Terminal? = terminals[id].orEmpty().firstOrNull { it.address == address }
+
+    /** The output lines held for a terminal, in order. Static demo text, never sent anywhere. */
+    @Synchronized
+    fun output(address: String): List<String> = outputs[address].orEmpty()
+
+    /** Appends a line to a terminal's demo output. */
+    @Synchronized
+    fun append(address: String, line: String) {
+        outputs.getOrPut(address) { mutableListOf() } += line
+    }
+
     /** A new machine id, for a machine added in the demo. */
     @Synchronized
     fun nextMachineId(): String = "demo-${++machineCounter}"
@@ -213,9 +257,10 @@ private class FakeState {
             cwd: String,
             labels: Map<String, String> = emptyMap(),
             state: TerminalState = TerminalState.Live,
+            name: String? = null,
         ): Terminal = Terminal(
             address = address,
-            name = null,
+            name = name,
             argv = emptyList(),
             cwd = cwd,
             labels = labels,
@@ -349,5 +394,77 @@ private class FakeSpaces(private val state: FakeState) : SpacesRepository {
         if (!state.isConnected(machineId)) return SpaceResult.MachineOffline
         state.editDocument(machineId, transform)
         return SpaceResult.Done(spaceId)
+    }
+}
+
+/**
+ * The terminals of the demo. Output is the static text the demo data holds. A send to a blocked program is refused unless
+ * forced, as hc refuses it; no program runs and nothing is sent to any machine.
+ */
+private class FakeTerminals(private val state: FakeState) : TerminalRepository {
+    override suspend fun open(machineId: String, address: String): TerminalHandle {
+        state.requireMachine(machineId)
+        return FakeTerminalHandle(state, machineId, address)
+    }
+}
+
+/** One demo terminal, read from [FakeState]. Actions change only the demo data. */
+private class FakeTerminalHandle(
+    private val state: FakeState,
+    private val machineId: String,
+    private val address: String,
+) : TerminalHandle {
+    private val output = MutableStateFlow(read())
+
+    override val screen: StateFlow<TerminalScreen> = output.asStateFlow()
+
+    override suspend fun send(text: String, force: Boolean): TerminalAction {
+        gate()?.let { return it }
+        val terminal = state.terminal(machineId, address) ?: return TerminalAction.Gone
+        if (terminal.status == AgentStatus.Blocked && !force) return TerminalAction.Blocked
+        state.append(address, "> $text")
+        refresh()
+        return TerminalAction.Done
+    }
+
+    override suspend fun keys(names: List<String>): TerminalAction {
+        gate()?.let { return it }
+        return TerminalAction.Done
+    }
+
+    override suspend fun interrupt(): TerminalAction {
+        gate()?.let { return it }
+        state.append(address, "^C")
+        refresh()
+        return TerminalAction.Done
+    }
+
+    override suspend fun stopAndRemove(): TerminalAction {
+        gate()?.let { return it }
+        state.dropTerminals(machineId) { it.address == address }
+        refresh()
+        return TerminalAction.Done
+    }
+
+    override fun close() {}
+
+    /** Offline or gone, as the action's result; `null` when the action may run. */
+    private fun gate(): TerminalAction? = when {
+        !state.isConnected(machineId) -> TerminalAction.Offline
+        state.terminal(machineId, address) == null -> TerminalAction.Gone
+        else -> null
+    }
+
+    private fun read(): TerminalScreen {
+        val reach = when {
+            !state.isConnected(machineId) -> TerminalReach.Offline
+            state.terminal(machineId, address) == null -> TerminalReach.Gone
+            else -> TerminalReach.Connected
+        }
+        return TerminalScreen(text = state.output(address).joinToString("\n"), reach = reach)
+    }
+
+    private fun refresh() {
+        output.value = read()
     }
 }

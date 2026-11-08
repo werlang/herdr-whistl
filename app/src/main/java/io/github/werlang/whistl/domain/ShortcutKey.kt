@@ -197,3 +197,71 @@ object ShortcutBar {
         return copy
     }
 }
+
+/**
+ * What a shortcut key does in the agent terminal (phase 4 r2). Measured on hc 0.1.18: `terminal.keys` accepts the names
+ * `esc tab up down left right enter home end pageup pagedown ctrl+c ctrl+d / -` and `ctrl+<a-z>`, and rejects `|` and `~`.
+ * The four character keys therefore insert their character into the text field, and every other key is sent at once.
+ */
+sealed interface KeyAction {
+    /**
+     * Sent at once with `terminal.keys`, under the hc key name [hcName].
+     *
+     * @property hcName the key name hc accepts, for example `ctrl+c`.
+     */
+    data class Send(val hcName: String) : KeyAction
+
+    /**
+     * Typed into the text field at the cursor. hc does not take this character as a key name.
+     *
+     * @property char the character to insert.
+     */
+    data class Insert(val char: Char) : KeyAction
+
+    /** Ctrl: it arms the sticky modifier and sends nothing itself. */
+    data object Modifier : KeyAction
+}
+
+/**
+ * The action for this key. One row per key; the table is tested row by row.
+ *
+ * @return the key's action.
+ */
+fun ShortcutKey.action(): KeyAction = when (this) {
+    ShortcutKey.ESC -> KeyAction.Send("esc")
+    ShortcutKey.TAB -> KeyAction.Send("tab")
+    ShortcutKey.CTRL -> KeyAction.Modifier
+    ShortcutKey.UP -> KeyAction.Send("up")
+    ShortcutKey.DOWN -> KeyAction.Send("down")
+    ShortcutKey.LEFT -> KeyAction.Send("left")
+    ShortcutKey.RIGHT -> KeyAction.Send("right")
+    ShortcutKey.ENTER -> KeyAction.Send("enter")
+    ShortcutKey.CTRL_C -> KeyAction.Send("ctrl+c")
+    ShortcutKey.CTRL_D -> KeyAction.Send("ctrl+d")
+    ShortcutKey.HOME -> KeyAction.Send("home")
+    ShortcutKey.END -> KeyAction.Send("end")
+    ShortcutKey.PG_UP -> KeyAction.Send("pageup")
+    ShortcutKey.PG_DN -> KeyAction.Send("pagedown")
+    ShortcutKey.SLASH -> KeyAction.Insert('/')
+    ShortcutKey.PIPE -> KeyAction.Insert('|')
+    ShortcutKey.TILDE -> KeyAction.Insert('~')
+    ShortcutKey.MINUS -> KeyAction.Insert('-')
+}
+
+/**
+ * The Ctrl combination a bar key becomes while Ctrl is armed, or `null` when the table has none. Only the `ctrl+<letter>`
+ * rows qualify (`^C` and `^D`); any other key disarms Ctrl and is sent as it is.
+ *
+ * @return the hc key name, for example `ctrl+c`, or `null`.
+ */
+fun ShortcutKey.ctrlCombination(): String? = (action() as? KeyAction.Send)?.hcName?.takeIf { it.startsWith("ctrl+") }
+
+/**
+ * The Ctrl combination for a typed character while Ctrl is armed: `ctrl+<lowercase letter>` for a letter a–z (either case),
+ * and `null` for anything else. Typed text is never sent through `terminal.keys` as text: only this name is.
+ *
+ * @param char the first typed character.
+ * @return the hc key name, or `null` when the character is not a letter.
+ */
+fun letterCombination(char: Char): String? =
+    if (char in 'a'..'z' || char in 'A'..'Z') "ctrl+${char.lowercaseChar()}" else null
