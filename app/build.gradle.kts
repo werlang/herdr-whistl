@@ -38,6 +38,8 @@ android {
     lint {
         abortOnError = true
         checkReleaseBuilds = true
+        // SPEC §8: severities for the security, accessibility and i18n IDs live in lint.xml (one place).
+        lintConfig = file("lint.xml")
     }
 }
 
