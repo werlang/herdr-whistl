@@ -15,8 +15,16 @@ android {
         applicationId = "io.github.werlang.whistl"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // Version lives in version.properties: versionName is SemVer and versionCode is derived
+        // from it, so it is monotonic without anyone having to remember it (see CONTRIBUTING.md).
+        val versionProps = java.util.Properties().apply {
+            val file = rootProject.file("version.properties")
+            if (file.exists()) file.inputStream().use { load(it) }
+        }
+        val semver = versionProps.getProperty("versionName", "0.0.0").trim()
+        val parts = semver.split(".").map { it.toIntOrNull() ?: 0 } + listOf(0, 0)
+        versionName = semver
+        versionCode = parts[0] * 10000 + parts[1] * 100 + parts[2]
     }
 
     compileOptions {
