@@ -1,6 +1,7 @@
 package io.github.werlang.whistl.core.ssh
 
 import io.github.werlang.whistl.core.rpc.CoreMissing
+import io.github.werlang.whistl.core.rpc.FramedSession
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.JsonRpcConnection
 import io.github.werlang.whistl.core.rpc.LinePipe
@@ -73,7 +74,7 @@ class SshMachineConnector internal constructor(
             if (isCoreMissing(transport.awaitHcExitStatus(EXIT_STATUS_WAIT_MILLIS))) throw CoreMissing(e)
             throw e
         }
-        return SshMachineSession(transport, client, hello, lost)
+        return SshMachineSession(transport, client, hello, lost, scope)
     }
 }
 
@@ -86,11 +87,22 @@ private class SshMachineSession(
     override val client: HcClient,
     override val hello: HelloResult,
     private val signal: CompletableDeferred<TransportLost>,
+    private val scope: CoroutineScope,
 ) : MachineSession {
     override val lost: Deferred<TransportLost> = signal
 
     override fun reportLost(cause: TransportLost) {
         signal.complete(cause)
+    }
+
+    override suspend fun openStream(): FramedSession {
+        val pipe = transport.execBytes(SshTransport.HC_CONNECT_COMMAND)
+        return try {
+            FramedSession.open(pipe, scope)
+        } catch (e: Throwable) {
+            withContext(NonCancellable) { pipe.close() }
+            throw e
+        }
     }
 
     override suspend fun close() {

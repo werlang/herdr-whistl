@@ -84,6 +84,12 @@ enum class ShotScreen(val slug: String) {
     /** The Agent terminal of a blocked agent. */
     AgentBlocked("agent-blocked"),
 
+    /** The Agent terminal with colour: the first paint of a shell, its palette and a 24-bit gradient (phase 8 r3). */
+    AgentColour("agent-colour"),
+
+    /** The Agent terminal on the alternate screen, with an htop-like screen (phase 8 r3). */
+    AgentAltScreen("agent-altscreen"),
+
     /** The Settings screen. */
     Settings("settings"),
 
@@ -253,6 +259,8 @@ fun ShotScreen.route(): String = when (this) {
     ShotScreen.AgentsAll, ShotScreen.AgentsNeedsYou -> Routes.AGENTS
     ShotScreen.AgentWorking -> Routes.agent("mac", "t-working")
     ShotScreen.AgentBlocked -> Routes.agent("mac", "t-blocked")
+    ShotScreen.AgentColour -> Routes.agent("mac", "t-colour")
+    ShotScreen.AgentAltScreen -> Routes.agent("mac", "t-htop")
     ShotScreen.Settings, ShotScreen.AddKeySheet -> Routes.SETTINGS
     ShotScreen.Machines, ShotScreen.MachinesEmpty, ShotScreen.MachinesLong, ShotScreen.AddMachineKey,
     ShotScreen.AddMachinePassword, ShotScreen.HostKeyUnknown, ShotScreen.HostKeyChanged, ShotScreen.MachineMenu,
@@ -314,6 +322,8 @@ fun ShotScreen.expectedText(): String {
     return when (this) {
         ShotScreen.AgentsAll, ShotScreen.AgentsNeedsYou -> app.getString(R.string.agents_title)
         ShotScreen.AgentWorking -> "claude"
+        ShotScreen.AgentColour -> "shell"
+        ShotScreen.AgentAltScreen -> "htop"
         ShotScreen.AgentBlocked -> "codex"
         ShotScreen.Settings -> app.getString(R.string.settings_title)
         ShotScreen.AddKeySheet -> app.getString(R.string.settings_add_key)
@@ -381,6 +391,16 @@ private fun ShotScreen.seed(core: FakeCore, container: AppContainer) {
             ConnectionState.HostKeyUnknown("ssh-ed25519", "SHA256:q8V3mZp1kT0rN7wLx2cY4bH6sJ9dF5gA3eU8iO0pQ1w"),
         )
         ShotScreen.AgentsEmpty -> clearMachines(container)
+        ShotScreen.AgentColour -> {
+            core.addAgent("mac", "t-colour", AgentStatus.Idle, "/home/demo/web", name = "shell")
+            core.setScreen("t-colour", colourScreen())
+        }
+
+        ShotScreen.AgentAltScreen -> {
+            core.addAgent("mac", "t-htop", AgentStatus.Working, "/home/demo/web", name = "htop")
+            core.setScreen("t-htop", htopScreen())
+        }
+
         ShotScreen.AgentOffline -> core.addAgent("lab", "t-lab", AgentStatus.Idle, "/srv/lab")
         ShotScreen.SpaceDetailEmpty -> core.addDemoSpace("mac", "sp_empty", "empty", "/home/demo/empty")
         ShotScreen.SpacesUnresolvedHome -> core.addDemoSpace("mac", "sp_home", "home", "/home/demo/unreadable")

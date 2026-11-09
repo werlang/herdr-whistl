@@ -1,6 +1,7 @@
 package io.github.werlang.whistl.core.ssh
 
 import io.github.werlang.whistl.core.rpc.AuthFailed
+import io.github.werlang.whistl.core.rpc.BytePipe
 import io.github.werlang.whistl.core.rpc.HcException
 import io.github.werlang.whistl.core.rpc.LinePipe
 import io.github.werlang.whistl.core.rpc.TransportLost
@@ -250,6 +251,28 @@ class SshjTransport internal constructor(
     }
 
     /**
+     * Opens a channel running [command] and returns its raw byte pipe (see [SshTransport.execBytes]). Only [HC_CONNECT_COMMAND] is
+     * accepted, as for [exec]. The channel is not the command channel: it carries one terminal's framed stream.
+     *
+     * @param command must equal [SshTransport.HC_CONNECT_COMMAND].
+     * @return the byte pipe for the new channel.
+     * @throws IllegalArgumentException for any other command.
+     * @throws TransportLost when the session is not open or the channel cannot start.
+     */
+    override suspend fun execBytes(command: String): BytePipe {
+        require(command == SshTransport.HC_CONNECT_COMMAND) { "only the hc connect command may run" }
+        return withContext(io) {
+            val port = session ?: throw TransportLost("ssh session is not open")
+            val channel = try {
+                port.exec(command)
+            } catch (e: IOException) {
+                throw TransportLost("could not start hc connect")
+            }
+            SshjBytePipe(channel, io)
+        }
+    }
+
+    /**
      * The exit status of the hc command: `127` when the shell could not find it. Waits up to [timeoutMillis] for the command to
      * end first, because the status can arrive after end-of-stream (p7r8 item 2). Runs on [io].
      *
@@ -339,6 +362,62 @@ private class SshjExecChannel(
     override fun close() {
         runCatching { command.close() }
         runCatching { session.close() }
+    }
+}
+
+/**
+ * One exec channel as a [BytePipe]: the raw streams, with nothing read ahead (SPEC §5.1). Its stderr is drained on a job of its
+ * own and discarded, as for [SshjLinePipe]. A read returns `-1` once the channel has ended.
+ *
+ * @param channel the running `hc connect` command.
+ * @param io the dispatcher for blocking reads and writes.
+ */
+internal class SshjBytePipe(
+    private val channel: ExecChannelPort,
+    private val io: CoroutineDispatcher,
+) : BytePipe {
+    private val drainScope = CoroutineScope(SupervisorJob() + io)
+
+    init {
+        drainScope.launch { drainDiscarding(channel.stderr) }
+    }
+
+    override suspend fun write(bytes: ByteArray) {
+        withContext(io) {
+            try {
+                channel.stdin.write(bytes)
+                channel.stdin.flush()
+            } catch (e: IOException) {
+                throw TransportLost("write to hc failed")
+            }
+        }
+    }
+
+    override suspend fun read(buffer: ByteArray): Int = withContext(io) {
+        try {
+            channel.stdout.read(buffer)
+        } catch (e: IOException) {
+            throw TransportLost("read from hc failed")
+        }
+    }
+
+    override suspend fun close() {
+        withContext(io) {
+            drainScope.cancel()
+            runCatching { channel.close() }
+        }
+    }
+}
+
+/** Reads and discards a stream until it ends or the channel closes. Nothing read here is shown or logged. */
+private fun drainDiscarding(stream: InputStream) {
+    val buffer = ByteArray(8 * 1024)
+    try {
+        while (stream.read(buffer) >= 0) {
+            // Discarded on purpose: hc's diagnostics may hold terminal text.
+        }
+    } catch (e: IOException) {
+        // The channel closed: nothing more to drain.
     }
 }
 

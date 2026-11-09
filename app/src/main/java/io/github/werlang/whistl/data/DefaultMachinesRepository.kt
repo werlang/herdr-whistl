@@ -2,6 +2,7 @@ package io.github.werlang.whistl.data
 
 import io.github.werlang.whistl.core.rpc.AuthFailed
 import io.github.werlang.whistl.core.rpc.CoreMissing
+import io.github.werlang.whistl.core.rpc.FramedSession
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.core.rpc.UnsupportedGeneration
@@ -267,6 +268,15 @@ class DefaultMachinesRepository(
         override fun client(): HcClient? {
             val slot = slots[machineId] ?: return null
             return if (slot.state.value is ConnectionState.Connected) slot.session?.client else null
+        }
+
+        override suspend fun openStream(): FramedSession {
+            val slot = slots[machineId]
+            val session = slot?.session
+            if (session == null || slot.state.value !is ConnectionState.Connected) {
+                throw TransportLost("machine is not connected")
+            }
+            return session.openStream()
         }
 
         override suspend fun release() {

@@ -171,6 +171,14 @@ interface MachineLease {
      */
     fun client(): HcClient?
 
+    /**
+     * Opens a framed connection for one terminal's stream (SPEC §5.1), on a new channel of the live session. The caller closes it.
+     *
+     * @return the framed session, after its hello.
+     * @throws io.github.werlang.whistl.core.rpc.TransportLost when the machine is not connected, or the channel cannot start.
+     */
+    suspend fun openStream(): io.github.werlang.whistl.core.rpc.FramedSession
+
     /** Gives this lease back. Releasing a second time does nothing. */
     suspend fun release()
 

@@ -100,6 +100,17 @@ data class ExecResult(
 )
 
 /**
+ * Result of `terminal.attach` (SPEC §5.1).
+ *
+ * @property channel the channel number; read it with [FramedSession.channel].
+ * @property terminal the terminal attached to.
+ */
+data class AttachResult(
+    val channel: Long,
+    val terminal: Terminal,
+)
+
+/**
  * Result of `doc.get`.
  *
  * @property value the document, or `null` when it was never written.
@@ -282,6 +293,42 @@ class HcClient(
     }
 
     /**
+     * Calls `terminal.attach` on the framed connection (SPEC §5.1). The reply names the channel. The program's output comes on
+     * it, and the viewer's frames go to it.
+     *
+     * @param terminal the terminal address.
+     * @param cols the viewer's width in cells, 0 to 65535.
+     * @param rows the viewer's height in cells, 0 to 65535.
+     * @param display the viewer's colours and cell size; omitted when `null`.
+     * @param history scrollback lines to show first, main screen only; omitted when `null`.
+     * @return the channel and the terminal.
+     * @throws NeedsFramed when the connection is not framed.
+     * @throws IllegalArgumentException when a size is not a u16.
+     */
+    suspend fun terminalAttach(
+        terminal: String,
+        cols: Int,
+        rows: Int,
+        display: ViewerDisplay? = null,
+        history: Int? = null,
+        resumed: Boolean? = null,
+    ): AttachResult {
+        require(cols in 0..MAX_CELLS && rows in 0..MAX_CELLS) { "size is not a u16" }
+        val wire = command.typed<TerminalAttachParams, AttachWire>(
+            "terminal.attach",
+            TerminalAttachParams(
+                terminal = terminal,
+                cols = cols,
+                rows = rows,
+                display = display?.toWire(),
+                history = history,
+                resumed = resumed,
+            ),
+        )
+        return AttachResult(channel = wire.channel, terminal = wire.terminal.toDomain())
+    }
+
+    /**
      * Calls `terminal.kill`.
      *
      * @param terminal the terminal address.
@@ -424,6 +471,9 @@ class HcClient(
     private companion object {
         /** The only protocol generation this client speaks (SPEC §5). */
         const val SUPPORTED_GENERATION = 1
+
+        /** The largest size a `u16` field holds, in cells. */
+        const val MAX_CELLS = 0xFFFF
 
         /** The notifications of the events channel that are events (SPEC §5, `docs/event-shapes.md`). */
         val EVENT_METHODS: Set<String> = setOf(HcEvent.EVENT_METHOD, HcEvent.HEARTBEAT_METHOD, HcEvent.MISSED_METHOD)

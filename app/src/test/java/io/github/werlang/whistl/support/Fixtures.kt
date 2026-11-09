@@ -96,6 +96,15 @@ object Fixtures {
      */
     fun text(name: String): String = file(name).readText()
 
+    /**
+     * Reads the raw bytes of a fixture, for example a framed capture (`attach_frames.bin`).
+     *
+     * @param name the file name.
+     * @return the file content.
+     * @throws IllegalStateException when the file is missing.
+     */
+    fun bytes(name: String): ByteArray = file(name).readBytes()
+
     private fun parse(name: String): JsonElement = Json.parseToJsonElement(text(name))
 
     private fun file(name: String): File {

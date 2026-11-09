@@ -17,6 +17,7 @@ import io.github.werlang.whistl.data.TerminalScreen
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.KeyAction
 import io.github.werlang.whistl.domain.ShortcutKey
+import io.github.werlang.whistl.domain.TerminalFrame
 import io.github.werlang.whistl.domain.TerminalState
 import io.github.werlang.whistl.domain.action
 import io.github.werlang.whistl.domain.ctrlCombination
@@ -89,7 +90,7 @@ enum class AgentStatusLabel {
  * @property spaceName the space's name, or `null` for "No space".
  * @property statusLabel the label next to the status dot.
  * @property status the raw status, for the dot's colour; `null` for a plain program.
- * @property screenText the output last read.
+ * @property frame the terminal as the emulator holds it: history and the screen rows, with the cursor.
  * @property reach whether the output is current.
  * @property input the text field, with its cursor.
  * @property ctrlArmed whether the sticky Ctrl is armed for the next key.
@@ -111,7 +112,7 @@ data class AgentUiState(
     val spaceName: String?,
     val statusLabel: AgentStatusLabel,
     val status: AgentStatus?,
-    val screenText: String,
+    val frame: TerminalFrame,
     val reach: TerminalReach,
     val input: TextFieldValue,
     val ctrlArmed: Boolean,
@@ -185,8 +186,11 @@ class AgentViewModel(
     private val interaction = MutableStateFlow(Interaction())
 
     private val screen = handle.flatMapLatest { open ->
-        open?.screen ?: flowOf(TerminalScreen(text = "", reach = TerminalReach.Offline))
+        open?.screen ?: flowOf(TerminalScreen(frame = TerminalFrame.empty(DEFAULT_COLS, DEFAULT_ROWS), reach = TerminalReach.Offline))
     }
+
+    /** The pane's size in cells, as the screen last measured it. Kept until the terminal opens, then sent to it. */
+    private var paneSize: Pair<Int, Int>? = null
 
     /**
      * The agent the machine lists now ([now]), and the last one it listed ([lastSeen]). The repository drops an offline
@@ -219,7 +223,19 @@ class AgentViewModel(
                 interaction.update { it.copy(unavailable = true) }
                 null
             }
+            paneSize?.let { (cols, rows) -> handle.value?.resize(cols, rows) }
         }
+    }
+
+    /**
+     * The pane that shows the terminal was measured: the terminal follows it, and the core gets the new size (SPEC §5.1).
+     *
+     * @param cols the pane's width in cells.
+     * @param rows the pane's height in cells.
+     */
+    fun onPaneSize(cols: Int, rows: Int) {
+        paneSize = cols to rows
+        handle.value?.resize(cols, rows)
     }
 
     /**
@@ -397,7 +413,7 @@ class AgentViewModel(
                 statusLabel(status, live, terminal != null)
             },
             status = status,
-            screenText = output.text,
+            frame = output.frame,
             reach = output.reach,
             input = input,
             ctrlArmed = own.ctrlArmed,
@@ -431,7 +447,7 @@ class AgentViewModel(
         spaceName = null,
         statusLabel = AgentStatusLabel.Offline,
         status = null,
-        screenText = "",
+        frame = TerminalFrame.empty(DEFAULT_COLS, DEFAULT_ROWS),
         reach = TerminalReach.Offline,
         input = TextFieldValue(""),
         ctrlArmed = false,
@@ -447,6 +463,10 @@ class AgentViewModel(
         fontSize = FontSize.Medium,
     )
 }
+
+/** The size a screen starts at, before its pane has been measured. */
+private const val DEFAULT_COLS: Int = 80
+private const val DEFAULT_ROWS: Int = 24
 
 /** The notice a refused action shows. Done has none. */
 private fun TerminalAction.notice(): AgentNotice? = when (this) {

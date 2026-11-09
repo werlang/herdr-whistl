@@ -8,6 +8,7 @@ import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.ShortcutKey
 import io.github.werlang.whistl.support.InMemorySettingsStore
 import io.github.werlang.whistl.support.MainDispatcherRule
+import io.github.werlang.whistl.support.RecordingLog
 import io.github.werlang.whistl.support.RepoStack
 import io.github.werlang.whistl.support.eventsSnapshot
 import io.github.werlang.whistl.support.snapshotPipe
@@ -39,6 +40,10 @@ class AgentViewModelTest {
 
     @get:Rule
     val main = MainDispatcherRule()
+
+    /** The stream's log lines go to the recording sink, not to the Android stub. */
+    @get:Rule
+    val log = RecordingLog()
 
     /** The method of a recorded request. */
     private fun JsonObject.method(): String = getValue("method").jsonPrimitive.content
@@ -72,6 +77,8 @@ class AgentViewModelTest {
         runCurrent()
         val vm = AgentViewModel(h.terminals, h.agents, h.machines, settings, "m1", "t1")
         runCurrent()
+        advanceTimeBy(100)
+        runCurrent()
         return Triple(h, vm, settings)
     }
 
@@ -81,21 +88,21 @@ class AgentViewModelTest {
         val (_, vm, _) = openAgent(screen = "line one")
 
         val state = vm.state.value
-        assertEquals("line one", state.screenText)
+        assertEquals("line one", state.frame.plainText().trimEnd())
         assertEquals(TerminalReach.Connected, state.reach)
         assertTrue(state.canType)
     }
 
-    /** The output is read again every 500 ms of time while the screen is open. */
+    /** What the program writes after the screen opens reaches the screen, on the stream the screen holds (SPEC §5.1). */
     @Test
-    fun theOutputUpdatesOnThePoll() = runTest {
+    fun theOutputFollowsWhatTheProgramWrites() = runTest {
         val (h, vm, _) = openAgent(screen = "one")
 
-        h.core.screens["t1"] = "two"
-        advanceTimeBy(500)
+        h.connector.streams.last().send("\r\ntwo".toByteArray())
+        advanceTimeBy(100)
         runCurrent()
 
-        assertEquals("two", vm.state.value.screenText)
+        assertEquals("one\ntwo", vm.state.value.frame.plainText().trimEnd())
     }
 
     /** Send sends the text and presses Enter. The request has no `force` field, and the field is cleared. */

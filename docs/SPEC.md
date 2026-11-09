@@ -76,6 +76,15 @@ The Agents destination shows a badge with the count of agents in `blocked`.
 5. **Agent** — a tmux-like **terminal only**, no chat UI: full-height monospace
    screen, a one-line status bar `[machine] space · agent    status`, then a
    horizontally scrolling **shortcut key bar**, then a text field + Send.
+   The screen is the terminal's own: its bytes come from a framed stream
+   (`terminal.attach`, §5.1) into a VT emulator, and the screen draws the
+   emulator's cells on a Canvas. Colour (16, 256 and 24-bit), bold, italic,
+   underline, strike-through, dim, inverse, the cursor and the alternate screen
+   (htop, vim) are drawn as the program sent them. The pane is measured in cells
+   and the core is told the size with a RESIZE frame (§5.1). Each line is also
+   a node of its own, so a screen reader moves line by line (phase 7 r6).
+   Output that outruns the redraw never shows half an update: every frame is one
+   state of the emulator, redrawn at most every 33 ms.
    Typed text is sent to the terminal (Send = text + Enter). `Ctrl` is a
    sticky modifier: armed, the next bar key is sent with Ctrl (`ctrl+<key>`).
    With Ctrl armed and the field empty, one typed letter is sent as its Ctrl
@@ -175,9 +184,9 @@ backs Compose previews, screenshot tests and a debug-only "demo mode".
 - `terminal.run {argv, cwd, labels, keep?, no_parent:true, no_notify:true}` →
   Terminal (has `address`). The app always passes `no_parent` and `no_notify`.
 - `terminal.read {terminal, lines}` → `{text, complete, how}`: plain text, no
-  colour and no cell attributes. Colour and live resize are **not supported in
-  v0.1.x**: they need `terminal.attach` (a raw framed stream with cols/rows and
-  resize notifications) and a VT emulator, a phase of its own (report F1).
+  colour and no cell attributes. The Agent screen does not use it any more (phase
+  8 r3): it shows the terminal from `terminal.attach` on a framed connection
+  (§5.1). The folder probe still reads with it.
 - `terminal.run` has no size parameter in hc 0.1.14 (`rpc.discover`); every
   terminal is created at the core's 200×120. The app cannot size it.
 - `terminal.list` and `events.subscribe` decode each terminal entry on its own:
@@ -197,6 +206,84 @@ backs Compose previews, screenshot tests and a debug-only "demo mode".
   (`not_found`, `conflict`, …). Map kinds to typed exceptions.
 - Terminal `status` ∈ idle, working, done, blocked, error, or null for plain
   programs; `state` ∈ live, finished.
+
+### 5.1 Framed mode (phase 8 P0; measured on hc 0.1.14 on the rpi5)
+
+Fixtures: `hello_framed.json`, `attach_result.json`, `attach_frames.bin`
+(layout in `docs/protocol-fixtures/README.md`), `attach_resize.json`,
+`attach_window.json`, `attach_close.json`, `attach_needs_framed.json`,
+`frame_kinds.json`. Capture and recording: `tools/framed-capture/`.
+
+- **Switch.** `hello {"framed": true}` on a line connection, as id 1. The reply is
+  one JSON line with `"framed": true` (`features` includes `framed` and `attach`).
+  From the byte after that line's newline the connection carries frames only; a
+  JSON line sent after the switch gets no reply. `terminal.attach` on a connection
+  that is not framed fails with `kind: needs_framed`.
+- **Frame.** `channel u32 LE | kind u8 | length u32 LE | payload[length]`, one
+  after another, no separator. Channel 0 is the JSON-RPC channel: kind 0 carries
+  one request or reply, without a newline; ids go on from the hello (the first call
+  is id 2). Another channel is one terminal's stream.
+- **Length cap.** A header that declares more than 16 MiB (16777216 bytes) is
+  refused as soon as the header is read, before its payload is buffered. The
+  connection fails with `FrameTooLarge`. A frame may arrive split across reads; a
+  stream that ends inside a frame fails with `TransportLost`, and one that ends
+  between frames is fine.
+- **Attach.** `terminal.attach {terminal, cols, rows, display?, history?}` (cols and
+  rows are u16; `display` is `{fg, bg, cursor, cell: [w, h]}` with null fields left
+  out) replies `{"channel": N, "terminal": {…}}`. Channel N then carries the first
+  paint, then the live bytes. The official client fills `display` from the outer
+  terminal's answers to OSC 10, 11 and 12 and CSI 16 t (its request holds the
+  answers as sent).
+
+| kind | name | sent by | payload |
+|---|---|---|---|
+| 0 | DATA | both | core → client: the program's bytes (first paint, then live output). Client → core: keys and pasted bytes. |
+| 1 | CREDIT | client → core | u32 LE: the DATA payload bytes the client has handled. Sent after each DATA frame, with that frame's length. |
+| 2 | CLOSE | both | Client → core: detach, empty payload; the core answers with an empty CLOSE and ends the stream. Core → client, when the program ends: JSON `{"exit_code", "finished_ms", "reason", "signal"}`, with `reason` `exited` (exit code set) or `killed` (signal set). |
+| 3 | RESIZE | client → core | u16 LE cols, then u16 LE rows. The core sends no frame back; it emits a `size` event on the events stream. |
+| 4 | FOCUS | client → core | one byte: 0 focus out, 1 focus in. The core writes `ESC [ O` or `ESC [ I` to the program only while it has DECSET 1004 on. |
+| 5 | FACTS | client → core | JSON `{"fg", "bg", "cursor", "cell": [w, h]}`, the shape of `display`. The official client sends it after a resize, when its answers have changed. The core answers later colour queries with the new value: `#112233` came back as `rgb:1111/2222/3333` (before it, `rgb:ffff/ffff/ffff`). |
+
+Kinds not in the table are not sent by the core. The client passes them on as they
+arrive, and the session skips and counts them without keeping the payload
+(`skippedFrames`), so the stream stays in step.
+
+- **CREDIT.** The core may run ahead of the client by a window: 262144 bytes
+  (256 KiB) of DATA payload before any CREDIT. Each CREDIT n adds n to the
+  allowance: 100000 granted released exactly 100000 more bytes, and the rest of a
+  flood arrived as soon as it was granted. The credit is per channel, for DATA
+  from the core only: the core never sends CREDIT, and 307200 bytes of keys sent
+  as DATA were accepted without any credit back (`attach_window.json`).
+- **Failures.** A refused attach is `needs_framed` (`attach_needs_framed.json`).
+  A hello reply without `framed: true` leaves the connection in line mode.
+- **Not measured yet.** `events.subscribe` in framed mode: the schema says its
+  events arrive on a channel with credit. Phase 8 P1 measures it before the app
+  relies on it.
+- **The app's use (phase 8 r3).** Each open Agent screen holds one framed
+  connection of its own: one more `hc connect` exec channel on the machine's
+  SSH session, so the command and events channels are untouched. The stream
+  sends `hello {framed: true}`, then `terminal.attach {terminal, cols, rows,
+  display}` with the pane's size in cells and the viewer's colours (`display`).
+  The first paint (and the live bytes) go to the emulator; each DATA frame is
+  credited once the emulator has taken it. A pane-size change sends RESIZE with
+  the new cols and rows (u16 LE each). When the machine's connection is lost,
+  the stream is closed and the screen shows offline; when the connection is
+  back, the stream attaches again with `resumed: true`, and the emulator keeps
+  the screen it has (decision(assumed): a resumed attach carries no first
+  paint). The stream's log lines carry the channel, the size and whether it
+  resumed, and nothing else.
+- **Core finding: programs that read keys on their command line (hc 0.1.14).**
+  `terminal.send` (and `hc send`) pastes the text but does not drive vim's
+  command line: reproduced with no app attached, `hc send <t> ':q!'` leaves vim
+  on `:q!:q!` and vim keeps running, and `hc keys <t> enter` does not run it
+  either. This is a herdr-core behaviour, not a Whistl bug; the app's Send path
+  is unchanged. To be reported to the core. In the same runs htop took `q`
+  from Send without trouble, so the fault is specific to the command line.
+- **Unverified against hc 0.1.14.** `terminal.attach` with `resumed` is sent by
+  the app; hc 0.1.14's schema for that field was not read in this round (the test
+  host had no hc; see the phase 8 r3 report). A core that refuses the field makes
+  the app attach plainly after the next drop, and the emulator still keeps the
+  screen.
 
 Installed agents: herdr-core has no API for it (Herdr desktop does it itself).
 Run `machine.exec ["sh","-lc", <script>]` with a known list (claude, codex,
@@ -278,6 +365,25 @@ Codex…) and key glyphs (Esc, ↑) are not translated.
 - KDoc on public types and non-obvious functions.
 
 ## 9. As built
+
+- **Known limit: the emulator loses one line on a row shrink (phase 8 r3).**
+  `io.github.johnan:terminal-core` 1.0.8 drops the line directly above the
+  cursor when the screen shrinks in rows: measured on the device, a 24-row
+  screen with 500 lines and the cursor below them, shrunk to 12 rows, loses
+  `line 0499`; the rest of the history is kept in order. The device test
+  `aResizeMidStreamKeepsTheTextAndTheNewLines` pins exactly that loss, so any
+  other loss, a reordering or a duplicate fails it, and a change of the engine
+  that fixes or moves the loss shows up there too. Accepted for this round and
+  documented here; it is not worked around in Whistl.
+- **Terminal emulator (phase 8 r3).** `io.github.johnan:terminal-core:1.0.8`
+  (Apache-2.0, pure Kotlin, no native code). Its classes are compiled for Java
+  21, so the JVM 17 unit tests cannot load them: `core/vt/JohnanEngine.kt` is
+  the only file that imports it, behind the `VtEngine` seam. The cell mapping,
+  the xterm palette (`core/vt/Xterm256.kt`) and the history cache are pure
+  Kotlin and run in the JVM tests on a scripted engine. The engine's own
+  behaviour runs as instrumented tests on the device (`app/src/androidTest`,
+  `scripts/gradle connectedDebugAndroidTest`), on the recorded attach streams in
+  `docs/protocol-fixtures/`.
 
 Implementation choices that this spec does not pin down (tilde resolution, the bundled BouncyCastle
 as the SSH provider on every API level, the recorded `terminal.interrupt` fixture, screenshot platform, release signing) are recorded

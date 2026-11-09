@@ -1,0 +1,59 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "terminal.attach",
+    "params": {
+      "terminal": "p8r1-fix1",
+      "cols": 80,
+      "rows": 24,
+      "display": {
+        "bg": null,
+        "cell": null,
+        "cursor": null,
+        "fg": null
+      },
+      "history": 0
+    }
+  },
+  "response": {
+    "id": 2,
+    "jsonrpc": "2.0",
+    "result": {
+      "channel": 1,
+      "terminal": {
+        "address": "t60",
+        "argv": [
+          "sh",
+          "-c",
+          "printf '\\033[31mred\\033[0m \\033[1;32mbold green\\033[0m\\n'; printf '\\033[38;2;255;100;0mtrue\\033[0m\\n'; while IFS= read -r line; do printf '\\033[1;35m%s\\033[0m\\n' \"$line\"; done"
+        ],
+        "cols": 80,
+        "created_ms": 1794208769422,
+        "cwd": "/root",
+        "die_with_parent": false,
+        "exit_code": null,
+        "finished_ms": null,
+        "identity": "ghostty",
+        "keep": false,
+        "labels": {},
+        "name": "p8r1-fix1",
+        "notify": false,
+        "parent": null,
+        "pid": 2622379,
+        "reason": null,
+        "reported": false,
+        "rm": false,
+        "rows": 24,
+        "screen": "exact",
+        "signal": null,
+        "state": "live",
+        "status": null,
+        "status_ms": null,
+        "template": null,
+        "title": "",
+        "turn": 0
+      }
+    }
+  }
+}

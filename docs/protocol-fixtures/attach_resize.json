@@ -1,0 +1,24 @@
+{
+  "request": {
+    "channel": 1,
+    "kind": 3,
+    "name": "RESIZE",
+    "payload_hex": "64001e00",
+    "cols": 100,
+    "rows": 30
+  },
+  "response": {
+    "channel_frames": [],
+    "events": [
+      {
+        "type": "size",
+        "terminal": "t5f",
+        "data": {
+          "cols": 100,
+          "rows": 30
+        }
+      }
+    ],
+    "window_s": 2.0
+  }
+}

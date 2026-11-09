@@ -57,6 +57,8 @@ android {
         versionCode = appVersionParts.getOrElse(0) { 0 } * 10000 +
             appVersionParts.getOrElse(1) { 0 } * 100 +
             appVersionParts.getOrElse(2) { 0 }
+        // The VT engine's own behaviour runs on the device (app/src/androidTest): its classes are Java 21, which the JVM 17 tests cannot load.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
@@ -94,6 +96,13 @@ android {
             // task sees three inputs for one path. Keep the first copy instead of excluding it: the
             // licence has to travel inside the APK, and the licences sheet only names the MIT licence.
             pickFirsts += "META-INF/LICENSE.md"
+        }
+    }
+
+    sourceSets {
+        // The recorded attach streams are the device tests' input (SPEC §5.1): read from the test APK's assets, not copied.
+        getByName("androidTest") {
+            assets.srcDir(rootProject.file("docs/protocol-fixtures"))
         }
     }
 
@@ -159,6 +168,9 @@ dependencies {
     implementation(libs.bouncycastle.bcprov)
     implementation(libs.bouncycastle.bcpkix)
 
+    // VT emulator (phase 8 r3): the screen's cells come from it. core/vt/JohnanEngine.kt is the only file that imports it.
+    implementation(libs.johnan.terminal.core)
+
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.junit)
 
@@ -172,4 +184,9 @@ dependencies {
     // The test activity the Compose rule launches. Only the debug variant runs the screenshot tests (src/testDebug).
     debugImplementation(platform(libs.androidx.compose.bom))
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    // Instrumented tests (phase 8 r3): the VT engine on the device, run with `scripts/gradle connectedDebugAndroidTest`.
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.junit)
 }

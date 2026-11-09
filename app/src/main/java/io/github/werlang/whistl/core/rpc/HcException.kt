@@ -70,6 +70,21 @@ class AuthFailed : HcException("ssh login was refused")
  */
 class CoreMissing(cause: Throwable? = null) : HcException("herdr-core is not available for this login", null, cause)
 
+/**
+ * `kind == "needs_framed"`: `terminal.attach` was sent on a connection that is not framed. Send `hello {framed: true}` first
+ * (SPEC §5.1). The message names no terminal.
+ */
+class NeedsFramed(message: String, hint: String?) : HcException(message, hint)
+
+/**
+ * A frame header declares a payload above [MAX_FRAME_PAYLOAD]. The header is refused before any payload is buffered. The
+ * stream cannot be read in step after it, so the connection fails.
+ *
+ * @property length the length the header declared.
+ */
+class FrameTooLarge(val length: Long) :
+    HcException("a frame declares $length bytes, above the $MAX_FRAME_PAYLOAD-byte limit")
+
 /** `hello` reported a protocol generation other than 1. The app refuses to talk to that core. */
 class UnsupportedGeneration(val generation: Int) :
     HcException("hc protocol generation $generation is not supported; this app needs generation 1")

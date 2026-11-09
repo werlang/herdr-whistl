@@ -133,6 +133,7 @@ class FakeCoreDoc(initialValue: JsonObject? = null, initialVersion: Long = 1) {
             "terminal.run" -> runProbe(params)
 
             "terminal.read" -> readProbe(params) ?: readTerminal(params)
+            "terminal.attach" -> attachTerminal(params)
 
             "terminal.send" -> sendTo(params)
 
@@ -227,6 +228,15 @@ class FakeCoreDoc(initialValue: JsonObject? = null, initialVersion: Long = 1) {
     }
 
     /** `terminal.read` of a terminal in [terminals]: its scripted screen, or `not_found` for an unknown address. */
+    /**
+     * `terminal.attach`: the channel and the terminal, or not found. The stream itself is [FakeFramedHc]'s; this is the reply.
+     */
+    private fun attachTerminal(params: JsonObject): JsonObject {
+        val address = params.getValue("terminal").jsonPrimitive.content
+        val terminal = terminalObject(address) ?: return notFound(address)
+        return reply(mapOf<String, JsonElement>("channel" to JsonPrimitive(1), "terminal" to terminal))
+    }
+
     private fun readTerminal(params: JsonObject): JsonObject? {
         val address = params.getValue("terminal").jsonPrimitive.content
         if (terminalObject(address) == null) return notFound(address)

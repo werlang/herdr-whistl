@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.core.ssh
 
+import io.github.werlang.whistl.core.rpc.FramedSession
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.domain.HelloResult
@@ -30,6 +31,16 @@ interface MachineSession {
      * @param cause the failure to report.
      */
     fun reportLost(cause: TransportLost)
+
+    /**
+     * Opens a framed connection on a new channel of this session (SPEC §5.1): one more `hc connect` for one terminal's stream. The
+     * command channel and the events channel are left alone. The caller closes the stream through [FramedSession.close].
+     *
+     * @return the framed session, after its hello.
+     * @throws TransportLost when the channel cannot start, or the connection ends before the hello reply.
+     * @throws io.github.werlang.whistl.core.rpc.NeedsFramed when the core does not switch the connection to framed mode.
+     */
+    suspend fun openStream(): FramedSession
 
     /** Closes the transport and every channel on it. Safe to call more than once. */
     suspend fun close()

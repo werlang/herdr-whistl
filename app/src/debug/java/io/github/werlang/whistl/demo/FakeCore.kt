@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.demo
 
+import io.github.werlang.whistl.core.rpc.FramedSession
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.data.AddResult
@@ -42,6 +43,7 @@ import io.github.werlang.whistl.data.withSpace
 import io.github.werlang.whistl.data.without
 import io.github.werlang.whistl.domain.Agent
 import io.github.werlang.whistl.domain.AgentStatus
+import io.github.werlang.whistl.domain.TerminalFrame
 import io.github.werlang.whistl.domain.HelloResult
 import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.domain.Terminal
@@ -125,9 +127,21 @@ class FakeCore : DemoCore {
      * @param address the terminal address.
      * @param status the agent status, or `null` for a plain shell.
      * @param cwd the folder.
+     * @param name the terminal's name, or `null` for the address.
      */
-    fun addAgent(machineId: String, address: String, status: AgentStatus?, cwd: String) {
-        state.addAgent(machineId, address, status, cwd)
+    fun addAgent(machineId: String, address: String, status: AgentStatus?, cwd: String, name: String? = null) {
+        state.addAgent(machineId, address, status, cwd, name = name)
+    }
+
+    /**
+     * Shows [frame] as the screen of terminal [address], in place of its plain text output. The screenshot tests use it to show
+     * colour and the alternate screen; the app never calls it.
+     *
+     * @param address the terminal address.
+     * @param frame the screen to show.
+     */
+    fun setScreen(address: String, frame: TerminalFrame) {
+        state.setFrame(address, frame)
     }
 
     /**
@@ -230,6 +244,9 @@ private class FakeState {
     private val documents = LinkedHashMap<String, SpacesDocument>()
     private val terminals = LinkedHashMap<String, List<Terminal>>()
     private val outputs = LinkedHashMap<String, MutableList<String>>()
+
+    /** Screens set by the screenshot tests, by address: shown in place of the plain text output. */
+    private val frames = LinkedHashMap<String, TerminalFrame>()
     private var machineCounter = 0
     private var spaceCounter = 0L
     private var startCounter = 0
@@ -423,6 +440,16 @@ private class FakeState {
     /** The output lines held for a terminal, in order. Static demo text, never sent anywhere. */
     @Synchronized
     fun output(address: String): List<String> = outputs[address].orEmpty()
+
+    /** The screen set for [address], or `null` when the plain text output is shown. */
+    @Synchronized
+    fun frame(address: String): TerminalFrame? = frames[address]
+
+    /** Sets the screen of [address]. */
+    @Synchronized
+    fun setFrame(address: String, frame: TerminalFrame) {
+        frames[address] = frame
+    }
 
     /** Appends a line to a terminal's demo output. */
     @Synchronized
@@ -647,6 +674,8 @@ private class FakeMachines(private val state: FakeState) : MachinesRepository {
 private class FakeLease(override val machineId: String) : MachineLease {
     override fun client(): HcClient? = null
 
+    override suspend fun openStream(): FramedSession = throw TransportLost("the demo has no streams")
+
     override suspend fun release() {}
 
     override fun reportLost(client: HcClient, cause: TransportLost) {}
@@ -792,6 +821,8 @@ private class FakeTerminalHandle(
         return TerminalAction.Done
     }
 
+    override fun resize(cols: Int, rows: Int) {}
+
     override fun close() {}
 
     /** Offline or gone, as the action's result; `null` when the action may run. */
@@ -807,7 +838,8 @@ private class FakeTerminalHandle(
             state.terminal(machineId, address) == null -> TerminalReach.Gone
             else -> TerminalReach.Connected
         }
-        return TerminalScreen(text = state.output(address).joinToString("\n"), reach = reach)
+        val frame = state.frame(address) ?: TerminalFrame.plain(state.output(address).joinToString("\n"))
+        return TerminalScreen(frame = frame, reach = reach)
     }
 
     private fun refresh() {

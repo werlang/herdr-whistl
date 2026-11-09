@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.support
 
+import io.github.werlang.whistl.core.rpc.FramedSession
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.data.AddResult
@@ -157,6 +158,8 @@ class ScriptedMachines : MachinesRepository {
             override val machineId: String = id
 
             override fun client(): HcClient? = leaseClient
+
+            override suspend fun openStream(): FramedSession = throw TransportLost("scripted machines have no streams")
 
             override suspend fun release() {}
 

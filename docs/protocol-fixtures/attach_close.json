@@ -1,0 +1,42 @@
+{
+  "request": {
+    "detach": {
+      "channel": 1,
+      "kind": 2,
+      "name": "CLOSE",
+      "payload_hex": ""
+    }
+  },
+  "response": {
+    "detach_ack": {
+      "channel": 1,
+      "kind": 2,
+      "name": "CLOSE",
+      "payload_hex": ""
+    },
+    "program_exit": {
+      "channel": 1,
+      "kind": 2,
+      "name": "CLOSE",
+      "payload_hex": "7b22657869745f636f6465223a372c2266696e69736865645f6d73223a313739343230383331333031312c22726561736f6e223a22657869746564222c227369676e616c223a6e756c6c7d",
+      "json": {
+        "exit_code": 7,
+        "finished_ms": 1794208313011,
+        "reason": "exited",
+        "signal": null
+      }
+    },
+    "program_killed": {
+      "channel": 1,
+      "kind": 2,
+      "name": "CLOSE",
+      "payload_hex": "7b22657869745f636f6465223a6e756c6c2c2266696e69736865645f6d73223a313739343230383737393631332c22726561736f6e223a226b696c6c6564222c227369676e616c223a317d",
+      "json": {
+        "exit_code": null,
+        "finished_ms": 1794208779613,
+        "reason": "killed",
+        "signal": 1
+      }
+    }
+  }
+}

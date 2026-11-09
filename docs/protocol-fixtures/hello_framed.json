@@ -1,0 +1,64 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "hello",
+    "params": {
+      "framed": true
+    }
+  },
+  "response": {
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result": {
+      "core": {
+        "id": "dfccaaad4e6f3a1973f27b54498b887f",
+        "name": "rpi5"
+      },
+      "features": [
+        "framed",
+        "attach",
+        "events",
+        "status",
+        "shell"
+      ],
+      "framed": true,
+      "generation": 1,
+      "methods": [
+        "hello",
+        "server.status",
+        "server.stop",
+        "server.restart",
+        "terminal.run",
+        "templates.list",
+        "terminal.list",
+        "terminal.get",
+        "terminal.kill",
+        "terminal.rm",
+        "terminal.keep",
+        "terminal.label",
+        "terminal.read",
+        "terminal.attach",
+        "terminal.send",
+        "terminal.wait",
+        "terminal.keys",
+        "terminal.interrupt",
+        "terminal.put",
+        "machine.exec",
+        "file.read",
+        "file.write",
+        "file.edit",
+        "doc.get",
+        "doc.set",
+        "events.subscribe",
+        "machine.add",
+        "machine.list",
+        "machine.connect",
+        "machine.rename",
+        "machine.rm",
+        "rpc.discover"
+      ],
+      "version": "0.1.14"
+    }
+  }
+}

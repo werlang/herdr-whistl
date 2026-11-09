@@ -82,7 +82,11 @@ class RepoStack(scope: TestScope, val docChanges: DocumentChanges = DocumentChan
     )
 
     /** The terminal repository under test: the Agent screen's reads and actions. */
-    val terminals: TerminalRepository = DefaultTerminalRepository(scope = scope.backgroundScope, machines = machines)
+    val terminals: TerminalRepository = DefaultTerminalRepository(
+        scope = scope.backgroundScope,
+        machines = machines,
+        newScreen = ::plainTextScreen,
+    )
 
     init {
         connector.commandReply = core::handle
