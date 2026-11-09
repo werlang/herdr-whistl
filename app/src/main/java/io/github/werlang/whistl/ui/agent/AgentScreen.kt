@@ -56,6 +56,7 @@ import io.github.werlang.whistl.R
 import io.github.werlang.whistl.data.FontSize
 import io.github.werlang.whistl.domain.ShortcutKey
 import io.github.werlang.whistl.ui.components.MinTouchTarget
+import io.github.werlang.whistl.ui.components.SheetDragHandle
 import io.github.werlang.whistl.ui.components.StatusLabel
 import io.github.werlang.whistl.ui.keyNameRes
 import io.github.werlang.whistl.ui.statusColor
@@ -142,14 +143,14 @@ fun AgentContent(
         }
     }
     if (state.menuOpen) {
-        ModalBottomSheet(onDismissRequest = onCloseMenu, modifier = Modifier.testTag(AGENT_MENU_SHEET_TAG)) {
+        ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest =onCloseMenu, modifier = Modifier.testTag(AGENT_MENU_SHEET_TAG)) {
             SheetAction(text = stringResource(R.string.agent_interrupt), onClick = onInterrupt)
             SheetAction(text = stringResource(R.string.agent_stop), danger = true, onClick = onAskStop)
             Spacer(Modifier.height(24.dp))
         }
     }
     if (state.confirmStop) {
-        ModalBottomSheet(onDismissRequest = onCancelStop) {
+        ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest =onCancelStop) {
             Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     text = stringResource(R.string.agent_stop_title, state.name),

@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,6 +28,19 @@ import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 
 /** The minimum touch target (SPEC §3): every clickable control is at least this tall and wide. */
 val MinTouchTarget = 48.dp
+
+/**
+ * The bottom sheet's drag handle, at its shipped 32x4 dp look. Material3 1.4.0 makes the handle clickable (tap to expand,
+ * collapse or dismiss) and gives it only 32 dp of width, under the 48 dp target (SPEC §3). The handle is drawn inside a
+ * 48x48 dp box, centred, so the pill stays where it was and the target is 48 dp.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SheetDragHandle() {
+    Box(modifier = Modifier.size(MinTouchTarget), contentAlignment = Alignment.Center) {
+        BottomSheetDefaults.DragHandle()
+    }
+}
 
 /**
  * A status as text beside a coloured dot. The label is always shown: status is never colour-only (SPEC §3).

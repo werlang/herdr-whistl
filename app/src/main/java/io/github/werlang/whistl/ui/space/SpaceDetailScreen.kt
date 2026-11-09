@@ -49,6 +49,7 @@ import io.github.werlang.whistl.R
 import io.github.werlang.whistl.data.StartChoice
 import io.github.werlang.whistl.ui.agentLabelRes
 import io.github.werlang.whistl.ui.components.MinTouchTarget
+import io.github.werlang.whistl.ui.components.SheetDragHandle
 import io.github.werlang.whistl.ui.components.StatusLabel
 import io.github.werlang.whistl.ui.spaces.FolderState
 import io.github.werlang.whistl.ui.spaces.unresolvedTextRes
@@ -352,7 +353,7 @@ fun PickerSheet(
     onChoose: (StartChoice) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss, modifier = Modifier.testTag(PICKER_SHEET_TAG)) {
+    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest =onDismiss, modifier = Modifier.testTag(PICKER_SHEET_TAG)) {
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 text = stringResource(R.string.new_agent),

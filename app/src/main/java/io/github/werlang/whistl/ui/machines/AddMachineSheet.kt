@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.SegmentOption
+import io.github.werlang.whistl.ui.components.SheetDragHandle
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
 
@@ -164,6 +165,7 @@ fun AddMachineSheet(
     // Opens fully expanded: the form is taller than a partly open sheet, and its fields and actions must be reachable at once.
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
+        dragHandle = { SheetDragHandle() },
         onDismissRequest = onClose,
         sheetState = sheetState,
         modifier = Modifier.testTag(ADD_MACHINE_SHEET_TAG),
