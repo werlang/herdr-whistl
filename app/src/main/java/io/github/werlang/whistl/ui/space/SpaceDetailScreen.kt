@@ -353,7 +353,7 @@ fun PickerSheet(
     onChoose: (StartChoice) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest =onDismiss, modifier = Modifier.testTag(PICKER_SHEET_TAG)) {
+    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = onDismiss, modifier = Modifier.testTag(PICKER_SHEET_TAG)) {
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 text = stringResource(R.string.new_agent),

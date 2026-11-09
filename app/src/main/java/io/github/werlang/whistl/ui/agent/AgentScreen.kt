@@ -143,14 +143,14 @@ fun AgentContent(
         }
     }
     if (state.menuOpen) {
-        ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest =onCloseMenu, modifier = Modifier.testTag(AGENT_MENU_SHEET_TAG)) {
+        ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = onCloseMenu, modifier = Modifier.testTag(AGENT_MENU_SHEET_TAG)) {
             SheetAction(text = stringResource(R.string.agent_interrupt), onClick = onInterrupt)
             SheetAction(text = stringResource(R.string.agent_stop), danger = true, onClick = onAskStop)
             Spacer(Modifier.height(24.dp))
         }
     }
     if (state.confirmStop) {
-        ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest =onCancelStop) {
+        ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = onCancelStop) {
             Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     text = stringResource(R.string.agent_stop_title, state.name),

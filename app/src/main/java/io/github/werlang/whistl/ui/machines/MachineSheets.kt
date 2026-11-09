@@ -75,7 +75,7 @@ fun MachineMenuSheet(
     onRemove: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest =onDismiss, modifier = Modifier.testTag(MACHINE_MENU_SHEET_TAG)) {
+    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = onDismiss, modifier = Modifier.testTag(MACHINE_MENU_SHEET_TAG)) {
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
             Text(text = menu.name, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
             Text(
@@ -121,7 +121,7 @@ fun RemoveMachineSheet(
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
 ) {
-    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest =onCancel, modifier = Modifier.testTag(REMOVE_MACHINE_SHEET_TAG)) {
+    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = onCancel, modifier = Modifier.testTag(REMOVE_MACHINE_SHEET_TAG)) {
         Column(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -178,7 +178,7 @@ fun HostKeySheet(
     onRemove: () -> Unit,
     onClose: () -> Unit,
 ) {
-    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest =onClose, modifier = Modifier.testTag(HOST_KEY_SHEET_TAG)) {
+    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = onClose, modifier = Modifier.testTag(HOST_KEY_SHEET_TAG)) {
         Column(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),

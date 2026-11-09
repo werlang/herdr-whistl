@@ -104,12 +104,12 @@ fun SettingsScreen(viewModel: SettingsViewModel, modifier: Modifier = Modifier) 
         }
     }
     if (state.addSheetOpen) {
-        ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest =viewModel::closeAddSheet) {
+        ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = viewModel::closeAddSheet) {
             AddKeySheet(addable = state.addable, onAdd = viewModel::add)
         }
     }
     if (state.licensesOpen) {
-        ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest =viewModel::closeLicenses, modifier = Modifier.testTag(LICENSES_SHEET_TAG)) {
+        ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = viewModel::closeLicenses, modifier = Modifier.testTag(LICENSES_SHEET_TAG)) {
             LicensesSheet()
         }
     }

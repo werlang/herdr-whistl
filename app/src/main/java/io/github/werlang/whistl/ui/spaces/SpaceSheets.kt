@@ -116,7 +116,7 @@ fun NewSpaceSheet(
     onAddMachine: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest =onDismiss, modifier = Modifier.testTag(NEW_SPACE_SHEET_TAG)) {
+    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = onDismiss, modifier = Modifier.testTag(NEW_SPACE_SHEET_TAG)) {
         Column(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -259,7 +259,7 @@ fun SpaceMenuSheet(
     onClose: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest =onDismiss, modifier = Modifier.testTag(SPACE_MENU_SHEET_TAG)) {
+    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = onDismiss, modifier = Modifier.testTag(SPACE_MENU_SHEET_TAG)) {
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
             Text(text = ref.name, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
             if (ref.offline) {
@@ -322,7 +322,7 @@ fun RenameSpaceSheet(
     onSave: () -> Unit,
     onCancel: () -> Unit,
 ) {
-    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest =onCancel, modifier = Modifier.testTag(RENAME_SPACE_SHEET_TAG)) {
+    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = onCancel, modifier = Modifier.testTag(RENAME_SPACE_SHEET_TAG)) {
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
                 text = stringResource(R.string.space_rename_title),
@@ -379,7 +379,7 @@ fun CloseSpaceSheet(
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
 ) {
-    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest =onCancel, modifier = Modifier.testTag(CLOSE_SPACE_SHEET_TAG)) {
+    ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = onCancel, modifier = Modifier.testTag(CLOSE_SPACE_SHEET_TAG)) {
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
                 text = stringResource(R.string.space_close_title, ui.target.name),
