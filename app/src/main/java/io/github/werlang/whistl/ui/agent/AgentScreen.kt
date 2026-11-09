@@ -62,6 +62,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -267,6 +268,9 @@ private const val DIM_ALPHA: Float = 0.6f
 /** How many run layouts are kept before the cache is emptied: a screen of history is far below it. */
 private const val LAYOUT_CACHE_LIMIT: Int = 6_000
 
+/** How long a pane size must hold before it is sent to the core: a rotation passes through layouts that are not the final size. */
+private const val RESIZE_SETTLE_MS: Long = 150L
+
 /** The size of one terminal cell in pixels, and the height of a line. */
 private class CellMetrics(val cellWidth: Float, val lineHeight: Float)
 
@@ -300,9 +304,12 @@ private fun TerminalOutput(state: AgentUiState, onPaneSize: (Int, Int) -> Unit, 
     val cols = ((pane.width - 2 * padding) / metrics.cellWidth).toInt().coerceAtLeast(1)
     val rows = ((pane.height - 2 * padding) / metrics.lineHeight).toInt().coerceAtLeast(1)
     LaunchedEffect(cols, rows, pane) {
-        // A pane too small for one cell while the screen is laid out (a rotation, the keyboard) is not a size: it is not sent.
+        // A pane too small for one cell is not a size. A size still changing (a rotation, the keyboard) is sent only once it has held
+        // for RESIZE_SETTLE_MS: the layout passes in between are not reported to the core.
         val holdsACell = pane.width > 2 * padding + metrics.cellWidth && pane.height > 2 * padding + metrics.lineHeight
-        if (holdsACell) onPaneSize(cols, rows)
+        if (!holdsACell) return@LaunchedEffect
+        delay(RESIZE_SETTLE_MS)
+        onPaneSize(cols, rows)
     }
     // The layouts of the runs: a run is measured once while it is on the screen or in the history (its object is kept by the emulator).
     if (layouts.size > LAYOUT_CACHE_LIMIT) layouts.clear()
