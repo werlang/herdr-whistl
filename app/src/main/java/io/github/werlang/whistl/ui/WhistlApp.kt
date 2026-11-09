@@ -14,8 +14,10 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -160,6 +162,11 @@ fun WhistlApp(startRoute: String = Routes.MACHINES) {
                             onClick = { navigateTo(navController, item.route) },
                             icon = { NavIcon(item = item) },
                             label = { Text(stringResource(item.labelRes)) },
+                            // material3 1.4.0 colours the selected label with `Secondary`; 1.3.1 (the shipped look) used `OnSurface`.
+                            colors =
+                                NavigationBarItemDefaults.colors(
+                                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                ),
                         )
                     }
                 }
