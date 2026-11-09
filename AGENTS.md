@@ -16,7 +16,7 @@ scripts/gradle recordRoborazziDebug     # rewrites those goldens; run it on macO
 
 It uses a native JDK 17 + Android SDK when it finds one (Homebrew:
 `brew install openjdk@17 && brew install --cask android-commandlinetools`,
-then `sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"`).
+then `sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"`).
 Otherwise, or with `WHISTL_DOCKER=1`, it runs in the pinned container from
 `docker/android-build/` (needs ~4 GB free in Docker; on Apple silicon it runs
 under amd64 emulation, because Android's aapt2 has no linux/arm64 build).

@@ -44,7 +44,7 @@ scripts/gradle recordRoborazziDebug     # screenshot goldens (macOS; see CONTRIB
 ```
 
 Native toolchain: `brew install openjdk@17 && brew install --cask android-commandlinetools`, then
-`sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"`.
+`sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"`.
 
 Container path (CI and machines without an SDK): `docker/android-build/`, amd64 because Android's
 `aapt2` has no `linux/arm64` build.

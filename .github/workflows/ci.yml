@@ -32,7 +32,7 @@ jobs:
           set -euo pipefail
           sdkmanager="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)"
           yes | "$sdkmanager" --licenses > /dev/null || true
-          "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          "$sdkmanager" "platform-tools" "platforms;android-37.0" "build-tools;36.0.0" > /dev/null
           "$sdkmanager" --list_installed | sed -n '1,20p'
 
       - uses: gradle/actions/setup-gradle@v6
@@ -52,7 +52,7 @@ jobs:
       - name: Release must not contain debug-only code
         run: |
           set -euo pipefail
-          dexdump="$ANDROID_HOME/build-tools/35.0.0/dexdump"
+          dexdump="$ANDROID_HOME/build-tools/36.0.0/dexdump"
           count="$("$dexdump" app/build/outputs/apk/release/app-release-unsigned.apk | grep -c FakeCore || true)"
           echo "FakeCore classes in the release dex: $count"
           test "$count" -eq 0
@@ -60,7 +60,7 @@ jobs:
       - name: Verify the APK is what we think it is
         run: |
           set -euo pipefail
-          aapt2="$ANDROID_HOME/build-tools/35.0.0/aapt2"
+          aapt2="$ANDROID_HOME/build-tools/36.0.0/aapt2"
           "$aapt2" dump badging app/build/outputs/apk/debug/app-debug.apk | head -3
           "$aapt2" dump resources app/build/outputs/apk/debug/app-debug.apk | grep -A3 'string/machines_title'
 
@@ -98,7 +98,7 @@ jobs:
           set -euo pipefail
           sdkmanager="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)"
           yes | "$sdkmanager" --licenses > /dev/null || true
-          "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          "$sdkmanager" "platform-tools" "platforms;android-37.0" "build-tools;36.0.0" > /dev/null
 
       - uses: gradle/actions/setup-gradle@v6
 
