@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import androidx.activity.ComponentActivity
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
@@ -219,7 +220,8 @@ data class ShotVariant(val dark: Boolean, val fontScale: Float = 1f) {
 }
 
 /**
- * The app as a screenshot shows it: the container, the theme, and the device density with the variant's font scale.
+ * The app as a screenshot shows it: the container, the theme, and the device density with the variant's font scale. Press
+ * ripples are off (`LocalRippleConfiguration` is null) so no ripple tail is captured; the app's own code is unchanged.
  *
  * @param container the app's object graph, over the debug demo data.
  * @param route the route to show first.
@@ -233,7 +235,11 @@ fun ShotContent(container: AppContainer, route: String, dark: Boolean, fontScale
         LocalDensity provides Density(density = SHOT_DENSITY, fontScale = fontScale),
     ) {
         WhistlTheme(darkTheme = dark) {
-            WhistlApp(startRoute = route)
+            // Screenshots carry no press ripples: a ripple's exit tail is a timing-dependent 1/255 tint, so a frame
+            // would differ from run to run. The app itself keeps its ripples; this is for the captured frames only.
+            CompositionLocalProvider(LocalRippleConfiguration provides null) {
+                WhistlApp(startRoute = route)
+            }
         }
     }
 }
@@ -785,6 +791,7 @@ abstract class ScreenHarness {
 
         /** How long a sheet or a stage may take to appear after it is opened or after a connection attempt. */
         const val SHEET_TIMEOUT_MS: Long = 5_000L
+
 
         /**
          * The fewest distinct colours a real frame has. The smallest golden the suite records has 553 (sampled every fourth

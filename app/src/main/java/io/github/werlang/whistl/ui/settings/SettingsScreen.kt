@@ -55,6 +55,7 @@ import io.github.werlang.whistl.data.ThemeChoice
 import io.github.werlang.whistl.domain.ShortcutKey
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.SegmentOption
+import io.github.werlang.whistl.ui.components.SheetDragHandle
 import io.github.werlang.whistl.ui.keyNameRes
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
@@ -103,12 +104,12 @@ fun SettingsScreen(viewModel: SettingsViewModel, modifier: Modifier = Modifier) 
         }
     }
     if (state.addSheetOpen) {
-        ModalBottomSheet(onDismissRequest = viewModel::closeAddSheet) {
+        ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = viewModel::closeAddSheet) {
             AddKeySheet(addable = state.addable, onAdd = viewModel::add)
         }
     }
     if (state.licensesOpen) {
-        ModalBottomSheet(onDismissRequest = viewModel::closeLicenses, modifier = Modifier.testTag(LICENSES_SHEET_TAG)) {
+        ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = viewModel::closeLicenses, modifier = Modifier.testTag(LICENSES_SHEET_TAG)) {
             LicensesSheet()
         }
     }

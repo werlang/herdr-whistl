@@ -24,7 +24,7 @@ RUN curl -fsSL -o /tmp/clt.zip "https://dl.google.com/android/repository/command
 ENV PATH=$PATH:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools
 
 RUN yes | sdkmanager --licenses > /dev/null \
- && sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+ && sdkmanager --install "platform-tools" "platforms;android-37.0" "build-tools;36.0.0" > /dev/null
 
 # Gradle, only to generate the wrapper; builds use ./gradlew.
 ARG GRADLE_VERSION=8.11.1

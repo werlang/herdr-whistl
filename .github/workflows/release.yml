@@ -23,7 +23,7 @@ jobs:
           set -euo pipefail
           sdkmanager="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)"
           yes | "$sdkmanager" --licenses > /dev/null || true
-          "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          "$sdkmanager" "platform-tools" "platforms;android-37.0" "build-tools;36.0.0" > /dev/null
       - uses: gradle/actions/setup-gradle@v6
       - name: Verify the tag matches the manifest version
         run: |
@@ -65,7 +65,7 @@ jobs:
           set -euo pipefail
           sdkmanager="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)"
           yes | "$sdkmanager" --licenses > /dev/null || true
-          "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          "$sdkmanager" "platform-tools" "platforms;android-37.0" "build-tools;36.0.0" > /dev/null
       - uses: gradle/actions/setup-gradle@v6
       - name: Verify screenshot goldens
         run: ./gradlew --no-daemon verifyRoborazziDebug
