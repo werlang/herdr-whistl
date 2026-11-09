@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -74,6 +75,9 @@ enum class AgentStatusLabel {
 
     /** The program has exited. */
     Finished,
+
+    /** The machine is not connected, so the agent is shown as it was last seen (phase 7 r7). */
+    Offline,
 }
 
 /**
@@ -152,11 +156,14 @@ private data class Interaction(
  * - Send sends the text and presses Enter. A blocked program refuses plain text, so Send forces it only when the agent's
  *   status is `blocked`; for any other status the request has no `force` field.
  * - Ctrl is sticky. Armed, the next bar key goes out as `ctrl+<key>` when the table has that combination, and otherwise
- *   disarms and goes out as it is. The first typed letter a–z goes out as `ctrl+<letter>` and is not inserted; any other typed
- *   character disarms Ctrl and is inserted.
+ *   disarms and goes out as it is. Armed on an empty field, one typed letter goes out as `ctrl+<letter>` and is not inserted,
+ *   and Ctrl disarms (phase 7 r9, user decision); other typing inserts and keeps Ctrl armed. Send never applies Ctrl: the
+ *   text goes out plainly and clears the latch (phase 7 r5 amendment U3).
  * - `/ | ~ -` insert their character at the cursor. Every other bar key is sent at once with `terminal.keys`.
  * - Interrupt sends Ctrl+C. Stop and remove asks first, then kills and removes the terminal, and the screen closes.
  * - Input is disabled while the machine is offline, the terminal is gone, or the program has finished.
+ * - While the machine has no connection (offline or connecting), the agent is shown as it was last seen: its status and its
+ *   space stay, and its label says offline. Only a program the core reported finished says finished (phase 7 r7).
  *
  * @param terminals opens the terminal.
  * @param agents the agent's status and state.
@@ -181,9 +188,15 @@ class AgentViewModel(
         open?.screen ?: flowOf(TerminalScreen(text = "", reach = TerminalReach.Offline))
     }
 
-    private val agent = agents.agents.map { list ->
-        list.firstOrNull { it.machineId == machineId && it.agent.terminal.address == address }
-    }
+    /**
+     * The agent the machine lists now ([now]), and the last one it listed ([lastSeen]). The repository drops an offline
+     * machine's agents from its list, so the screen keeps the last one while the machine has no connection (phase 7 r7).
+     */
+    private data class Sighting(val now: MachineAgent? = null, val lastSeen: MachineAgent? = null)
+
+    private val agent = agents.agents
+        .map { list -> list.firstOrNull { it.machineId == machineId && it.agent.terminal.address == address } }
+        .scan(Sighting()) { seen, now -> Sighting(now = now, lastSeen = now ?: seen.lastSeen) }
 
     /** The screen's state. */
     val state: StateFlow<AgentUiState> = combine(
@@ -192,8 +205,8 @@ class AgentViewModel(
         machines.machines(),
         settings.settings,
         interaction,
-    ) { output, current, machineList, prefs, own ->
-        build(output, current, machineList.firstOrNull { it.id == machineId }?.name ?: machineId, prefs.fontSize, prefs.shortcutBar, own)
+    ) { output, sighting, machineList, prefs, own ->
+        build(output, sighting, machineList.firstOrNull { it.id == machineId }?.name ?: machineId, prefs.fontSize, prefs.shortcutBar, own)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, placeholder())
 
     init {
@@ -210,29 +223,30 @@ class AgentViewModel(
     }
 
     /**
-     * The text field changed. While Ctrl is armed, a typed letter becomes a Ctrl combination and is not inserted.
+     * The text field changed. Ctrl armed on an empty field sends one typed letter as its Ctrl combination (phase 7 r9, user
+     * decision): `s` goes out as `ctrl+s`, the field stays empty, and Ctrl disarms. So `sleep` typed with Ctrl armed on an
+     * empty field begins with Ctrl+S; that is the intended result, not a fault. Every other change only inserts and keeps Ctrl
+     * armed: a digit or punctuation on an empty field, typing into a field that has text, and a paste or IME commit of more than
+     * one character. A latched Ctrl stays armed until Send or a bar key. (Phase 7 r5: typing used to send the first letter as
+     * Ctrl whatever the field held, so `sleep` began with Ctrl+S and froze the terminal. r5 made typing insert; r9 keeps that
+     * for a field with text and for non-letters, and sends one letter as Ctrl only when Ctrl was armed on an empty field.)
      *
      * @param newValue the field after the change.
      */
     fun onInputChange(newValue: TextFieldValue) {
         val own = interaction.value
-        val old = own.input
-        val added = newValue.text.length - old.text.length
-        if (own.ctrlArmed && added > 0) {
-            val typed = newValue.text.substring(old.selection.min, old.selection.min + added)
-            val combination = letterCombination(typed.first())
-            if (combination != null) {
-                interaction.value = own.copy(
-                    ctrlArmed = false,
-                    lastKey = SentKey(typed.first().uppercaseChar().toString(), ctrl = true),
-                )
-                sendKeys(listOf(combination))
-                return
-            }
-            interaction.value = own.copy(input = newValue, ctrlArmed = false)
-            return
+        val combination = if (own.ctrlArmed && state.value.canType && own.input.text.isEmpty() && newValue.text.length == 1) {
+            letterCombination(newValue.text[0])
+        } else {
+            null
         }
-        interaction.value = own.copy(input = newValue)
+        if (combination == null) {
+            interaction.value = own.copy(input = newValue)
+        } else {
+            val letter = newValue.text[0].uppercaseChar().toString()
+            interaction.value = own.copy(ctrlArmed = false, lastKey = SentKey(letter, ctrl = true))
+            sendKeys(listOf(combination))
+        }
     }
 
     /**
@@ -268,13 +282,17 @@ class AgentViewModel(
         }
     }
 
-    /** Send: the field's text and Enter. A blocked agent receives it forced. Empty text or no connection does nothing. */
+    /**
+     * Send: the field's text goes out unmodified, with Enter, and a blocked agent receives it forced. Send never applies a
+     * latched Ctrl (phase 7 r5 amendment U3): Ctrl disarms, and only a bar key takes it. Empty text or no connection does nothing.
+     */
     fun onSend() {
         val current = state.value
         if (!current.canSend) return
-        val text = interaction.value.input.text
+        val own = interaction.value
+        val text = own.input.text
         val force = current.status == AgentStatus.Blocked
-        interaction.value = interaction.value.copy(ctrlArmed = false)
+        interaction.value = own.copy(ctrlArmed = false)
         viewModelScope.launch {
             val outcome = handle.value?.send(text, force) ?: TerminalAction.Offline
             when (outcome) {
@@ -344,14 +362,19 @@ class AgentViewModel(
 
     private fun build(
         output: TerminalScreen,
-        current: MachineAgent?,
+        sighting: Sighting,
         machineName: String,
         fontSize: FontSize,
         keyBar: List<ShortcutKey>,
         own: Interaction,
     ): AgentUiState {
+        // No connection (offline, or still connecting): the agent is shown as last seen, so its status and space stay (phase 7 r7).
+        val offline = output.reach == TerminalReach.Offline && !own.unavailable
+        val current = if (offline) sighting.now ?: sighting.lastSeen else sighting.now
         val terminal = current?.agent?.terminal
         val live = terminal?.state == TerminalState.Live
+        // The label says offline unless the core reported the program finished: a missing or unlisted agent is never "finished".
+        val reportedFinished = terminal?.state == TerminalState.Finished
         val derived = when {
             own.unavailable -> AgentNotice.Gone
             output.reach == TerminalReach.Offline -> AgentNotice.Offline
@@ -368,7 +391,11 @@ class AgentViewModel(
             address = address,
             machineName = machineName,
             spaceName = current?.space?.name,
-            statusLabel = statusLabel(status, live, terminal != null),
+            statusLabel = if (offline && !reportedFinished) {
+                AgentStatusLabel.Offline
+            } else {
+                statusLabel(status, live, terminal != null)
+            },
             status = status,
             screenText = output.text,
             reach = output.reach,
@@ -402,7 +429,7 @@ class AgentViewModel(
         address = address,
         machineName = "",
         spaceName = null,
-        statusLabel = AgentStatusLabel.Finished,
+        statusLabel = AgentStatusLabel.Offline,
         status = null,
         screenText = "",
         reach = TerminalReach.Offline,

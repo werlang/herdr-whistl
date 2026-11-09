@@ -79,6 +79,10 @@ core/secure/ Android Keystore AES-256-GCM secret store
 Working: the six screens, the protocol core against recorded herdr-core fixtures, i18n (en, pt-BR),
 and a screenshot suite covering every screen and sheet in dark, light and both locales.
 
+Not supported in v0.1.x: terminal colour and live terminal resize. They need
+`terminal.attach` (a raw framed stream with cols/rows and resize notifications) and a VT
+emulator, a phase of its own (`docs/SPEC.md` §5, report follow-up F1).
+
 Not done yet: a run on a physical device or emulator in CI, a release signing configuration, and a
 real recording of a `missed` event (its fixture is synthetic — see `docs/event-shapes.md`).
 

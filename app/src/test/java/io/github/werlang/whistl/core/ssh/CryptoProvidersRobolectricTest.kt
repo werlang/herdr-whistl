@@ -43,7 +43,7 @@ class CryptoProvidersRobolectricTest {
         assertNull(Security.getProvider("BC").getService("Signature", "Ed25519"))
         assertThrows(NoSuchAlgorithmException::class.java) { Signature.getInstance("Ed25519", "BC") }
 
-        CryptoProviders.install(Build.VERSION.SDK_INT, JavaSecurityRegistry)
+        CryptoProviders.install(JavaSecurityRegistry)
 
         val first = Security.getProviders()[0]
         assertTrue("first provider is ${first.javaClass.name}", first is BouncyCastleProvider)

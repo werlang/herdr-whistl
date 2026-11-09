@@ -115,6 +115,27 @@ class SpacesRepositoryTest {
         assertEquals(JsonPrimitive(0), written.getValue("order"))
     }
 
+    /**
+     * R4 (phase 7 P2): a space stays under its machine after the machine is edited. Spaces are keyed by machine id, and an
+     * edit keeps the id, so the same space is listed under the same machine after a rename and after a user change.
+     */
+    @Test
+    fun spacesStayUnderTheSameMachineAfterAnEdit() = runTest {
+        val (h, id) = connectedWith(spacesDocJson(emptyList()))
+        val spaceId = (h.spaces.create(id, folder = "~/code/web-app") as SpaceResult.Done).spaceId
+        runCurrent()
+
+        h.machines.edit(id, NewMachine("renamed", "mac.local", 22, "root"), AuthMethod.Key)
+        runCurrent()
+        h.machines.edit(id, NewMachine("renamed", "mac.local", 22, "admin"), AuthMethod.Key)
+        runCurrent()
+
+        assertEquals(listOf(id), h.machines.machines().value.map { it.id })
+        val group = h.spaces.groups().value.single()
+        assertEquals(id, group.machineId)
+        assertEquals(listOf(spaceId), group.spaces.map { it.id })
+    }
+
     /** create with no folder uses `~`, and the default name is `~`. */
     @Test
     fun createDefaultsToTheHomeFolder() = runTest {

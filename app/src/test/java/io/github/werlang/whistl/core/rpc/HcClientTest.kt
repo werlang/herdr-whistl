@@ -1,7 +1,10 @@
 package io.github.werlang.whistl.core.rpc
 
+import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.TerminalState
 import io.github.werlang.whistl.support.FakeLinePipe
+import io.github.werlang.whistl.support.LoggedLine
+import io.github.werlang.whistl.support.RecordingLog
 import io.github.werlang.whistl.support.Fixtures
 import io.github.werlang.whistl.support.assertThrowsSuspend
 import io.github.werlang.whistl.support.clientWith
@@ -15,13 +18,19 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 
 /**
@@ -32,6 +41,10 @@ import org.junit.Test
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HcClientTest {
+    /** Reaches the warning for a skipped terminal entry; the recording sink replaces the Android logger (phase 7 r6). */
+    @get:Rule
+    val log = RecordingLog()
+
 
     /** `hello` at generation 2 is refused. The generation is patched in memory; the fixture on disk is unchanged. */
     @Test
@@ -112,6 +125,61 @@ class HcClientTest {
         assertEquals("future_kind", unknown.type)
         assertEquals("t15s", unknown.terminal)
         assertNull(collector.failure)
+    }
+
+    /**
+     * hc sends a Claude Code terminal's status as an object, `{"app":"claude-code","state":"idle"}`, in the events snapshot.
+     * The snapshot must still decode, and the status is read from `state`. Before this, the object made the whole snapshot
+     * fail to decode, so the machine lost every agent after a restart (phase 7 r5).
+     */
+    @Test
+    fun aClaudeStatusObjectInTheSnapshotKeepsEveryTerminal() = runTest {
+        val fixture = Fixtures.load("subscribe.json")
+        val events = FakeLinePipe.replaying(fixture, withStatusObject(fixture.response, "t15s", "idle"))
+        val sub = clientWith(events = events).eventsSubscribe(mapOf("whistl.fixture" to "1"))
+
+        val byAddress = sub.terminals.associateBy { it.address }
+        assertEquals(AgentStatus.Idle, byAddress.getValue("t15s").status)
+        assertEquals(fixture.response.getValue("result").jsonObject.getValue("terminals").jsonArray.size, sub.terminals.size)
+    }
+
+    /** Rewrites one terminal's `status` in a subscribe response to hc's object form. */
+    private fun withStatusObject(response: JsonObject, address: String, state: String): JsonObject {
+        val result = response.getValue("result").jsonObject
+        val terminals = result.getValue("terminals").jsonArray.map { element ->
+            val terminal = element.jsonObject
+            if (terminal.getValue("address").jsonPrimitive.content != address) {
+                element
+            } else {
+                JsonObject(terminal + ("status" to buildJsonObject { put("app", "claude-code"); put("state", state) }))
+            }
+        }
+        return JsonObject(response + ("result" to JsonObject(result + ("terminals" to JsonArray(terminals)))))
+    }
+
+    /**
+     * One terminal entry that does not decode is skipped and counted, and the others of the same snapshot are kept (phase 7
+     * r5 amendment U4). Before this, the first bad entry failed the whole snapshot.
+     */
+    @Test
+    fun aBadTerminalEntryIsSkippedAndTheOthersAreKept() = runTest {
+        val fixture = Fixtures.load("subscribe.json")
+        val good = fixture.response.getValue("result").jsonObject.getValue("terminals").jsonArray.single().jsonObject
+        val broken = JsonObject(good + ("address" to JsonPrimitive("t-broken")) + ("turn" to buildJsonObject { }))
+        val other = JsonObject(good + ("address" to JsonPrimitive("t-other")))
+        val response = withTerminals(fixture.response, listOf(good, broken, other))
+        val sub = clientWith(events = FakeLinePipe.replaying(fixture, response)).eventsSubscribe(mapOf("whistl.fixture" to "1"))
+
+        assertEquals(listOf("t15s", "t-other"), sub.terminals.map { it.address })
+        assertEquals(1, sub.skippedTerminals)
+        // The warning names the exception's class only: no entry text, no address (phase 7 r6 step 0).
+        assertEquals(listOf(LoggedLine("w", "Whistl.rpc", "skipped a terminal entry: JsonDecodingException")), log.lines)
+    }
+
+    /** Replaces the `terminals` array of a subscribe response. */
+    private fun withTerminals(response: JsonObject, entries: List<JsonObject>): JsonObject {
+        val result = response.getValue("result").jsonObject
+        return JsonObject(response + ("result" to JsonObject(result + ("terminals" to JsonArray(entries)))))
     }
 
     /** 39 s of silence after the last line does not fail the stream (the control case). */

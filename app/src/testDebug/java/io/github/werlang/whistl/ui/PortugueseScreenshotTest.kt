@@ -61,4 +61,13 @@ class PortugueseScreenshotTest : ScreenHarness() {
     fun addKeySheet() {
         checkTwoThemes(ShotScreen.AddKeySheet)
     }
+
+    /** The Settings screen in dark at 1.3× font scale (phase 7 r6, row 12: `settings_dark_pt-BR_fs13.png`). */
+    @Test
+    @Config(qualifiers = "pt-rBR-w411dp-h891dp-xxhdpi")
+    fun settingsLargeFont() {
+        val frames = renderVariants(ShotScreen.Settings, listOf(ShotVariant(dark = true, fontScale = 1.3f)), locale = "pt-BR")
+        val frame = frames.getValue(ShotVariant(dark = true, fontScale = 1.3f))
+        assertTrue("settings large-font frame is ${frame.size} bytes", frame.size > MIN_PNG_BYTES)
+    }
 }

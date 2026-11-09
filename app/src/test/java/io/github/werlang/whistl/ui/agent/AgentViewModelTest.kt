@@ -4,12 +4,15 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import io.github.werlang.whistl.data.DefaultSettingsRepository
 import io.github.werlang.whistl.data.TerminalReach
+import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.ShortcutKey
 import io.github.werlang.whistl.support.InMemorySettingsStore
 import io.github.werlang.whistl.support.MainDispatcherRule
 import io.github.werlang.whistl.support.RepoStack
 import io.github.werlang.whistl.support.eventsSnapshot
 import io.github.werlang.whistl.support.snapshotPipe
+import io.github.werlang.whistl.support.spaceJson
+import io.github.werlang.whistl.support.spacesDocJson
 import io.github.werlang.whistl.support.terminalJson
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
@@ -125,18 +128,131 @@ class AgentViewModelTest {
         assertNull(vm.state.value.notice)
     }
 
-    /** Ctrl armed, then a typed letter: the letter goes out as `ctrl+<letter>`, is not inserted, and Ctrl disarms. */
+    /**
+     * Ctrl armed on an empty field, then one typed letter: `ctrl+s` goes out, the letter is not inserted, Ctrl disarms, and the
+     * hint says "Ctrl+S" (phase 7 r9, user decision).
+     */
     @Test
-    fun ctrlThenALetterSendsTheCtrlLetterAndInsertsNothing() = runTest {
+    fun ctrlThenOneTypedLetterOnAnEmptyFieldSendsCtrlLetter() = runTest {
         val (h, vm, _) = openAgent()
 
         vm.onKey(ShortcutKey.CTRL)
         assertTrue(vm.state.value.ctrlArmed)
-        vm.onInputChange(TextFieldValue("X"))
+        vm.onInputChange(TextFieldValue("s"))
         runCurrent()
 
-        assertEquals(listOf("ctrl+x"), h.sent("terminal.keys").single().keyNames())
+        assertEquals(listOf("ctrl+s"), h.sent("terminal.keys").single().keyNames())
+        assertTrue(h.sent("terminal.send").isEmpty())
         assertEquals("", vm.state.value.input.text)
+        assertFalse(vm.state.value.ctrlArmed)
+        assertEquals(SentKey("S", ctrl = true), vm.state.value.lastKey)
+    }
+
+    /** Ctrl armed on an empty field, then an uppercase letter: the lowercase combination goes out, and the hint says "S". */
+    @Test
+    fun ctrlThenAnUppercaseLetterSendsTheLowercaseCombination() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onKey(ShortcutKey.CTRL)
+        vm.onInputChange(TextFieldValue("S"))
+        runCurrent()
+
+        assertEquals(listOf("ctrl+s"), h.sent("terminal.keys").single().keyNames())
+        assertEquals(SentKey("S", ctrl = true), vm.state.value.lastKey)
+        assertEquals("", vm.state.value.input.text)
+    }
+
+    /** Ctrl armed with text in the field, then a typed letter: it is inserted, nothing is sent, and Ctrl stays armed. */
+    @Test
+    fun ctrlWithTextInTheFieldInsertsTheLetterAndStaysArmed() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onInputChange(TextFieldValue("l"))
+        vm.onKey(ShortcutKey.CTRL)
+        vm.onInputChange(TextFieldValue("ls"))
+        runCurrent()
+
+        assertEquals("ls", vm.state.value.input.text)
+        assertTrue(vm.state.value.ctrlArmed)
+        assertTrue(h.sent("terminal.keys").isEmpty())
+    }
+
+    /** Ctrl armed on an empty field, then a pasted word (more than one character): it is inserted, and Ctrl stays armed. */
+    @Test
+    fun ctrlThenAPastedWordIsInsertedAndStaysArmed() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onKey(ShortcutKey.CTRL)
+        vm.onInputChange(TextFieldValue("sleep"))
+        runCurrent()
+
+        assertEquals("sleep", vm.state.value.input.text)
+        assertTrue(vm.state.value.ctrlArmed)
+        assertTrue(h.sent("terminal.keys").isEmpty())
+    }
+
+    /** Ctrl armed while offline: the field takes no input, so nothing is sent and Ctrl stays armed. */
+    @Test
+    fun ctrlThenATypedLetterWhileOfflineIsInsertedAndStaysArmed() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onKey(ShortcutKey.CTRL)
+        h.connector.lastSession!!.kill()
+        advanceTimeBy(500)
+        runCurrent()
+        vm.onInputChange(TextFieldValue("s"))
+        runCurrent()
+
+        assertFalse(vm.state.value.canType)
+        assertEquals("s", vm.state.value.input.text)
+        assertTrue(vm.state.value.ctrlArmed)
+        assertTrue(h.sent("terminal.keys").isEmpty())
+    }
+
+    /** Ctrl armed, then Send of text already in the field: the text goes out plainly, no Ctrl key is sent, and Ctrl disarms. */
+    @Test
+    fun ctrlThenSendSendsThePlainTextAndNeverCtrl() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onInputChange(TextFieldValue("ls"))
+        vm.onKey(ShortcutKey.CTRL)
+        vm.onSend()
+        runCurrent()
+
+        assertTrue(h.sent("terminal.keys").isEmpty())
+        assertEquals("ls", h.sent("terminal.send").single().params().getValue("text").jsonPrimitive.content)
+        assertEquals("", vm.state.value.input.text)
+        assertFalse(vm.state.value.ctrlArmed)
+    }
+
+    /** Ctrl armed, then Send of longer text: the text goes out unmodified with Enter, no Ctrl key is sent, and Ctrl disarms. */
+    @Test
+    fun ctrlThenSendOfLongerTextSendsItUnmodifiedAndDisarms() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onKey(ShortcutKey.CTRL)
+        vm.onInputChange(TextFieldValue("sleep 100"))
+        vm.onSend()
+        runCurrent()
+
+        assertTrue(h.sent("terminal.keys").isEmpty())
+        val send = h.sent("terminal.send").single()
+        assertEquals("sleep 100", send.params().getValue("text").jsonPrimitive.content)
+        assertFalse(vm.state.value.ctrlArmed)
+    }
+
+    /** Ctrl armed, then Send of one character with no Ctrl combination (a digit): it goes out unmodified, and Ctrl disarms. */
+    @Test
+    fun ctrlThenSendOfASingleDigitSendsItUnmodified() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onKey(ShortcutKey.CTRL)
+        vm.onInputChange(TextFieldValue("1"))
+        vm.onSend()
+        runCurrent()
+
+        assertTrue(h.sent("terminal.keys").isEmpty())
+        assertEquals("1", h.sent("terminal.send").single().params().getValue("text").jsonPrimitive.content)
         assertFalse(vm.state.value.ctrlArmed)
     }
 
@@ -166,16 +282,16 @@ class AgentViewModelTest {
         assertFalse(vm.state.value.ctrlArmed)
     }
 
-    /** Ctrl armed, then a typed character that is not a letter: it is inserted, and Ctrl disarms. */
+    /** Ctrl armed, then a typed character that is not a letter: it is inserted, nothing is sent, and Ctrl stays armed until Send. */
     @Test
-    fun ctrlThenATypedDigitIsInsertedAndDisarms() = runTest {
+    fun ctrlThenATypedDigitIsInsertedAndStaysArmed() = runTest {
         val (h, vm, _) = openAgent()
 
         vm.onKey(ShortcutKey.CTRL)
         vm.onInputChange(TextFieldValue("1"))
 
         assertEquals("1", vm.state.value.input.text)
-        assertFalse(vm.state.value.ctrlArmed)
+        assertTrue(vm.state.value.ctrlArmed)
         assertTrue(h.sent("terminal.keys").isEmpty())
     }
 
@@ -259,6 +375,42 @@ class AgentViewModelTest {
         assertFalse(state.canType)
         assertFalse(state.canSend)
         assertTrue(h.sent("terminal.send").isEmpty())
+    }
+
+    /**
+     * An agent whose machine drops keeps the status and the space it had while connected (phase 7 r7). Its label says offline:
+     * the core never reported it finished, so the screen must not say "finished" and must not say "No space" for it.
+     */
+    @Test
+    fun anOfflineAgentKeepsItsStatusAndSpaceAndSaysOffline() = runTest {
+        val h = RepoStack(this)
+        h.core.value = spacesDocJson(listOf(spaceJson("sp_a", "web", "/home/u/web")))
+        val terminal = terminalJson(
+            "t1",
+            status = "working",
+            labels = mapOf("whistl.space" to "sp_a"),
+            cwd = "/home/u/web",
+        )
+        h.core.terminals += terminal
+        h.core.screens["t1"] = "compiling"
+        h.connector.eventsPipeFactory = { snapshotPipe(eventsSnapshot(1, listOf(terminal))) }
+        h.addMachine()
+        runCurrent()
+        val vm = AgentViewModel(h.terminals, h.agents, h.machines, DefaultSettingsRepository(InMemorySettingsStore()), "m1", "t1")
+        runCurrent()
+        assertEquals(AgentStatusLabel.Working, vm.state.value.statusLabel)
+        assertEquals("web", vm.state.value.spaceName)
+
+        h.connector.lastSession!!.kill()
+        advanceTimeBy(500)
+        runCurrent()
+
+        val state = vm.state.value
+        assertEquals(TerminalReach.Offline, state.reach)
+        assertEquals(AgentStatusLabel.Offline, state.statusLabel)
+        assertEquals("web", state.spaceName)
+        assertEquals(AgentStatus.Working, state.status)
+        assertEquals("t1", state.address)
     }
 
     /** Leaving the screen stops the reads: no `terminal.read` is sent during the next ten seconds. */

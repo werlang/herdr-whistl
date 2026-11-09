@@ -151,6 +151,7 @@ enum class SpaceProblem {
  * @property folderProblem the folder's problem, after the last Create.
  * @property nameProblem the name's problem, after the last Create.
  * @property machineOffline whether the last Create found the machine offline.
+ * @property machineMissing whether the machine the sheet was on is no longer added, so there is nothing to create on.
  */
 data class NewSpaceUi(
     val machines: List<MachineChoice>,
@@ -161,6 +162,7 @@ data class NewSpaceUi(
     val folderProblem: SpaceProblem?,
     val nameProblem: SpaceProblem?,
     val machineOffline: Boolean,
+    val machineMissing: Boolean,
 )
 
 /**
@@ -191,7 +193,7 @@ data class SpaceRef(
  * @property draft the name as typed.
  * @property problem the name's problem, after the last Save.
  */
-data class RenameUi(val target: SpaceRef, val draft: String, val problem: SpaceProblem?)
+data class RenameUi(val target: SpaceRef, val draft: String, val problem: SpaceProblem?, val machineOffline: Boolean = false)
 
 /**
  * The close confirmation.
@@ -255,6 +257,7 @@ private data class NewDraft(
     val folderProblem: SpaceProblem? = null,
     val nameProblem: SpaceProblem? = null,
     val machineOffline: Boolean = false,
+    val machineMissing: Boolean = false,
 )
 
 /** A space identified by its machine and id. */
@@ -267,6 +270,7 @@ private data class Sheets(
     val renameFor: SpaceKey? = null,
     val renameDraft: String = "",
     val renameProblem: SpaceProblem? = null,
+    val renameMachineOffline: Boolean = false,
     val closeFor: SpaceKey? = null,
 )
 
@@ -308,7 +312,7 @@ class SpacesViewModel(
      *
      * @param id the machine.
      */
-    fun pickMachine(id: String) = editNewSpace { it.copy(selectedId = id, machineOffline = false) }
+    fun pickMachine(id: String) = editNewSpace { it.copy(selectedId = id, machineOffline = false, machineMissing = false) }
 
     /**
      * The folder field changed.
@@ -330,7 +334,12 @@ class SpacesViewModel(
      */
     fun createSpace() {
         val draft = sheets.value.newSpace ?: return
-        val machineId = draft.selectedId ?: state.value.newSpace?.selectedId ?: return
+        val machineId = draft.selectedId ?: state.value.newSpace?.selectedId
+        if (machineId == null) {
+            // The machine was removed while the sheet was open: there is nothing to create on. The sheet says so and stays open.
+            editNewSpace { it.copy(machineMissing = true) }
+            return
+        }
         viewModelScope.launch {
             when (val result = spaces.create(machineId, draft.folder, draft.name)) {
                 is SpaceResult.Done -> sheets.value = sheets.value.copy(newSpace = null)
@@ -342,8 +351,13 @@ class SpacesViewModel(
                     }
                 }
 
-                SpaceResult.MachineOffline -> editNewSpace { it.copy(machineOffline = true) }
-                is SpaceResult.UnknownSpace -> Unit
+                SpaceResult.MachineOffline -> {
+                    // A machine that is no longer added has no lease, so the repository reports it as offline too. It is gone, not
+                    // offline, and the sheet must say so (p7r8 item 5).
+                    val stillAdded = machines.machines().value.any { it.id == machineId }
+                    editNewSpace { if (stillAdded) it.copy(machineOffline = true) else it.copy(machineMissing = true) }
+                }
+                is SpaceResult.UnknownSpace -> editNewSpace { it.copy(machineMissing = true) }
             }
         }
     }
@@ -383,7 +397,13 @@ class SpacesViewModel(
         val key = sheets.value.menuFor ?: return
         val ref = refOf(key) ?: return
         if (ref.offline) return
-        sheets.value = sheets.value.copy(menuFor = null, renameFor = key, renameDraft = ref.name, renameProblem = null)
+        sheets.value = sheets.value.copy(
+            menuFor = null,
+            renameFor = key,
+            renameDraft = ref.name,
+            renameProblem = null,
+            renameMachineOffline = false,
+        )
     }
 
     /**
@@ -392,7 +412,7 @@ class SpacesViewModel(
      * @param text the name typed.
      */
     fun editRename(text: String) {
-        sheets.value = sheets.value.copy(renameDraft = text, renameProblem = null)
+        sheets.value = sheets.value.copy(renameDraft = text, renameProblem = null, renameMachineOffline = false)
     }
 
     /** Saves the new name. A rejected name shows under the field and nothing is written. */
@@ -403,8 +423,8 @@ class SpacesViewModel(
             when (val result = spaces.rename(key.machineId, key.spaceId, open.renameDraft)) {
                 is SpaceResult.Done -> sheets.value = sheets.value.copy(renameFor = null, renameProblem = null)
                 is SpaceResult.Rejected -> sheets.value = sheets.value.copy(renameProblem = problemOf(result.field, result.reason))
-                // Offline: nothing was written. The sheet stays open, so the user can cancel; the row is dimmed.
-                SpaceResult.MachineOffline -> Unit
+                // Offline: nothing was written. The sheet stays open, so the user can cancel, and it says why (phase 7 r6, row 14).
+                SpaceResult.MachineOffline -> sheets.value = sheets.value.copy(renameMachineOffline = true)
 
                 is SpaceResult.UnknownSpace -> sheets.value = sheets.value.copy(renameFor = null)
             }
@@ -413,7 +433,7 @@ class SpacesViewModel(
 
     /** Closes the rename sheet without saving. */
     fun cancelRename() {
-        sheets.value = sheets.value.copy(renameFor = null, renameProblem = null)
+        sheets.value = sheets.value.copy(renameFor = null, renameProblem = null, renameMachineOffline = false)
     }
 
     /** Opens the close confirmation for the menu's space. */
@@ -490,7 +510,7 @@ class SpacesViewModel(
             isEmpty = groupUi.all { it.rows.isEmpty() },
             newSpace = open.newSpace?.let { newSpaceUi(it, choices) },
             menu = menuRef,
-            rename = renameRef?.let { RenameUi(it, open.renameDraft, open.renameProblem) },
+            rename = renameRef?.let { RenameUi(it, open.renameDraft, open.renameProblem, open.renameMachineOffline) },
             close = closeRef?.let { ref ->
                 val live = agentList.count { it.machineId == ref.machineId && it.spaceId == ref.spaceId && it.agent.terminal.state == TerminalState.Live }
                 CloseUi(ref, live)
@@ -537,5 +557,6 @@ class SpacesViewModel(
         folderProblem = draft.folderProblem,
         nameProblem = draft.nameProblem,
         machineOffline = draft.machineOffline,
+        machineMissing = draft.machineMissing,
     )
 }

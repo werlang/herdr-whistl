@@ -231,6 +231,37 @@ class FolderResolverTest {
         assertEquals(FolderResolution.Resolved("/srv/app"), resolver.resolve("/srv/app"))
     }
 
+    /**
+     * Row 4 (phase 7 r3): a home read that did not run cleanly is not kept. The folder is HomeUnreadable, and the next read of
+     * it reads the home again and resolves to the path. This is the case the device showed as "no home folder".
+     */
+    @Test
+    fun aFailedHomeReadThenAGoodOneResolvesTilde() = runTest {
+        val core = FakeCoreDoc().apply { homeProbeFailures = 1 }
+        val recorded = Recorded(core)
+        val resolver = resolverFor(recorded, InMemoryResolvedFolderCache())
+
+        assertEquals(FolderResolution.Unresolvable(UnresolvableReason.HomeUnreadable), resolver.resolve("~/a"))
+        assertEquals(FolderResolution.Resolved("/home/u/a"), resolver.resolve("~/a"))
+        assertEquals(2, recorded.methods().count { it == "machine.exec" })
+        assertEquals(listOf("/home/u/a"), core.probeFolders)
+    }
+
+    /**
+     * A machine that really reports no HOME (an empty answer) is NoHome, and that is kept for the connection: the home is not read
+     * again for the next `~` folder.
+     */
+    @Test
+    fun aRealEmptyHomeIsNoHomeAndIsKeptForTheConnection() = runTest {
+        val core = FakeCoreDoc().apply { home = "" }
+        val recorded = Recorded(core)
+        val resolver = resolverFor(recorded, InMemoryResolvedFolderCache())
+
+        assertEquals(FolderResolution.Unresolvable(UnresolvableReason.NoHome), resolver.resolve("~/a"))
+        assertEquals(FolderResolution.Unresolvable(UnresolvableReason.NoHome), resolver.resolve("~/b"))
+        assertEquals(1, recorded.methods().count { it == "machine.exec" })
+    }
+
     /** A lost connection is not a verdict: it is thrown, and nothing is kept for the folder. */
     @Test
     fun aLostConnectionIsNotAVerdict() = runTest {

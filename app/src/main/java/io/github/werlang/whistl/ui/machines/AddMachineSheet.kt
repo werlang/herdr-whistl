@@ -127,24 +127,38 @@ fun AddMachineSheet(
     onRemove: () -> Unit,
     onCopyKey: () -> Unit,
     onClose: () -> Unit,
+    onPasswordEntered: (Boolean) -> Unit = {},
 ) {
     var password by remember { mutableStateOf(TextFieldValue("")) }
     LaunchedEffect(state.stage) {
         if (state.stage != AddStage.Form) password = TextFieldValue("")
     }
+    LaunchedEffect(password.text) { onPasswordEntered(password.text.isNotEmpty()) }
     val primary: PrimaryAction? = when (state.stage) {
-        AddStage.Form -> PrimaryAction(
-            label = R.string.add_connect,
-            tag = ADD_CONNECT_TAG,
-            // Connect waits for every required field: host and user, and the password in password mode.
-            enabled = state.canConnect && (state.auth == AuthChoice.Key || password.text.isNotEmpty()),
-            danger = false,
-            onClick = { onConnect(if (state.auth == AuthChoice.Password) password.text.toCharArray() else null) },
-        )
+        AddStage.Form -> if (state.editing) {
+            // Edit machine: Save waits for a change, and for a password where the login method needs one.
+            PrimaryAction(
+                label = R.string.edit_save,
+                tag = ADD_CONNECT_TAG,
+                enabled = state.canSave,
+                danger = false,
+                onClick = { onConnect(if (state.auth == AuthChoice.Password && password.text.isNotEmpty()) password.text.toCharArray() else null) },
+            )
+        } else {
+            PrimaryAction(
+                label = R.string.add_connect,
+                tag = ADD_CONNECT_TAG,
+                // Connect waits for every required field: host and user, and the password in password mode.
+                enabled = state.canConnect && (state.auth == AuthChoice.Key || password.text.isNotEmpty()),
+                danger = false,
+                onClick = { onConnect(if (state.auth == AuthChoice.Password) password.text.toCharArray() else null) },
+            )
+        }
 
         AddStage.HostKeyUnknown -> PrimaryAction(R.string.add_trust, ADD_TRUST_TAG, true, false, onTrust)
         AddStage.HostKeyChanged -> PrimaryAction(R.string.machine_remove, ADD_REMOVE_TAG, true, true, onRemove)
-        AddStage.LoginRefused, AddStage.Unreachable -> PrimaryAction(R.string.add_retry, ADD_RETRY_TAG, true, false, onRetry)
+        AddStage.LoginRefused, AddStage.Unreachable, AddStage.ConnectionRefused, AddStage.Internal, AddStage.CoreMissing ->
+            PrimaryAction(R.string.add_retry, ADD_RETRY_TAG, true, false, onRetry)
         AddStage.Connecting, AddStage.UnsupportedCore, AddStage.Connected, AddStage.Missing -> null
     }
     // Opens fully expanded: the form is taller than a partly open sheet, and its fields and actions must be reachable at once.
@@ -161,7 +175,7 @@ fun AddMachineSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = stringResource(R.string.add_machine_title),
+                text = stringResource(if (state.editing) R.string.edit_machine_title else R.string.add_machine_title),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.semantics { heading() },
@@ -295,7 +309,7 @@ private fun FormFields(
             label = { Text(stringResource(R.string.add_field_password)) },
             singleLine = true,
             isError = state.problems[AddField.Password] != null,
-            supportingText = problemMessage(state.problems[AddField.Password]),
+            supportingText = problemMessage(state.problems[AddField.Password]) ?: editPasswordHint(state.editing),
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
             modifier = Modifier.fillMaxWidth().testTag(ADD_PASSWORD_TAG),
@@ -350,6 +364,19 @@ private fun Field(
 private fun placeholderMessage(hint: String?): (@Composable () -> Unit)? {
     if (hint == null) return null
     return { Text(hint, color = LocalWhistlTokens.current.dim) }
+}
+
+/**
+ * The hint under the password field in the Edit sheet: a blank field keeps the saved password (phase 7 P2).
+ *
+ * @param editing whether the sheet is the Edit machine sheet.
+ * @return the hint, or `null` outside the Edit sheet.
+ */
+@Composable
+private fun editPasswordHint(editing: Boolean): (@Composable () -> Unit)? {
+    if (!editing) return null
+    val text = stringResource(R.string.edit_password_keep)
+    return { Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant) }
 }
 
 /**
@@ -501,6 +528,24 @@ private fun StagePanel(state: AddMachineUiState) {
 
         AddStage.UnsupportedCore -> Text(
             text = stringResource(R.string.error_unsupported_core),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+
+        AddStage.ConnectionRefused -> Text(
+            text = stringResource(R.string.error_connection_refused),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+
+        AddStage.Internal -> Text(
+            text = stringResource(R.string.error_internal),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+
+        AddStage.CoreMissing -> Text(
+            text = stringResource(R.string.error_core_missing),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.error,
         )

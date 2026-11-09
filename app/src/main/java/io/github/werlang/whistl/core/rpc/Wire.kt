@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.core.rpc
 
+import io.github.werlang.whistl.core.log.Log
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.CoreMachine
 import io.github.werlang.whistl.domain.Terminal
@@ -7,9 +8,11 @@ import io.github.werlang.whistl.domain.TerminalState
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * The JSON used to write requests. Strict: each request type is a class with declared fields only.
@@ -215,7 +218,8 @@ internal class TerminalWire(
     val cwd: String? = null,
     val labels: Map<String, String> = emptyMap(),
     val state: String? = null,
-    val status: String? = null,
+    /** A string, or for an agent that reports its app an object `{"app":…,"state":…}`: see [statusOf]. */
+    val status: JsonElement? = null,
     val turn: Long = 0,
     @SerialName("exit_code") val exitCode: Int? = null,
     @SerialName("created_ms") val createdMs: Long? = null,
@@ -244,7 +248,8 @@ internal class MachineWire(
 /** `terminal.list` result. Lenient: unknown keys are ignored. */
 @Serializable
 internal class TerminalListWire(
-    val terminals: List<TerminalWire> = emptyList(),
+    /** Kept raw: each entry is decoded on its own by [decodeTerminals], so one bad entry drops only itself (phase 7 r5). */
+    val terminals: List<JsonElement> = emptyList(),
     val machines: List<MachineWire> = emptyList(),
     @SerialName("hidden_finished") val hiddenFinished: Int = 0,
 )
@@ -320,7 +325,8 @@ internal class DocSetWire(
 @Serializable
 internal class SubscribeWire(
     val seq: Long = 0,
-    val terminals: List<TerminalWire> = emptyList(),
+    /** Kept raw: each entry is decoded on its own by [decodeTerminals], so one bad entry drops only itself (phase 7 r5). */
+    val terminals: List<JsonElement> = emptyList(),
 )
 
 /**
@@ -337,6 +343,50 @@ internal class EventWire(
 
 // ---- Mapping to the domain ----
 
+/**
+ * The status name in a wire `status` value. hc sends a plain string (`"idle"`), or for an agent that reports its app an
+ * object `{"app":"claude-code","state":"idle"}` (phase 7 r5: the string-only type made the whole events snapshot fail to
+ * decode). The name is read from the string, or from the object's `state`; anything else is `null`.
+ *
+ * @param value the `status` member, or `null` when absent.
+ * @return the status name, for [AgentStatus.fromWire].
+ */
+internal fun statusOf(value: JsonElement?): String? = when (value) {
+    is JsonPrimitive -> value.takeIf { it.isString }?.content
+    is JsonObject -> (value["state"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+    else -> null
+}
+
+/** The decoded terminals of one result, and how many of its entries were skipped (see [decodeTerminals]). */
+internal data class TerminalDecode(val terminals: List<Terminal>, val skipped: Int)
+
+/**
+ * The terminals of a `terminal.list`, `events.subscribe` or `missed` result, each entry decoded on its own (phase 7 r5
+ * amendment U4). An entry that does not decode is skipped and counted; the others are kept, so one unexpected field in one
+ * terminal never empties a machine's agent list. The log holds the exception's class name only, never the entry.
+ *
+ * @param entries the raw `terminals` entries, in order.
+ * @return the decoded terminals, in order, and the number of entries that did not decode.
+ */
+internal fun decodeTerminals(entries: List<JsonElement>): TerminalDecode {
+    val terminals = ArrayList<Terminal>(entries.size)
+    var skipped = 0
+    for (entry in entries) {
+        try {
+            terminals += ResponseJson.decodeFromJsonElement(TerminalWire.serializer(), entry).toDomain()
+        } catch (e: SerializationException) {
+            skipped++
+            Log.w(TAG, "skipped a terminal entry: ${e::class.java.simpleName}")
+        } catch (e: IllegalArgumentException) {
+            skipped++
+            Log.w(TAG, "skipped a terminal entry: ${e::class.java.simpleName}")
+        }
+    }
+    return TerminalDecode(terminals, skipped)
+}
+
+private const val TAG: String = "Whistl.rpc"
+
 /** Converts a wire terminal to the domain [Terminal]. Unknown state and status values become `null`. */
 internal fun TerminalWire.toDomain(): Terminal = Terminal(
     address = address,
@@ -345,7 +395,7 @@ internal fun TerminalWire.toDomain(): Terminal = Terminal(
     cwd = cwd,
     labels = labels,
     state = TerminalState.fromWire(state),
-    status = AgentStatus.fromWire(status),
+    status = AgentStatus.fromWire(statusOf(status)),
     turn = turn,
     exitCode = exitCode,
     createdMs = createdMs,

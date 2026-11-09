@@ -59,7 +59,7 @@ sealed interface ConnectionState {
  * Why a connection is in [ConnectionState.Error].
  *
  * A failure to open is [ConnectionState.Offline] with a scheduled retry, so a machine that cannot be reached is never an error
- * (phase 6 P0-10).
+ * (phase 6 P0-10). The kinds below are failures that retrying will not fix on its own, so none of them retries.
  */
 enum class ErrorKind {
     /** The login was refused. Not retried automatically; the user can acquire again to try once more. */
@@ -67,6 +67,24 @@ enum class ErrorKind {
 
     /** `hello` reported a protocol generation other than 1. Not retried automatically. */
     UnsupportedGeneration,
+
+    /**
+     * The host answered and nothing listens on the port (`ECONNREFUSED`). Not retried automatically; the user can acquire
+     * again once the SSH server runs.
+     */
+    ConnectionRefused,
+
+    /**
+     * The attempt failed inside the app, not on the network (a missing algorithm, a provider error, an internal error).
+     * Not retried automatically: retrying repeats the same failure. Only the class name is logged.
+     */
+    Internal,
+
+    /**
+     * The login worked, but herdr-core (`hc`) is not installed for that login on the machine: the command was not found. Not retried
+     * automatically; the user installs it for the login, then retries.
+     */
+    CoreMissing,
 }
 
 /**
@@ -232,4 +250,57 @@ interface MachinesRepository {
      * @throws NoSuchElementException when no machine has that id.
      */
     suspend fun reconnect(id: String)
+
+    /**
+     * The login method a machine is stored with, so the Edit sheet can show it. The password itself is never returned.
+     *
+     * @param id the machine id.
+     * @return the login method.
+     * @throws NoSuchElementException when no machine has that id.
+     */
+    fun authOf(id: String): AuthMethod
+
+    /**
+     * Edits a machine in place, keeping its id, so its spaces and agents stay with it (phase 7 P2). Input is checked the
+     * same way as [add]. The rules, by what changed:
+     *
+     * - **Name only:** stored in place. The pinned host key and the session are not touched.
+     * - **User, port, login method, or a new password:** the pinned host key is kept (same host, same key). The session
+     *   closes and reconnects with the new settings, when the machine is held. A machine waiting for a host-key decision,
+     *   or blocked by a changed key, keeps that state until the user decides.
+     * - **Host:** the pinned host key is forgotten, and the session closes. The next connection goes through the
+     *   first-connection confirmation again, which shows the new host's fingerprint. No fingerprint of the old host is
+     *   compared with or saved for the new one. A changed-key block for the old host is cleared too, since its key no
+     *   longer applies.
+     *
+     * A saved password is replaced only when [password] is given. In password mode with `null`, the stored password is
+     * kept, and it is an error when the login method changes to password without one. In key mode the saved password is
+     * deleted.
+     *
+     * @param id the machine id.
+     * @param draft the machine as typed.
+     * @param auth the login method after the edit.
+     * @param password the new password in password mode, or `null` to keep the stored one.
+     * @return the stored machine, or the rejected field.
+     * @throws NoSuchElementException when no machine has that id.
+     */
+    suspend fun edit(id: String, draft: NewMachine, auth: AuthMethod, password: CharArray? = null): EditResult
+}
+
+/** The outcome of [MachinesRepository.edit]. Invalid input is a value, not an exception, and changes nothing. */
+sealed interface EditResult {
+    /**
+     * The machine was updated in place.
+     *
+     * @property machine the stored machine, with the same id.
+     */
+    data class Saved(val machine: Machine) : EditResult
+
+    /**
+     * The input was rejected. Nothing was changed.
+     *
+     * @property field the field that failed.
+     * @property reason why it failed.
+     */
+    data class Rejected(val field: MachineField, val reason: Rejection) : EditResult
 }

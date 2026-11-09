@@ -61,6 +61,15 @@ class Timeout(method: String, timeoutMillis: Long) :
  */
 class AuthFailed : HcException("ssh login was refused")
 
+/**
+ * The login is accepted, but the hc command cannot be found for it: its shell ended the command with "command not found"
+ * (exit status 127) before any answer. herdr-core is not installed for that login on the machine (phase 7 r3). It is not retried
+ * automatically; the user installs it for the login, then retries. The message names neither the user, the host nor any path.
+ *
+ * @param cause the connection failure the empty answer produced.
+ */
+class CoreMissing(cause: Throwable? = null) : HcException("herdr-core is not available for this login", null, cause)
+
 /** `hello` reported a protocol generation other than 1. The app refuses to talk to that core. */
 class UnsupportedGeneration(val generation: Int) :
     HcException("hc protocol generation $generation is not supported; this app needs generation 1")

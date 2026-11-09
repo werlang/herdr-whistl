@@ -107,9 +107,9 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
 
-    // SSH: sshj for the transport. BouncyCastle is sshj's crypto provider on API 26-32 only, where the platform has no
-    // Ed25519 in JCA (SPEC §6, phase 4 decision 2); core/ssh/CryptoProviders registers it there. bcpkix is back on the
-    // classpath for that: it was excluded while the app needed no PEM or EST code, and it carries the EST trust-all
+    // SSH: sshj for the transport. The bundled BouncyCastle is sshj's crypto provider on every API level (SPEC §6; phase 7
+    // r1c): the platform's own BC has no X25519, which sshj's key exchange needs. core/ssh/CryptoProviders registers it.
+    // bcpkix is back on the classpath for that: it was excluded while the app needed no PEM or EST code, and it carries the EST trust-all
     // manager that lint reports as TrustAllX509TrustManager. app/lint.xml ignores that issue for the bcpkix jar only.
     implementation(libs.sshj)
     implementation(libs.bouncycastle.bcprov)

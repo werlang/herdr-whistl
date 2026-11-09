@@ -1,11 +1,16 @@
 package io.github.werlang.whistl.core.ssh
 
 import io.github.werlang.whistl.core.rpc.AuthFailed
+import io.github.werlang.whistl.core.rpc.CoreMissing
 import io.github.werlang.whistl.core.rpc.TransportLost
+import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.support.FakeHostKeyStore
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -52,6 +57,9 @@ class SshjTransportTest {
         var stdout: InputStream = ByteArrayInputStream(ByteArray(0))
         var stderr: InputStream = ByteArrayInputStream(ByteArray(0))
 
+        /** The channel `exec` returns, when a test needs its own; otherwise a [FakeChannel] over [stdout] and [stderr]. */
+        var channel: ExecChannelPort? = null
+
         /** The connect timeout the client was given, or `null` when none was set. */
         private var connectTimeoutMillis: Int? = null
 
@@ -92,7 +100,7 @@ class SshjTransportTest {
 
         override fun exec(command: String): ExecChannelPort {
             calls += "exec"
-            return FakeChannel(stdout, stderr)
+            return channel ?: FakeChannel(stdout, stderr)
         }
 
         override fun disconnect() {
@@ -299,6 +307,85 @@ class SshjTransportTest {
         assertTrue("the open failed with a transport error", failure is TransportLost)
         assertTrue("the open gave up at the connect timeout (${elapsedMillis} ms)", elapsedMillis < CONNECT_WAIT_SECONDS * 1000)
         assertTrue("the session was closed", session.disconnects.get() >= 1)
+    }
+
+    /**
+     * P7R8 item 2: OpenSSH can end the stream before it sends the exit status. The hello fails at end-of-stream while the status is
+     * still unknown, and the status arrives 100 ms later. The connector waits for it and reports CoreMissing (exit 127), not an
+     * unreachable machine that would retry forever.
+     */
+    @Test
+    fun aCoreMissingIsDetectedWhenTheExitStatusArrivesAfterEndOfStream() {
+        val session = FakeSession().also { it.channel = LateExitChannel(status = 127, arrivesAfterMillis = 100L) }
+        val failure = connectThrough(session)
+        assertTrue("the missing core was reported as CoreMissing, got $failure", failure is CoreMissing)
+    }
+
+    /**
+     * P7R8 item 2: a status that never comes does not hang the connect. The wait is bounded, and the failure stays a transport
+     * failure, which retries as a network loss.
+     */
+    @Test
+    fun aMissingExitStatusEndsTheWaitAndStaysTransportLost() {
+        val session = FakeSession().also { it.channel = LateExitChannel(status = 127, arrivesAfterMillis = null) }
+        val started = System.nanoTime()
+        val failure = connectThrough(session)
+        val elapsedMillis = (System.nanoTime() - started) / 1_000_000
+        assertTrue("without a status the failure is TransportLost, got $failure", failure is TransportLost)
+        assertTrue("the wait is bounded (${elapsedMillis} ms)", elapsedMillis < CONNECT_WAIT_SECONDS * 1000)
+    }
+
+    /** Runs a connect through [SshMachineConnector] over [session] and returns the failure it ends with. */
+    private fun connectThrough(session: FakeSession): Throwable? {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        return try {
+            runBlocking {
+                val connector = SshMachineConnector(scope, Dispatchers.IO) { session }
+                val machine = Machine(id = "m1", name = "m1", host = "m1.lan", port = 22, user = "ci")
+                val gate = HostKeyGate(HostKeyPolicy(FakeHostKeyStore()), "m1")
+                try {
+                    connector.connect(machine, SshAuth.Key(ByteArray(32)), gate)
+                    null
+                } catch (e: Throwable) {
+                    e
+                }
+            }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    /**
+     * An exec channel whose stream ends at once. Its exit status arrives [arrivesAfterMillis] later, or never when that is `null`.
+     * [awaitExit] waits for it up to the timeout it is given, as sshj's join does.
+     */
+    private class LateExitChannel(private val status: Int, private val arrivesAfterMillis: Long?) : ExecChannelPort {
+        override val stdin: OutputStream = ByteArrayOutputStream()
+        override val stdout: InputStream = ByteArrayInputStream(ByteArray(0))
+        override val stderr: InputStream = ByteArrayInputStream(ByteArray(0))
+        private val exited = CountDownLatch(1)
+
+        @Volatile
+        private var code: Int? = null
+
+        init {
+            arrivesAfterMillis?.let { delay ->
+                Thread {
+                    Thread.sleep(delay)
+                    code = status
+                    exited.countDown()
+                }.apply { isDaemon = true }.start()
+            }
+        }
+
+        override fun exitStatus(): Int? = code
+
+        override fun awaitExit(timeoutMillis: Long): Int? {
+            exited.await(timeoutMillis, TimeUnit.MILLISECONDS)
+            return code
+        }
+
+        override fun close() = Unit
     }
 
     private companion object {
