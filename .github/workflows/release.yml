@@ -1,0 +1,104 @@
+name: Release
+
+# Triggered by an annotated tag: push v0.2.0 and the release pipeline runs.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK packages
+        run: |
+          set -euo pipefail
+          sdkmanager="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)"
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Verify the tag matches the manifest version
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          name="$(sed -n 's/^versionName=//p' version.properties | tr -d '\r')"
+          echo "tag v${tag} / version.properties ${name}"
+          test "${tag}" = "${name}" || { echo "tag and version.properties disagree"; exit 1; }
+      - name: Unit tests and lint
+        run: ./gradlew --no-daemon testDebugUnitTest lintDebug
+      - name: Assemble release
+        run: ./gradlew --no-daemon assembleRelease
+      - name: Checksums
+        run: |
+          set -euo pipefail
+          cd app/build/outputs/apk/release
+          sha256sum app-release-unsigned.apk > app-release-unsigned.apk.sha256
+          cat app-release-unsigned.apk.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-unsigned
+          path: |
+            app/build/outputs/apk/release/app-release-unsigned.apk
+            app/build/outputs/apk/release/app-release-unsigned.apk.sha256
+
+  screenshots:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK packages
+        run: |
+          set -euo pipefail
+          sdkmanager="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)"
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Verify screenshot goldens
+        run: ./gradlew --no-daemon verifyRoborazziDebug
+
+  publish:
+    needs: [build, screenshots]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-unsigned
+          path: dist
+      - name: Notes from the changelog
+        run: |
+          python3 - <<'PY'
+          import re, pathlib, os
+          text = pathlib.Path("CHANGELOG.md").read_text()
+          tag = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          m = re.search(rf"^## \[{re.escape(tag)}\].*?$(.*?)(?=^## \[)", text, re.M | re.S)
+          body = m.group(1).strip() if m else "See CHANGELOG.md."
+          pathlib.Path("notes.md").write_text(body + "\n")
+          PY
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Herdr Whistl ${{ github.ref_name }}
+          body_path: notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          append_body: false
+          files: |
+            dist/app-release-unsigned.apk
+            dist/app-release-unsigned.apk.sha256
+          fail_on_unmatched_files: true
+
+# The attached APK is NOT signed: the release keystore never enters this repository or its
+# secrets. The maintainer signs it locally (scripts/sign-release.sh) and uploads the signed
+# file to the same release with `gh release upload`. See CONTRIBUTING.md, "Cutting a release".

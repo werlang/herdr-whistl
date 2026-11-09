@@ -6,6 +6,20 @@ plugins {
     alias(libs.plugins.roborazzi)
 }
 
+// Version lives in version.properties: versionName is SemVer and versionCode is derived from it,
+// so it is monotonic without anyone having to remember it (see CONTRIBUTING.md). Bumping the name
+// changes what the About panel renders, so the goldens containing it must be re-recorded.
+val appVersionName: String = rootProject.file("version.properties")
+    .takeIf { it.exists() }
+    ?.readLines()
+    ?.map { it.trim() }
+    ?.firstOrNull { it.startsWith("versionName=") }
+    ?.substringAfter("versionName=")
+    ?.trim()
+    ?.takeIf { it.isNotEmpty() }
+    ?: "0.0.0"
+val appVersionParts: List<Int> = appVersionName.split(".").map { it.toIntOrNull() ?: 0 }
+
 android {
     namespace = "io.github.werlang.whistl"
     compileSdk = 35
@@ -15,16 +29,10 @@ android {
         applicationId = "io.github.werlang.whistl"
         minSdk = 26
         targetSdk = 35
-        // Version lives in version.properties: versionName is SemVer and versionCode is derived
-        // from it, so it is monotonic without anyone having to remember it (see CONTRIBUTING.md).
-        val versionProps = java.util.Properties().apply {
-            val file = rootProject.file("version.properties")
-            if (file.exists()) file.inputStream().use { load(it) }
-        }
-        val semver = versionProps.getProperty("versionName", "0.0.0").trim()
-        val parts = semver.split(".").map { it.toIntOrNull() ?: 0 } + listOf(0, 0)
-        versionName = semver
-        versionCode = parts[0] * 10000 + parts[1] * 100 + parts[2]
+        versionName = appVersionName
+        versionCode = appVersionParts.getOrElse(0) { 0 } * 10000 +
+            appVersionParts.getOrElse(1) { 0 } * 100 +
+            appVersionParts.getOrElse(2) { 0 }
     }
 
     compileOptions {
