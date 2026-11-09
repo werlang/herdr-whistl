@@ -5,6 +5,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0] - 2026-11-09
+
 ### Added
 
 - **Edit machine**: change a machine's name, host, user or port from its card menu. Changing the
@@ -43,5 +47,6 @@ versions follow [Semantic Versioning](https://semver.org/).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/werlang/herdr-whistl/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/werlang/herdr-whistl/releases/tag/v0.1.0
