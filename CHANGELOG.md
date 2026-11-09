@@ -7,6 +7,28 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.3.0] - 2026-11-09
+
+### Added
+
+- **The agent screen is a real terminal.** The framed `terminal.attach` stream is rendered through a VT
+  emulator: ANSI 16/256/truecolour, bold/underline/inverse, the cursor, and the alternate screen, so
+  `vim` and `htop` work instead of arriving as plain text.
+- The pane size follows the window: the size you see is the size herdr-core gets (a `RESIZE` frame on
+  the attached channel), never a 1x1.
+- Recorded 256-colour and alternate-screen protocol fixtures, plus screenshot coverage for a coloured
+  agent screen and one in the alternate buffer.
+
+### Changed
+
+- The terminal is drawn from cells on a Canvas; the text view is gone.
+
+### Known limitations
+
+- `terminal-core` 1.0.8 drops the line above the cursor when the pane shrinks.
+- `vim`'s `:q!` sent as a line does not reach herdr-core's command line (`hc send` of a command does).
+
+
 ## [0.2.0] - 2026-11-09
 
 ### Added
@@ -47,6 +69,7 @@ Nothing yet.
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/werlang/herdr-whistl/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/werlang/herdr-whistl/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/werlang/herdr-whistl/releases/tag/v0.1.0
