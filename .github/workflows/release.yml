@@ -32,8 +32,10 @@ jobs:
           name="$(sed -n 's/^versionName=//p' version.properties | tr -d '\r')"
           echo "tag v${tag} / version.properties ${name}"
           test "${tag}" = "${name}" || { echo "tag and version.properties disagree"; exit 1; }
+      # Goldens are macOS-rendered, so the comparison is skipped here like in ci.yml; the
+      # screenshots job below is what proves them.
       - name: Unit tests and lint
-        run: ./gradlew --no-daemon testDebugUnitTest lintDebug
+        run: ./gradlew --no-daemon testDebugUnitTest lintDebug -Pwhistl.screenshots=skip
       - name: Assemble release
         run: ./gradlew --no-daemon assembleRelease
       - name: Checksums
@@ -80,11 +82,17 @@ jobs:
       - name: Notes from the changelog
         run: |
           python3 - <<'PY'
-          import re, pathlib, os
+          import pathlib, os, re
           text = pathlib.Path("CHANGELOG.md").read_text()
           tag = os.environ["GITHUB_REF_NAME"].lstrip("v")
-          m = re.search(rf"^## \[{re.escape(tag)}\].*?$(.*?)(?=^## \[)", text, re.M | re.S)
-          body = m.group(1).strip() if m else "See CHANGELOG.md."
+          # The section runs to the next "## [" heading, or to the link definitions / EOF when it
+          # is the oldest entry (v0.1.0), which is the case that used to yield no match.
+          m = re.search(
+              rf"^## \[{re.escape(tag)}\][^\n]*\n(.*?)(?=^## \[|^\[[^\]]+\]:|\Z)",
+              text, re.M | re.S)
+          body = m.group(1).strip() if m else ""
+          if not body:
+              raise SystemExit(f"CHANGELOG.md has no section for {tag}")
           pathlib.Path("notes.md").write_text(body + "\n")
           PY
       - name: Publish

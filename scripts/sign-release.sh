@@ -10,6 +10,9 @@
 #   WHISTL_KEYSTORE_PASSWORD_FILE  file holding the pass (default beside the keystore, "keystore.password")
 #   WHISTL_KEY_ALIAS  key alias                          (default herdr-whistl)
 #   ANDROID_HOME      Android SDK                        (default /opt/homebrew/share/android-commandlinetools)
+#
+# The password never appears in argv: apksigner reads it from a 0600 temp file, and the key
+# password is omitted so apksigner reuses the store password (PKCS12 keeps them the same).
 set -euo pipefail
 
 IN="${1:?usage: sign-release.sh <unsigned.apk> [output.apk]}"
@@ -26,11 +29,14 @@ BT="$(ls -d "$ANDROID_HOME"/build-tools/* 2>/dev/null | sort -V | tail -1)"
 [ -f "$PWFILE" ] || { echo "password file not found: $PWFILE"; exit 1; }
 
 TMP="$(mktemp -d)"
+umask 077
 trap 'rm -rf "$TMP"' EXIT
+tr -d '\r\n' < "$PWFILE" > "$TMP/pw"
+chmod 600 "$TMP/pw"
 
 "$BT/zipalign" -p -f 4 "$IN" "$TMP/aligned.apk"
 "$BT/apksigner" sign --ks "$KEYSTORE" --ks-key-alias "$ALIAS" \
-  --ks-pass "pass:$(cat "$PWFILE")" --key-pass "pass:$(cat "$PWFILE")" \
+  --ks-pass "file:$TMP/pw" \
   --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true \
   --out "$OUT" "$TMP/aligned.apk"
 
