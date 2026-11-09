@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -28,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.ui.components.MinTouchTarget
+import io.github.werlang.whistl.ui.components.whistlButtonColors
 import io.github.werlang.whistl.ui.components.SheetDragHandle
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
@@ -144,7 +144,7 @@ fun RemoveMachineSheet(
                 }
                 Button(
                     onClick = onConfirm,
-                    colors = ButtonDefaults.buttonColors(
+                    colors = whistlButtonColors(
                         containerColor = MaterialTheme.colorScheme.error,
                         contentColor = MaterialTheme.colorScheme.onError,
                     ),
@@ -200,6 +200,7 @@ fun HostKeySheet(
                     FingerprintBlock(label = null, value = prompt.fingerprint)
                     Button(
                         onClick = onTrust,
+                        colors = whistlButtonColors(),
                         modifier = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget).testTag(HOST_KEY_TRUST_TAG),
                     ) {
                         Text(stringResource(R.string.add_trust))
@@ -228,7 +229,7 @@ fun HostKeySheet(
                         }
                         Button(
                             onClick = onRemove,
-                            colors = ButtonDefaults.buttonColors(
+                            colors = whistlButtonColors(
                                 containerColor = MaterialTheme.colorScheme.error,
                                 contentColor = MaterialTheme.colorScheme.onError,
                             ),

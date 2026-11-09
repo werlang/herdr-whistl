@@ -14,7 +14,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +43,7 @@ import io.github.werlang.whistl.R
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.SegmentOption
 import io.github.werlang.whistl.ui.components.SheetDragHandle
+import io.github.werlang.whistl.ui.components.whistlButtonColors
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
 
@@ -580,12 +580,12 @@ private fun ActionRow(primary: PrimaryAction?, onClose: () -> Unit) {
                 onClick = primary.onClick,
                 enabled = primary.enabled,
                 colors = if (primary.danger) {
-                    ButtonDefaults.buttonColors(
+                    whistlButtonColors(
                         containerColor = MaterialTheme.colorScheme.error,
                         contentColor = MaterialTheme.colorScheme.onError,
                     )
                 } else {
-                    ButtonDefaults.buttonColors()
+                    whistlButtonColors()
                 },
                 modifier = Modifier.heightIn(min = MinTouchTarget).testTag(primary.tag),
             ) {

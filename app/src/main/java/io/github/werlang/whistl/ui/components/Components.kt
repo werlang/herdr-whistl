@@ -13,6 +13,8 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +36,26 @@ val MinTouchTarget = 48.dp
  * collapse or dismiss) and gives it only 32 dp of width, under the 48 dp target (SPEC §3). The handle is drawn inside a
  * 48x48 dp box, centred, so the pill stays where it was and the target is 48 dp.
  */
+/**
+ * The filled-button colours the app shipped with (material3 1.3.1). Material3 1.4.0 renders a disabled button with the
+ * `onSurfaceVariant` label at 38% and a 10% container; 1.3.1 used the `onSurface` label at 38% and a 12% container. Every
+ * filled button goes through here so the disabled look stays the shipped one.
+ *
+ * @param containerColor the enabled container colour (the primary colour by default).
+ * @param contentColor the enabled label colour (`onPrimary` by default).
+ * @return the button colours.
+ */
+@Composable
+fun whistlButtonColors(
+    containerColor: Color = MaterialTheme.colorScheme.primary,
+    contentColor: Color = MaterialTheme.colorScheme.onPrimary,
+): ButtonColors = ButtonDefaults.buttonColors(
+    containerColor = containerColor,
+    contentColor = contentColor,
+    disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SheetDragHandle() {

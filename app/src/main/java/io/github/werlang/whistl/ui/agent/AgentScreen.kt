@@ -26,7 +26,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -58,6 +57,7 @@ import io.github.werlang.whistl.domain.ShortcutKey
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.SheetDragHandle
 import io.github.werlang.whistl.ui.components.StatusLabel
+import io.github.werlang.whistl.ui.components.whistlButtonColors
 import io.github.werlang.whistl.ui.keyNameRes
 import io.github.werlang.whistl.ui.statusColor
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
@@ -169,7 +169,7 @@ fun AgentContent(
                     Spacer(Modifier.weight(1f))
                     Button(
                         onClick = onConfirmStop,
-                        colors = ButtonDefaults.buttonColors(
+                        colors = whistlButtonColors(
                             containerColor = MaterialTheme.colorScheme.error,
                             contentColor = MaterialTheme.colorScheme.onError,
                         ),
@@ -315,13 +315,9 @@ private fun KeyBar(state: AgentUiState, onKey: (ShortcutKey) -> Unit) {
                 onClick = { onKey(key) },
                 enabled = state.canType,
                 contentPadding = PaddingValues(horizontal = 10.dp),
-                colors = ButtonDefaults.buttonColors(
+                colors = whistlButtonColors(
                     containerColor = if (armed) MaterialTheme.colorScheme.primary else tokens.field,
                     contentColor = if (armed) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                    // material3 1.4.0 dims a disabled key with onSurfaceVariant at 38% and a 10% container; 1.3.1 (the shipped
-                    // look) used onSurface at 38% for the label and onSurface at 12% for the container.
-                    disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
                 ),
                 modifier = Modifier
                     .heightIn(min = MinTouchTarget)

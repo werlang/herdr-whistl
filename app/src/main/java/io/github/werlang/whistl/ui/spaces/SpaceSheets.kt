@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -33,6 +32,7 @@ import io.github.werlang.whistl.R
 import io.github.werlang.whistl.ui.machines.text
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.SheetDragHandle
+import io.github.werlang.whistl.ui.components.whistlButtonColors
 import io.github.werlang.whistl.ui.machines.SheetRow
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
@@ -136,6 +136,7 @@ fun NewSpaceSheet(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     Button(
                         onClick = onAddMachine,
+                        colors = whistlButtonColors(),
                         modifier = Modifier.heightIn(min = MinTouchTarget).testTag(NEW_SPACE_ADD_MACHINE_TAG),
                     ) {
                         Text(stringResource(R.string.add_machine_title))
@@ -224,6 +225,7 @@ fun NewSpaceSheet(
                 Button(
                     onClick = onCreate,
                     enabled = ui.selectedId != null,
+                    colors = whistlButtonColors(),
                     modifier = Modifier.heightIn(min = MinTouchTarget).testTag(NEW_SPACE_CREATE_TAG),
                 ) {
                     Text(stringResource(R.string.space_create))
@@ -351,6 +353,7 @@ fun RenameSpaceSheet(
                 Spacer(Modifier.weight(1f))
                 Button(
                     onClick = onSave,
+                    colors = whistlButtonColors(),
                     modifier = Modifier.heightIn(min = MinTouchTarget).testTag(RENAME_SPACE_SAVE_TAG),
                 ) {
                     Text(stringResource(R.string.space_rename_save))
@@ -400,7 +403,7 @@ fun CloseSpaceSheet(
                 Spacer(Modifier.weight(1f))
                 Button(
                     onClick = onConfirm,
-                    colors = ButtonDefaults.buttonColors(
+                    colors = whistlButtonColors(
                         containerColor = MaterialTheme.colorScheme.error,
                         contentColor = MaterialTheme.colorScheme.onError,
                     ),
