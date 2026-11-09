@@ -484,6 +484,7 @@ abstract class ScreenHarness {
         }
         composeRule.waitForIdle()
         prepare(screen)
+        settle()
         assertShowsItsText(screen, locale)
         val frames = LinkedHashMap<ShotVariant, ByteArray>()
         variants.forEach { variant ->
@@ -492,6 +493,7 @@ abstract class ScreenHarness {
                 scale.value = variant.fontScale
             }
             composeRule.waitForIdle()
+            settle()
             val name = fileName(screen, variant, locale)
             record(screen, name)
             val png = frameBytes()
@@ -743,6 +745,15 @@ abstract class ScreenHarness {
     }
 
     /**
+     * Runs the test clock for [SETTLE_MS] and waits for idle, so the animations the last step started (a press ripple, a sheet
+     * entrance, a colour change) have finished before a frame is captured.
+     */
+    private fun settle() {
+        composeRule.mainClock.advanceTimeBy(SETTLE_MS)
+        composeRule.waitForIdle()
+    }
+
+    /**
      * Records the frame: a sheet from its own node (it is a separate window), the rest from the root.
      *
      * @param screen the screen.
@@ -785,6 +796,12 @@ abstract class ScreenHarness {
 
         /** How long a sheet or a stage may take to appear after it is opened or after a connection attempt. */
         const val SHEET_TIMEOUT_MS: Long = 5_000L
+
+        /**
+         * How far the test clock runs before a frame is captured: longer than a press ripple (about 400 ms in material3 1.4.0),
+         * a sheet entrance and a colour change, so the captured frame is the settled one.
+         */
+        const val SETTLE_MS: Long = 1_000L
 
         /**
          * The fewest distinct colours a real frame has. The smallest golden the suite records has 553 (sampled every fourth
