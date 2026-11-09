@@ -13,6 +13,8 @@
 #   focus.jsonl    frame_kinds.json (what the core does with FOCUS)
 #   facts.jsonl    frame_kinds.json (what the core answers to a colour query before and after a FACTS frame)
 #   line.jsonl     attach_needs_framed.json (terminal.attach on a line-mode connection)
+#   palette.jsonl  attach_frames_256.bin (256-colour palette and truecolor gradient, as received)
+#   altscreen.jsonl attach_frames_altscreen.bin (htop on the alternate screen, as received)
 #   strace.txt     frame_kinds.json (the frames hc attach sends; output of pty_strace.py)
 import json
 import os
@@ -105,6 +107,17 @@ def record_hello_and_attach(capture, out_dir):
         fh.write(rest)
     print("wrote attach_frames.bin:", len(rest), "bytes,", len(frames), "frames")
     return frames
+
+
+def record_stream(out_dir, capture, name):
+    """The bytes the core sent after the hello reply, as received, for a capture that is not a protocol test (the emulator
+    spike, phase 8 P1). The frames are checked to end exactly at the end of the stream."""
+    raw = stream_in(load(capture))
+    rest = raw[raw.index(b"\n") + 1:]
+    frames = split_frames(rest)
+    with open(os.path.join(out_dir, name), "wb") as fh:
+        fh.write(rest)
+    print("wrote", name + ":", len(rest), "bytes,", len(frames), "frames")
 
 
 def record_needs_framed(out_dir, line_capture):
@@ -271,6 +284,8 @@ if __name__ == "__main__":
     def cap(name):
         return os.path.join(capture_dir, name)
     record_hello_and_attach(cap("fixture.jsonl"), out_dir_global)
+    record_stream(out_dir_global, cap("palette.jsonl"), "attach_frames_256.bin")
+    record_stream(out_dir_global, cap("altscreen.jsonl"), "attach_frames_altscreen.bin")
     record_needs_framed(out_dir_global, cap("line.jsonl"))
     record_resize(out_dir_global, cap("live.jsonl"))
     record_close(out_dir_global, cap("live.jsonl"), cap("exit.jsonl"), cap("kill.jsonl"))

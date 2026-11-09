@@ -4,7 +4,7 @@
 # Run it from the WSL box, with the terminal name of a terminal you created:
 #   ssh <root@rpi5-host> python3 - <mode> <name> create < tools/framed-capture/capture.py > <dir>/<mode>.jsonl
 # (`create` makes the terminal first, with the program for <mode>; drop it to attach to an existing terminal.)
-# Modes: line (terminal.attach without a framed hello: needs_framed), live (colour, live key, resize, focus, detach), fixture (colour first paint and a typed line), exit (the program
+# Modes: palette (256 colours and a truecolor gradient), altscreen (htop, quit with q), line (terminal.attach without a framed hello: needs_framed), live (colour, live key, resize, focus, detach), fixture (colour first paint and a typed line), exit (the program
 # exits while attached), kill (`hc kill` while attached), modes (title, alternate screen, mouse, focus, cursor query),
 # focus (focus frames while DECSET 1004 is on), flood (CREDIT window), paste (300 KB of keys as DATA).
 # Output: one JSON object per line on stdout: {"t", "dir": "in"|"out", "hex"} for each byte chunk, {"t", "frame": {...}} for
@@ -22,6 +22,10 @@ SCRIPTS = {
     "flood": "sleep 1; yes 0123456789abcdef | head -n 75000; exec cat",
     "paste": "exec cat > /dev/null",
     "kill": "exec sleep 60",
+    # 16 x 16 palette cells (indices 0-255), then a 32-cell truecolor gradient; the program then waits for input.
+    "palette": r"""i=0; while [ $i -lt 256 ]; do printf '\033[48;5;%dm  ' $i; i=$((i+1)); if [ $((i % 16)) -eq 0 ]; then printf '\033[0m\n'; fi; done; i=0; while [ $i -lt 32 ]; do printf '\033[48;2;%d;%d;%dm  ' $((i*8)) $((255-i*8)) 128; i=$((i+1)); done; printf '\033[0m\n'; exec cat""",
+    # Main-screen text, then htop (alternate screen: ESC[?1049h), which the capture quits with `q` (ESC[?1049l).
+    "altscreen": "printf 'main screen before\\n'; sleep 1; htop; printf 'main screen after\\n'; exec cat",
     # Asks for the foreground colour twice: before and after a FACTS frame; the core's answers are echoed as DATA.
     "facts": "sleep 1; printf '\\033]10;?\\033\\\\'; sleep 3; printf '\\033]10;?\\033\\\\'; exec cat",
     # Colour first paint, then a line typed in and echoed back in colour (raw bytes as received).
@@ -182,6 +186,19 @@ elif MODE == "facts":
     emit({"t": now(), "note": "facts sent: fg #112233"})
     send(frame(channel, 5, b'{"fg":"#112233"}'))
     pump(4.0)
+    send(frame(channel, 2))
+    pump(0.5, credit=False)
+elif MODE == "palette":
+    pump(2.0)
+    send(frame(channel, 0, b"x"))
+    pump(1.0)
+    send(frame(channel, 2))
+    pump(0.5, credit=False)
+elif MODE == "altscreen":
+    pump(3.0)
+    emit({"t": now(), "note": "quit htop"})
+    send(frame(channel, 0, b"q"))
+    pump(3.0)
     send(frame(channel, 2))
     pump(0.5, credit=False)
 elif MODE == "fixture":

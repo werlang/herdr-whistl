@@ -26,5 +26,12 @@ Framed mode (SPEC §5.1, measured on hc 0.1.14 on the rpi5):
 - `frame_kinds.json`: the frames the official client (`hc attach`) sends, read from strace of its socket writes on a
   pty; what the core does with FOCUS; and the colour the core answers OSC 10 with before and after a FACTS frame.
 
+`attach_frames_256.bin` and `attach_frames_altscreen.bin` (phase 8 P1, for the emulator spike) use the same layout as
+`attach_frames.bin`: the bytes after the hello reply's newline, as received. `attach_frames_256.bin` is a program that
+prints a 16 × 16 grid of background cells in palette indices 0 to 255, then a 32-cell truecolor gradient (`ESC[48;2;…m`),
+then waits for input; the first paint and the live `x` echo carry it. `attach_frames_altscreen.bin` is main-screen text,
+then htop (ESC[?1049h … ESC[?1049l, the capture quits it with `q`), then more main-screen text. Its 29 frames include both
+alternate-screen switches.
+
 Re-record with `tools/framed-capture/` (see the header of each script): run `capture.py` once per mode into a
 directory, `pty_strace.py` into `strace.txt`, then `python3 tools/framed-capture/record.py <dir> docs/protocol-fixtures`.
