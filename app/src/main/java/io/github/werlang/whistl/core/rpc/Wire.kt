@@ -87,6 +87,7 @@ internal fun RpcErrorWire.toException(): HcException {
         kind == "spawn_failed" -> SpawnFailed(message, hint)
         kind == "live" -> StillLive(message, hint)
         kind == "blocked" -> Blocked(message, hint)
+        kind == "needs_framed" -> NeedsFramed(message, hint)
         kind == "invalid_request" || (kind == null && code == JSON_RPC_INVALID_REQUEST) ->
             InvalidRequest(message, hint)
         else -> Unknown(kind, code, message, hint)
@@ -196,14 +197,56 @@ internal class CoreWire(
     val name: String = "",
 )
 
-/** `hello` result. Lenient: unknown keys are ignored. */
+/** `hello` result. `framed` is true once the connection is framed (SPEC §5.1). Lenient: unknown keys are ignored. */
 @Serializable
 internal class HelloWire(
     val core: CoreWire = CoreWire(),
     val features: List<String> = emptyList(),
+    val framed: Boolean = false,
     val generation: Int = 0,
     val methods: List<String> = emptyList(),
     val version: String = "",
+)
+
+/** `hello` on a connection that should switch to framed mode: `framed: true` (SPEC §5.1). */
+@Serializable
+internal class FramedHelloParams(val framed: Boolean)
+
+/**
+ * The `display` object of `terminal.attach` and of a FACTS frame (SPEC §5.1). A `null` field is left out, so the core keeps
+ * its default for it.
+ */
+@Serializable
+internal class DisplayWire(
+    val fg: String? = null,
+    val bg: String? = null,
+    val cursor: String? = null,
+    val cell: List<Int>? = null,
+)
+
+/** Converts the viewer's display to its wire form. */
+internal fun ViewerDisplay.toWire(): DisplayWire = DisplayWire(
+    fg = fg,
+    bg = bg,
+    cursor = cursor,
+    cell = cell?.let { listOf(it.first, it.second) },
+)
+
+/** `terminal.attach`. `display` and `history` are optional and left out when unset (SPEC §5.1). */
+@Serializable
+internal class TerminalAttachParams(
+    val terminal: String,
+    val cols: Int,
+    val rows: Int,
+    val display: DisplayWire? = null,
+    val history: Int? = null,
+)
+
+/** `terminal.attach` result: the channel and the terminal. Lenient: unknown keys are ignored. */
+@Serializable
+internal class AttachWire(
+    val channel: Long = 0,
+    val terminal: TerminalWire = TerminalWire(),
 )
 
 /**

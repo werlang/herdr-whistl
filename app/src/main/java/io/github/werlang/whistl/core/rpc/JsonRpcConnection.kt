@@ -52,13 +52,15 @@ data class RpcNotification(val method: String, val params: JsonElement)
  * @param pipe the channel to read from and write to.
  * @param scope the scope the reader coroutine runs in. Tests pass `backgroundScope`.
  * @param idleTimeoutMillis the watchdog window, or `null` for no watchdog (commands).
+ * @param firstId the id of the first request. A framed session starts at 2, because its `hello` was id 1 (SPEC §5.1).
  */
 class JsonRpcConnection(
     private val pipe: LinePipe,
     scope: CoroutineScope,
     private val idleTimeoutMillis: Long? = null,
+    firstId: Long = 1L,
 ) {
-    private val nextId = AtomicLong(1L)
+    private val nextId = AtomicLong(firstId)
     private val pending = ConcurrentHashMap<Long, CompletableDeferred<JsonElement>>()
     private val writeLock = Mutex()
     private val closed = AtomicBoolean(false)

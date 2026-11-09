@@ -1,0 +1,24 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "terminal.attach",
+    "params": {
+      "terminal": "p8r1-fix1",
+      "cols": 80,
+      "rows": 24
+    }
+  },
+  "response": {
+    "error": {
+      "code": -32000,
+      "data": {
+        "hint": "send hello with framed: true first, or use `hc attach`",
+        "kind": "needs_framed"
+      },
+      "message": "attach needs a framed connection"
+    },
+    "id": 2,
+    "jsonrpc": "2.0"
+  }
+}

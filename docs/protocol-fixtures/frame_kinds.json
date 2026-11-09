@@ -1,0 +1,101 @@
+{
+  "request": {
+    "source": "hc attach (official client) on a pty, strace of its socket writes",
+    "frames": [
+      {
+        "channel": 1,
+        "kind": 1,
+        "name": "CREDIT",
+        "payload_hex": "4f010000",
+        "consumed": 335
+      },
+      {
+        "channel": 1,
+        "kind": 3,
+        "name": "RESIZE",
+        "payload_hex": "64001e00",
+        "cols": 100,
+        "rows": 30
+      },
+      {
+        "channel": 1,
+        "kind": 3,
+        "name": "RESIZE",
+        "payload_hex": "50001800",
+        "cols": 80,
+        "rows": 24
+      },
+      {
+        "channel": 1,
+        "kind": 0,
+        "name": "DATA",
+        "payload_hex": "78",
+        "text": "x"
+      },
+      {
+        "channel": 1,
+        "kind": 1,
+        "name": "CREDIT",
+        "payload_hex": "01000000",
+        "consumed": 1
+      },
+      {
+        "channel": 1,
+        "kind": 4,
+        "name": "FOCUS",
+        "payload_hex": "00",
+        "focus": "out"
+      },
+      {
+        "channel": 1,
+        "kind": 4,
+        "name": "FOCUS",
+        "payload_hex": "01",
+        "focus": "in"
+      },
+      {
+        "channel": 1,
+        "kind": 5,
+        "name": "FACTS",
+        "payload_hex": "7b226667223a2223313235363961222c226267223a2223323233333434222c22637572736f72223a2223666562613736222c2263656c6c223a5b31302c32305d7d",
+        "json": {
+          "fg": "#12569a",
+          "bg": "#223344",
+          "cursor": "#feba76",
+          "cell": [
+            10,
+            20
+          ]
+        }
+      },
+      {
+        "channel": 1,
+        "kind": 2,
+        "name": "CLOSE",
+        "payload_hex": ""
+      }
+    ]
+  },
+  "response": {
+    "source": "hc connect captures: what the core sent back",
+    "focus_reactions": [
+      {
+        "focus": "out",
+        "data_back": [
+          "^[[O"
+        ]
+      },
+      {
+        "focus": "in",
+        "data_back": [
+          "^[[I"
+        ]
+      }
+    ],
+    "facts_reaction": {
+      "fg_sent": "#112233",
+      "answer_before": "ffff/ffff/ffff",
+      "answer_after": "1111/2222/3333"
+    }
+  }
+}

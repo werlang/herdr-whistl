@@ -52,8 +52,13 @@ class FixtureCoverageTest {
     }
 
     private companion object {
-        /** All 21 recorded fixtures in `docs/protocol-fixtures/`, sorted. */
+        /** All 33 recorded fixtures in `docs/protocol-fixtures/`, sorted. */
         val KNOWN_FIXTURES: List<String> = listOf(
+            "attach_close.json",
+            "attach_needs_framed.json",
+            "attach_resize.json",
+            "attach_result.json",
+            "attach_window.json",
             "doc_get.json",
             "doc_get_missing.json",
             "doc_set.json",
@@ -64,7 +69,9 @@ class FixtureCoverageTest {
             "events_seen.json",
             "events_snapshot_agent_status.json",
             "exec_installed.json",
+            "frame_kinds.json",
             "hello.json",
+            "hello_framed.json",
             "interrupt.json",
             "keys.json",
             "kill.json",

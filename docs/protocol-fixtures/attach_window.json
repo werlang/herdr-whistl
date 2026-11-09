@@ -1,0 +1,31 @@
+{
+  "request": {
+    "flood": {
+      "no_credit_until_first_grant": true,
+      "grants": [
+        100000,
+        1000000,
+        1000000
+      ]
+    },
+    "paste": {
+      "keys_as_data_bytes": 307200
+    }
+  },
+  "response": {
+    "flood": {
+      "data_payload_before_each_grant": [
+        262144,
+        100000,
+        988103
+      ],
+      "data_payload_after_last_grant": 0,
+      "data_payload_total": 1350247
+    },
+    "paste": {
+      "core_credit_frames": 0,
+      "credited_by_client": 247,
+      "data_payload_total": 262391
+    }
+  }
+}
