@@ -61,6 +61,18 @@ class EnglishScreenshotTest : ScreenHarness() {
 
     @Test
     @Config(qualifiers = "en-rUS-w411dp-h891dp-xxhdpi")
+    fun agentColour() {
+        checkThreeVariants(ShotScreen.AgentColour)
+    }
+
+    @Test
+    @Config(qualifiers = "en-rUS-w411dp-h891dp-xxhdpi")
+    fun agentAltScreen() {
+        checkThreeVariants(ShotScreen.AgentAltScreen)
+    }
+
+    @Test
+    @Config(qualifiers = "en-rUS-w411dp-h891dp-xxhdpi")
     fun settings() {
         checkThreeVariants(ShotScreen.Settings)
     }

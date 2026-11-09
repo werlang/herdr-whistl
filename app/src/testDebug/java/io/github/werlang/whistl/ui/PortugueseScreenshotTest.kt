@@ -52,6 +52,18 @@ class PortugueseScreenshotTest : ScreenHarness() {
 
     @Test
     @Config(qualifiers = "pt-rBR-w411dp-h891dp-xxhdpi")
+    fun agentColour() {
+        checkTwoThemes(ShotScreen.AgentColour)
+    }
+
+    @Test
+    @Config(qualifiers = "pt-rBR-w411dp-h891dp-xxhdpi")
+    fun agentAltScreen() {
+        checkTwoThemes(ShotScreen.AgentAltScreen)
+    }
+
+    @Test
+    @Config(qualifiers = "pt-rBR-w411dp-h891dp-xxhdpi")
     fun settings() {
         checkTwoThemes(ShotScreen.Settings)
     }
