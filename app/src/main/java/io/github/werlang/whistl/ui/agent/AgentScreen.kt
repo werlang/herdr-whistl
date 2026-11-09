@@ -318,6 +318,10 @@ private fun KeyBar(state: AgentUiState, onKey: (ShortcutKey) -> Unit) {
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (armed) MaterialTheme.colorScheme.primary else tokens.field,
                     contentColor = if (armed) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    // material3 1.4.0 dims a disabled key with onSurfaceVariant at 38% and a 10% container; 1.3.1 (the shipped
+                    // look) used onSurface at 38% for the label and onSurface at 12% for the container.
+                    disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
                 ),
                 modifier = Modifier
                     .heightIn(min = MinTouchTarget)
