@@ -6,6 +6,45 @@ plugins {
     alias(libs.plugins.roborazzi)
 }
 
+// Version lives in version.properties: versionName is SemVer and versionCode is derived from it,
+// so it is monotonic without anyone having to remember it (see CONTRIBUTING.md). Bumping the name
+// changes what the About panel renders, so the goldens containing it must be re-recorded.
+val appVersionName: String = rootProject.file("version.properties")
+    .takeIf { it.exists() }
+    ?.readLines()
+    ?.map { it.trim() }
+    ?.firstOrNull { it.startsWith("versionName=") }
+    ?.substringAfter("versionName=")
+    ?.trim()
+    ?.takeIf { it.isNotEmpty() }
+    ?: "0.0.0"
+/**
+ * The encoding is MAJOR*10000 + MINOR*100 + PATCH, which only preserves ordering while every
+ * component stays below 100 — 0.1.100 and 0.2.0 would otherwise collide. Pre-release suffixes are
+ * rejected too: they have no ordering in this scheme, so a `-rc.1` build would install as a
+ * downgrade. Fail the build instead of silently producing a wrong versionCode.
+ */
+private fun versionComponent(part: String, name: String): Int {
+    require(part.isNotEmpty() && part.all { it.isDigit() }) {
+        "version.properties: versionName '$appVersionName' has a non-numeric $name component " +
+            "('$part'). Use plain MAJOR.MINOR.PATCH — pre-release suffixes are not supported."
+    }
+    val value = part.toInt()
+    check(value in 0..99) {
+        "version.properties: versionName '$appVersionName' has $name=$value, which does not fit the " +
+            "versionCode scheme (each component must be 0..99)."
+    }
+    return value
+}
+
+val appVersionParts: List<Int> = appVersionName.split(".").also {
+    check(it.size == 3) {
+        "version.properties: versionName '$appVersionName' must have exactly three components."
+    }
+}.mapIndexed { index, part ->
+    versionComponent(part, listOf("major", "minor", "patch")[index])
+}
+
 android {
     namespace = "io.github.werlang.whistl"
     compileSdk = 35
@@ -15,8 +54,10 @@ android {
         applicationId = "io.github.werlang.whistl"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionName = appVersionName
+        versionCode = appVersionParts.getOrElse(0) { 0 } * 10000 +
+            appVersionParts.getOrElse(1) { 0 } * 100 +
+            appVersionParts.getOrElse(2) { 0 }
     }
 
     compileOptions {

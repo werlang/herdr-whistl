@@ -45,6 +45,25 @@ CI skips the screenshot classes on Linux (`-Pwhistl.screenshots=skip`, comment i
 `.github/workflows/ci.yml`); the macOS `screenshots` job runs `verifyRoborazziDebug`. Adding or
 changing a screen means re-recording and committing the goldens in the same pull request.
 
+## Cutting a release
+
+1. Bump `version.properties` (`versionName` only — `versionCode` is derived: MAJOR*10000 +
+   MINOR*100 + PATCH).
+2. Move the `Unreleased` entries in `CHANGELOG.md` into a new `## [x.y.z] - YYYY-MM-DD` section.
+3. Commit, open the PR, wait for `build` and `screenshots`.
+4. Tag and push: `git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`. The `Release` workflow
+   then runs the tests and lint, builds the release APK on Linux, verifies the goldens on macOS,
+   and publishes a GitHub release with the **unsigned** APK and its SHA-256.
+5. Sign locally and upload, because the keystore never enters GitHub:
+
+   ```sh
+   scripts/sign-release.sh dist/app-release-unsigned.apk herdr-whistl-X.Y.Z.apk
+   gh release upload vX.Y.Z herdr-whistl-X.Y.Z.apk --repo werlang/herdr-whistl
+   ```
+
+Bumping `versionName` changes the string the About panel renders, so the goldens that contain it
+must be re-recorded in the same commit, on macOS.
+
 ## Commits and pull requests
 
 Conventional Commits, one logical change per commit. Branch from `main` as `<type>/<slug>`. A pull
