@@ -44,7 +44,7 @@ jobs:
           cd app/build/outputs/apk/release
           sha256sum app-release-unsigned.apk > app-release-unsigned.apk.sha256
           cat app-release-unsigned.apk.sha256
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-unsigned
           path: |
