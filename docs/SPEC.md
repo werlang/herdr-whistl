@@ -272,6 +272,13 @@ arrive, and the session skips and counts them without keeping the payload
   the screen it has (decision(assumed): a resumed attach carries no first
   paint). The stream's log lines carry the channel, the size and whether it
   resumed, and nothing else.
+- **Core finding: programs that read keys on their command line (hc 0.1.14).**
+  `terminal.send` (and `hc send`) pastes the text but does not drive vim's
+  command line: reproduced with no app attached, `hc send <t> ':q!'` leaves vim
+  on `:q!:q!` and vim keeps running, and `hc keys <t> enter` does not run it
+  either. This is a herdr-core behaviour, not a Whistl bug; the app's Send path
+  is unchanged. To be reported to the core. In the same runs htop took `q`
+  from Send without trouble, so the fault is specific to the command line.
 - **Unverified against hc 0.1.14.** `terminal.attach` with `resumed` is sent by
   the app; hc 0.1.14's schema for that field was not read in this round (the test
   host had no hc; see the phase 8 r3 report). A core that refuses the field makes
@@ -359,6 +366,15 @@ Codex…) and key glyphs (Esc, ↑) are not translated.
 
 ## 9. As built
 
+- **Known limit: the emulator loses one line on a row shrink (phase 8 r3).**
+  `io.github.johnan:terminal-core` 1.0.8 drops the line directly above the
+  cursor when the screen shrinks in rows: measured on the device, a 24-row
+  screen with 500 lines and the cursor below them, shrunk to 12 rows, loses
+  `line 0499`; the rest of the history is kept in order. The device test
+  `aResizeMidStreamKeepsTheTextAndTheNewLines` pins exactly that loss, so any
+  other loss, a reordering or a duplicate fails it, and a change of the engine
+  that fixes or moves the loss shows up there too. Accepted for this round and
+  documented here; it is not worked around in Whistl.
 - **Terminal emulator (phase 8 r3).** `io.github.johnan:terminal-core:1.0.8`
   (Apache-2.0, pure Kotlin, no native code). Its classes are compiled for Java
   21, so the JVM 17 unit tests cannot load them: `core/vt/JohnanEngine.kt` is
