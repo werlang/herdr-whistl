@@ -76,6 +76,15 @@ The Agents destination shows a badge with the count of agents in `blocked`.
 5. **Agent** — a tmux-like **terminal only**, no chat UI: full-height monospace
    screen, a one-line status bar `[machine] space · agent    status`, then a
    horizontally scrolling **shortcut key bar**, then a text field + Send.
+   The screen is the terminal's own: its bytes come from a framed stream
+   (`terminal.attach`, §5.1) into a VT emulator, and the screen draws the
+   emulator's cells on a Canvas. Colour (16, 256 and 24-bit), bold, italic,
+   underline, strike-through, dim, inverse, the cursor and the alternate screen
+   (htop, vim) are drawn as the program sent them. The pane is measured in cells
+   and the core is told the size with a RESIZE frame (§5.1). Each line is also
+   a node of its own, so a screen reader moves line by line (phase 7 r6).
+   Output that outruns the redraw never shows half an update: every frame is one
+   state of the emulator, redrawn at most every 33 ms.
    Typed text is sent to the terminal (Send = text + Enter). `Ctrl` is a
    sticky modifier: armed, the next bar key is sent with Ctrl (`ctrl+<key>`).
    With Ctrl armed and the field empty, one typed letter is sent as its Ctrl
@@ -175,9 +184,9 @@ backs Compose previews, screenshot tests and a debug-only "demo mode".
 - `terminal.run {argv, cwd, labels, keep?, no_parent:true, no_notify:true}` →
   Terminal (has `address`). The app always passes `no_parent` and `no_notify`.
 - `terminal.read {terminal, lines}` → `{text, complete, how}`: plain text, no
-  colour and no cell attributes. Colour and live resize are **not supported in
-  v0.1.x**: they need `terminal.attach` on a framed connection (§5.1) and a VT
-  emulator (phase 8 P1).
+  colour and no cell attributes. The Agent screen does not use it any more (phase
+  8 r3): it shows the terminal from `terminal.attach` on a framed connection
+  (§5.1). The folder probe still reads with it.
 - `terminal.run` has no size parameter in hc 0.1.14 (`rpc.discover`); every
   terminal is created at the core's 200×120. The app cannot size it.
 - `terminal.list` and `events.subscribe` decode each terminal entry on its own:
@@ -250,6 +259,24 @@ arrive, and the session skips and counts them without keeping the payload
 - **Not measured yet.** `events.subscribe` in framed mode: the schema says its
   events arrive on a channel with credit. Phase 8 P1 measures it before the app
   relies on it.
+- **The app's use (phase 8 r3).** Each open Agent screen holds one framed
+  connection of its own: one more `hc connect` exec channel on the machine's
+  SSH session, so the command and events channels are untouched. The stream
+  sends `hello {framed: true}`, then `terminal.attach {terminal, cols, rows,
+  display}` with the pane's size in cells and the viewer's colours (`display`).
+  The first paint (and the live bytes) go to the emulator; each DATA frame is
+  credited once the emulator has taken it. A pane-size change sends RESIZE with
+  the new cols and rows (u16 LE each). When the machine's connection is lost,
+  the stream is closed and the screen shows offline; when the connection is
+  back, the stream attaches again with `resumed: true`, and the emulator keeps
+  the screen it has (decision(assumed): a resumed attach carries no first
+  paint). The stream's log lines carry the channel, the size and whether it
+  resumed, and nothing else.
+- **Unverified against hc 0.1.14.** `terminal.attach` with `resumed` is sent by
+  the app; hc 0.1.14's schema for that field was not read in this round (the test
+  host had no hc; see the phase 8 r3 report). A core that refuses the field makes
+  the app attach plainly after the next drop, and the emulator still keeps the
+  screen.
 
 Installed agents: herdr-core has no API for it (Herdr desktop does it itself).
 Run `machine.exec ["sh","-lc", <script>]` with a known list (claude, codex,
@@ -331,6 +358,16 @@ Codex…) and key glyphs (Esc, ↑) are not translated.
 - KDoc on public types and non-obvious functions.
 
 ## 9. As built
+
+- **Terminal emulator (phase 8 r3).** `io.github.johnan:terminal-core:1.0.8`
+  (Apache-2.0, pure Kotlin, no native code). Its classes are compiled for Java
+  21, so the JVM 17 unit tests cannot load them: `core/vt/JohnanEngine.kt` is
+  the only file that imports it, behind the `VtEngine` seam. The cell mapping,
+  the xterm palette (`core/vt/Xterm256.kt`) and the history cache are pure
+  Kotlin and run in the JVM tests on a scripted engine. The engine's own
+  behaviour runs as instrumented tests on the device (`app/src/androidTest`,
+  `scripts/gradle connectedDebugAndroidTest`), on the recorded attach streams in
+  `docs/protocol-fixtures/`.
 
 Implementation choices that this spec does not pin down (tilde resolution, the bundled BouncyCastle
 as the SSH provider on every API level, the recorded `terminal.interrupt` fixture, screenshot platform, release signing) are recorded

@@ -311,11 +311,19 @@ class HcClient(
         rows: Int,
         display: ViewerDisplay? = null,
         history: Int? = null,
+        resumed: Boolean? = null,
     ): AttachResult {
         require(cols in 0..MAX_CELLS && rows in 0..MAX_CELLS) { "size is not a u16" }
         val wire = command.typed<TerminalAttachParams, AttachWire>(
             "terminal.attach",
-            TerminalAttachParams(terminal = terminal, cols = cols, rows = rows, display = display?.toWire(), history = history),
+            TerminalAttachParams(
+                terminal = terminal,
+                cols = cols,
+                rows = rows,
+                display = display?.toWire(),
+                history = history,
+                resumed = resumed,
+            ),
         )
         return AttachResult(channel = wire.channel, terminal = wire.terminal.toDomain())
     }

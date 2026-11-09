@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.core.ssh
 
+import io.github.werlang.whistl.core.rpc.BytePipe
 import io.github.werlang.whistl.core.rpc.LineTransport
 
 /**
@@ -64,6 +65,15 @@ sealed interface SshAuth {
 interface SshTransport : LineTransport {
     /** The machine this transport talks to. */
     val target: SshTarget
+
+    /**
+     * Starts [command] on a new channel and returns its raw byte pipe, for a framed connection (SPEC §5.1). Nothing is read ahead
+     * of the caller, so the bytes after a line are the caller's.
+     *
+     * @param command must be [HC_CONNECT_COMMAND].
+     * @return the byte pipe for that channel.
+     */
+    suspend fun execBytes(command: String): BytePipe
 
     /** Closes the SSH session and every channel on it. Safe to call more than once. */
     suspend fun close()

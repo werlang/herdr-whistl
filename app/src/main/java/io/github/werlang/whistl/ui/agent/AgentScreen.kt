@@ -21,6 +21,28 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.text
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import io.github.werlang.whistl.domain.CellColor
+import io.github.werlang.whistl.domain.CellRun
+import io.github.werlang.whistl.domain.CellStyle
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -39,6 +61,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -103,6 +126,7 @@ fun AgentScreen(
         onAskStop = viewModel::onAskStop,
         onCancelStop = viewModel::onCancelStop,
         onConfirmStop = viewModel::onConfirmStop,
+        onPaneSize = viewModel::onPaneSize,
         modifier = modifier,
     )
 }
@@ -122,11 +146,12 @@ fun AgentContent(
     onAskStop: () -> Unit,
     onCancelStop: () -> Unit,
     onConfirmStop: () -> Unit,
+    onPaneSize: (Int, Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize().testTag(AGENT_SCREEN_TAG)) {
         AgentHeader(state = state, onBack = onBack, onOptions = onOpenMenu)
-        TerminalOutput(state = state, modifier = Modifier.weight(1f))
+        TerminalOutput(state = state, onPaneSize = onPaneSize, modifier = Modifier.weight(1f))
         StatusBar(state = state)
         Column(
             modifier = Modifier
@@ -230,34 +255,159 @@ private fun AgentHeader(state: AgentUiState, onBack: () -> Unit, onOptions: () -
     }
 }
 
-/** The terminal: the output in monospace on the always-dark terminal colour, scrolled to its last line. */
+/** The terminal's padding inside its box, in dp. */
+private val TERMINAL_PADDING: Dp = 12.dp
+
+/** Glyphs measured to find one cell's width: a long run averages out the rounding of a single one. */
+private const val CELL_PROBE_GLYPHS: Int = 10
+
+/** The opacity of dim text. */
+private const val DIM_ALPHA: Float = 0.6f
+
+/** How many run layouts are kept before the cache is emptied: a screen of history is far below it. */
+private const val LAYOUT_CACHE_LIMIT: Int = 6_000
+
+/** The size of one terminal cell in pixels, and the height of a line. */
+private class CellMetrics(val cellWidth: Float, val lineHeight: Float)
+
+/**
+ * The terminal (SPEC §2.5): the emulator's cells drawn on a Canvas, in monospace, on the always-dark terminal colour, scrolled to the
+ * last line. Each line also carries its text as a node of its own, so a screen reader moves line by line (phase 7 r6, row 13). The
+ * pane is measured in cells, and [onPaneSize] receives the size, so the core is told what the viewer shows.
+ *
+ * @param state the screen's state; its frame is what is drawn.
+ * @param onPaneSize called with the pane's size in cells whenever it changes.
+ * @param modifier the modifier for the box.
+ */
 @Composable
-private fun TerminalOutput(state: AgentUiState, modifier: Modifier) {
+private fun TerminalOutput(state: AgentUiState, onPaneSize: (Int, Int) -> Unit, modifier: Modifier) {
     val scroll = rememberScrollState()
     val description = stringResource(R.string.agent_terminal_description)
-    LaunchedEffect(state.screenText) { scroll.scrollTo(scroll.maxValue) }
-    val size = fontSizeFor(state.fontSize)
-    // One text per line: a screen reader moves line by line, not through one node holding the whole buffer. The container keeps
-    // its description and does not replace the lines (phase 7 r6, row 13). The look is the same as one text block.
-    Column(
+    val tokens = LocalWhistlTokens.current
+    val density = LocalDensity.current
+    val fontSize = fontSizeFor(state.fontSize)
+    val style = TextStyle(fontFamily = WhistlMono, fontSize = fontSize)
+    val measurer = rememberTextMeasurer()
+    val metrics = remember(measurer, style) {
+        val probe = measurer.measure(AnnotatedString("M".repeat(CELL_PROBE_GLYPHS)), style, softWrap = false).size
+        CellMetrics(cellWidth = probe.width.toFloat() / CELL_PROBE_GLYPHS, lineHeight = probe.height.toFloat())
+    }
+    val layouts = remember(measurer, style) { HashMap<CellRun, TextLayoutResult>() }
+    val padding = with(density) { TERMINAL_PADDING.toPx() }
+    var pane by remember { mutableStateOf(IntSize.Zero) }
+    val frame = state.frame
+    LaunchedEffect(frame) { scroll.scrollTo(scroll.maxValue) }
+    val cols = ((pane.width - 2 * padding) / metrics.cellWidth).toInt().coerceAtLeast(1)
+    val rows = ((pane.height - 2 * padding) / metrics.lineHeight).toInt().coerceAtLeast(1)
+    LaunchedEffect(cols, rows, pane) {
+        // A pane too small for one cell while the screen is laid out (a rotation, the keyboard) is not a size: it is not sent.
+        val holdsACell = pane.width > 2 * padding + metrics.cellWidth && pane.height > 2 * padding + metrics.lineHeight
+        if (holdsACell) onPaneSize(cols, rows)
+    }
+    // The layouts of the runs: a run is measured once while it is on the screen or in the history (its object is kept by the emulator).
+    if (layouts.size > LAYOUT_CACHE_LIMIT) layouts.clear()
+    frame.lines.forEach { line ->
+        line.forEach { run -> layouts.getOrPut(run) { measurer.measure(AnnotatedString(run.text), runStyle(run.style, style), softWrap = false) } }
+    }
+    val lineHeightDp = with(density) { metrics.lineHeight.toDp() }
+    val contentHeightDp = lineHeightDp * frame.lines.size
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(LocalWhistlTokens.current.terminal)
+            .background(tokens.terminal)
+            .onSizeChanged { pane = it }
             .verticalScroll(scroll)
-            .padding(12.dp)
+            .padding(TERMINAL_PADDING)
             .testTag(AGENT_OUTPUT_TAG)
             .semantics { contentDescription = description },
     ) {
-        state.screenText.split('\n').forEach { line ->
-            Text(
-                text = line,
-                fontFamily = WhistlMono,
-                fontSize = size,
-                lineHeight = size * 1.4f,
-                color = WhistlTerminalText,
-            )
+        Canvas(Modifier.fillMaxWidth().height(contentHeightDp)) {
+            val top = scroll.value.toFloat() - padding
+            val bottom = top + pane.height
+            frame.lines.forEachIndexed { index, line ->
+                val y = index * metrics.lineHeight
+                if (y + metrics.lineHeight < top || y > bottom) return@forEachIndexed
+                line.forEach { run -> drawRun(run, y, metrics, layouts, tokens.terminal) }
+            }
+        }
+        Column(Modifier.fillMaxWidth()) {
+            frame.lines.forEach { line ->
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(lineHeightDp)
+                        .semantics { text = AnnotatedString(line.joinToString("") { it.text }) },
+                )
+            }
         }
     }
+}
+
+/**
+ * Draws one run at its place on a line: its background where it has one, then its glyphs. The cursor is a block in the text colour,
+ * and an inverse run swaps its colours.
+ */
+private fun DrawScope.drawRun(
+    run: CellRun,
+    y: Float,
+    metrics: CellMetrics,
+    layouts: Map<CellRun, TextLayoutResult>,
+    terminal: Color,
+) {
+    val colours = runColours(run, terminal)
+    val left = run.col * metrics.cellWidth
+    val width = run.cells * metrics.cellWidth
+    colours.background?.let { drawRect(it, Offset(left, y), Size(width, metrics.lineHeight)) }
+    val layout = layouts[run] ?: return
+    drawText(layout, color = colours.foreground, topLeft = Offset(left, y))
+}
+
+/** The colours a run is drawn in: its foreground, and its background when it has one. */
+private class RunColours(val foreground: Color, val background: Color?)
+
+/**
+ * The colours of a run. A default colour is the theme's: the text colour for the foreground, and no background. Inverse swaps the two
+ * (a default takes the other default); the cursor is drawn as a block in the text colour, with the terminal colour on it.
+ */
+private fun runColours(run: CellRun, terminal: Color): RunColours {
+    val style = run.style
+    val foregroundOwn = style.fg.colourOrNull()
+    val backgroundOwn = style.bg.colourOrNull()
+    var foreground = foregroundOwn ?: WhistlTerminalText
+    var background = backgroundOwn
+    if (style.inverse) {
+        foreground = backgroundOwn ?: terminal
+        background = foregroundOwn ?: WhistlTerminalText
+    }
+    if (run.cursor) {
+        foreground = terminal
+        background = WhistlTerminalText
+    }
+    if (style.dim) foreground = foreground.copy(alpha = DIM_ALPHA)
+    return RunColours(foreground, background)
+}
+
+/** The text style of one run: the monospace style with its weight, slant and decorations. */
+private fun runStyle(style: CellStyle, base: TextStyle): TextStyle = base.merge(
+    TextStyle(
+        fontWeight = if (style.bold) FontWeight.Bold else null,
+        fontStyle = if (style.italic) FontStyle.Italic else null,
+        textDecoration = decorationOf(style),
+    ),
+)
+
+/** The text decoration of a style: underline, strike-through, both, or none. */
+private fun decorationOf(style: CellStyle): TextDecoration? = when {
+    style.underline && style.strike -> TextDecoration.combine(listOf(TextDecoration.Underline, TextDecoration.LineThrough))
+    style.underline -> TextDecoration.Underline
+    style.strike -> TextDecoration.LineThrough
+    else -> null
+}
+
+/** The colour of a cell colour, or `null` for the terminal's default, which the caller supplies. */
+private fun CellColor.colourOrNull(): Color? = when (this) {
+    CellColor.Default -> null
+    is CellColor.Rgb -> Color(0xFF000000L or value.toLong())
 }
 
 /** The one-line status bar, on the accent colour: `[machine] space · agent` and the status. */

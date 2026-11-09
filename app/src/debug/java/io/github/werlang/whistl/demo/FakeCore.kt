@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.demo
 
+import io.github.werlang.whistl.core.rpc.FramedSession
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.data.AddResult
@@ -42,6 +43,7 @@ import io.github.werlang.whistl.data.withSpace
 import io.github.werlang.whistl.data.without
 import io.github.werlang.whistl.domain.Agent
 import io.github.werlang.whistl.domain.AgentStatus
+import io.github.werlang.whistl.domain.TerminalFrame
 import io.github.werlang.whistl.domain.HelloResult
 import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.domain.Terminal
@@ -647,6 +649,8 @@ private class FakeMachines(private val state: FakeState) : MachinesRepository {
 private class FakeLease(override val machineId: String) : MachineLease {
     override fun client(): HcClient? = null
 
+    override suspend fun openStream(): FramedSession = throw TransportLost("the demo has no streams")
+
     override suspend fun release() {}
 
     override fun reportLost(client: HcClient, cause: TransportLost) {}
@@ -792,6 +796,8 @@ private class FakeTerminalHandle(
         return TerminalAction.Done
     }
 
+    override fun resize(cols: Int, rows: Int) {}
+
     override fun close() {}
 
     /** Offline or gone, as the action's result; `null` when the action may run. */
@@ -807,7 +813,7 @@ private class FakeTerminalHandle(
             state.terminal(machineId, address) == null -> TerminalReach.Gone
             else -> TerminalReach.Connected
         }
-        return TerminalScreen(text = state.output(address).joinToString("\n"), reach = reach)
+        return TerminalScreen(frame = TerminalFrame.plain(state.output(address).joinToString("\n")), reach = reach)
     }
 
     private fun refresh() {

@@ -1,6 +1,7 @@
 package io.github.werlang.whistl.support
 
 import io.github.werlang.whistl.core.rpc.AuthFailed
+import io.github.werlang.whistl.core.rpc.FramedSession
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.JsonRpcConnection
 import io.github.werlang.whistl.core.rpc.TransportLost
@@ -140,6 +141,9 @@ class FakeMachineConnector(private val scope: CoroutineScope) : MachineConnector
         withContext(NonCancellable) { held.release.await() }
     }
 
+    /** Every framed stream opened on any session, in order: a test drives the hc side of each one. */
+    val streams: MutableList<FakeFramedHc> = mutableListOf()
+
     override suspend fun connect(machine: Machine, auth: SshAuth, gate: HostKeyGate): MachineSession {
         connectCalls++
         val scripted = queued.removeFirstOrNull() ?: Attempt.Healthy
@@ -197,6 +201,12 @@ class FakeMachineConnector(private val scope: CoroutineScope) : MachineConnector
     ) : MachineSession {
         private val signal = CompletableDeferred<TransportLost>()
         private var closed = false
+
+        override suspend fun openStream(): FramedSession {
+            val hc = FakeFramedHc(commandReply)
+            streams += hc
+            return FramedSession.open(hc, scope)
+        }
 
         /** How many times the lifecycle reported this session lost through [reportLost]. */
         var reportedLosses: Int = 0

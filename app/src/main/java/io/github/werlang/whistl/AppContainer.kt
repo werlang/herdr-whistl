@@ -139,7 +139,11 @@ private class LiveCore(context: Context, scope: CoroutineScope) {
         documentChanges = documentChanges,
     )
 
-    val terminals: TerminalRepository = DefaultTerminalRepository(scope = scope, machines = machines)
+    val terminals: TerminalRepository = DefaultTerminalRepository(
+        scope = scope,
+        machines = machines,
+        display = DefaultTerminalRepository.VIEWER_DISPLAY,
+    )
 
     val installed: InstalledAgentsRepository = DefaultInstalledAgentsRepository(
         scope = scope,

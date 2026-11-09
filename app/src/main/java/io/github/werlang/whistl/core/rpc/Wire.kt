@@ -232,7 +232,10 @@ internal fun ViewerDisplay.toWire(): DisplayWire = DisplayWire(
     cell = cell?.let { listOf(it.first, it.second) },
 )
 
-/** `terminal.attach`. `display` and `history` are optional and left out when unset (SPEC §5.1). */
+/**
+ * `terminal.attach`. `display`, `history` and `resumed` are optional and left out when unset (SPEC §5.1). `resumed` is set on a
+ * re-attach after a dropped stream, so the core keeps the screen the viewer already has (phase 8 r3).
+ */
 @Serializable
 internal class TerminalAttachParams(
     val terminal: String,
@@ -240,6 +243,7 @@ internal class TerminalAttachParams(
     val rows: Int,
     val display: DisplayWire? = null,
     val history: Int? = null,
+    val resumed: Boolean? = null,
 )
 
 /** `terminal.attach` result: the channel and the terminal. Lenient: unknown keys are ignored. */

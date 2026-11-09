@@ -14,6 +14,11 @@ lifecycle = "2.8.7"
 appcompat = "1.8.0"
 robolectric = "4.17"
 roborazzi = "1.77.0"
+# VT emulator for the terminal screen (phase 8 P1 decision: kmp-terminal-emulator, pure Kotlin, no native code).
+# Only io.github.johnan:terminal-core is used (its android variant): the screen draws its cells on a Compose Canvas, so terminal-ui and its Material 3 stack stay out.
+johnanTerminal = "1.0.8"
+androidxTest = "1.6.2"
+androidxTestExt = "1.2.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -38,6 +43,9 @@ roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "robora
 sshj = { group = "com.hierynomus", name = "sshj", version.ref = "sshj" }
 bouncycastle-bcprov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastle" }
 bouncycastle-bcpkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncycastle" }
+johnan-terminal-core = { group = "io.github.johnan", name = "terminal-core", version.ref = "johnanTerminal" }
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTest" }
+androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExt" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
