@@ -35,7 +35,7 @@ jobs:
           "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0" > /dev/null
           "$sdkmanager" --list_installed | sed -n '1,20p'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       # Screenshot tests are SKIPPED on this Linux job: -Pwhistl.screenshots=skip excludes the *ScreenshotTest classes
       # (app/build.gradle.kts). The goldens are recorded on macOS and Robolectric rasterises fonts per platform, so a
@@ -100,7 +100,7 @@ jobs:
           yes | "$sdkmanager" --licenses > /dev/null || true
           "$sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0" > /dev/null
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Verify screenshot goldens
         run: ./gradlew --no-daemon verifyRoborazziDebug
