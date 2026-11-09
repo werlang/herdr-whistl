@@ -91,6 +91,10 @@ android {
         resources {
             // bcprov, bcutil and bcpkix each ship this manifest for Java 9+; the APK needs none of them.
             excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+            // BouncyCastle 1.86 ships the same LICENSE.md in bcprov, bcutil and bcpkix, so the merge
+            // task sees three inputs for one path. Keep the first copy instead of excluding it: the
+            // licence has to travel inside the APK, and the licences sheet only names the MIT licence.
+            pickFirsts += "META-INF/LICENSE.md"
         }
     }
 
