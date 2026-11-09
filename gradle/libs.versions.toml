@@ -1,19 +1,19 @@
 [versions]
-agp = "8.7.3"
-kotlin = "2.0.21"
+agp = "9.5.1"
+kotlin = "2.4.10"
 activityCompose = "1.9.3"
-composeBom = "2024.12.01"
-coreKtx = "1.15.0"
-kotlinxSerialization = "1.7.3"
-kotlinxCoroutines = "1.9.0"
+composeBom = "2026.09.00"
+coreKtx = "1.19.1"
+kotlinxSerialization = "1.12.0"
+kotlinxCoroutines = "1.11.0"
 junit = "4.13.2"
 sshj = "0.41.2"
 bouncycastle = "1.86"
-navigationCompose = "2.8.5"
+navigationCompose = "2.10.2"
 lifecycle = "2.8.7"
 appcompat = "1.7.0"
-robolectric = "4.14.1"
-roborazzi = "1.40.1"
+robolectric = "4.17"
+roborazzi = "1.77.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -41,7 +41,6 @@ bouncycastle-bcpkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", ver
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
