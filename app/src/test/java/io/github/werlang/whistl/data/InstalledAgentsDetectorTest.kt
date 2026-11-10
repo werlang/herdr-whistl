@@ -28,7 +28,7 @@ class InstalledAgentsDetectorTest {
         advanceTimeBy(30_000L)
         val second = detector.installed("m1", client)
 
-        assertEquals(listOf("claude", "opencode"), first.map { it.id })
+        assertEquals(listOf("claude", "agy", "opencode"), first.map { it.id })
         assertEquals(first, second)
         assertEquals("machine.exec count", 1, pipe.written.size)
     }

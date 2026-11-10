@@ -49,8 +49,11 @@ class DomainTest {
 
     /** Blank lines and names outside the table are ignored; known names keep output order, once each. */
     @Test
-    fun parseInstalledKeepsUnknownNamesAndDropsBlanksAndRepeats() {
-        val parsed = KnownAgents.parseInstalled("\nopencode\n\nmystery-tool\n  claude  \nopencode\n")
+    fun parseInstalledKeepsUnknownNamesAndIgnoresBanners() {
+        // A login banner is not an agent: only lines the script marked with its prefix are read (0.3.5 review).
+        val parsed = KnownAgents.parseInstalled(
+            "\nWelcome to Ubuntu 26.04 LTS\nAGENT:opencode\n\nAGENT:mystery-tool\n  AGENT:claude  \nAGENT:opencode\n",
+        )
 
         // A probe result is a fact about the machine: an agent this table does not name is still offered, labelled
         // and started by its own command (0.3.5).

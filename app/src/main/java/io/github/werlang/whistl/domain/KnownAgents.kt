@@ -43,6 +43,12 @@ object KnownAgents {
         KnownAgent(id = "cline", displayName = "Cline", argv = listOf("cline")),
     )
 
+    /**
+     * What the script puts in front of every name it prints. A login profile can print a banner, and a probe result
+     * must be distinguishable from it (0.3.5 review: any non-blank line used to be read as an agent).
+     */
+    const val AGENT_PREFIX: String = "AGENT:"
+
     /** The command names the detection script probes, in [table] order. */
     val probedIds: List<String> = table.map { it.id }
 
@@ -54,7 +60,7 @@ object KnownAgents {
      */
     val DETECTION_SCRIPT: String =
         "for a in " + probedIds.joinToString(" ") +
-            "; do command -v \"\$a\" >/dev/null 2>&1 && echo \"\$a\"; done; exit 0"
+            "; do command -v \"\$a\" >/dev/null 2>&1 && echo \"$AGENT_PREFIX\$a\"; done; exit 0"
 
     /** The complete argv for the detection call: `sh -lc` with [DETECTION_SCRIPT]. */
     val detectionArgv: List<String> = listOf("sh", "-lc", DETECTION_SCRIPT)
@@ -74,6 +80,8 @@ object KnownAgents {
         val byId = table.associateBy { it.id }
         return stdout.lineSequence()
             .map { it.trim() }
+            .filter { it.startsWith(AGENT_PREFIX) }
+            .map { it.removePrefix(AGENT_PREFIX).trim() }
             .filter { it.isNotEmpty() }
             .map { name -> byId[name] ?: KnownAgent(id = name, displayName = name, argv = listOf(name)) }
             .distinctBy { it.id }
