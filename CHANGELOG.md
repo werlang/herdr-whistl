@@ -7,6 +7,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **A menu on every agent row.** Overflow button or long press opens Interrupt, Stop, Close and remove, and Rename —
+  the same actions the agent's own screen offers, without opening the terminal. Acting from the list does not attach
+  the terminal's stream: it takes the machine's lease, sends one command and releases it. Rename is a `whistl.name`
+  label, because the core cannot rename a live terminal, and the list shows it over the original name.
+- **Tapping a machine opens its spaces.** The Spaces list filters to that machine, with a banner naming it and one tap
+  to show every machine again.
+- **The app icon**, reproduced as an adaptive vector from the delivered art (IoU 0.947 against the source).
+
 - **Check for updates, and install the new version from the app.** Settings now has an Updates card: it reads the
   newest release, offers the download, and hands the file to the installer. Nothing is installed on trust — the APK
   must hash to the published `sha256` *and* carry exactly the signers of the app that downloaded it, so a tampered
