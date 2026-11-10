@@ -4,6 +4,9 @@
     <!-- Only SSH to user-configured hosts (SPEC §6). -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Installing an update the user asked for (phase 9, SPEC §2.7). The system still asks the user to allow it. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <application
         android:name=".WhistlApplication"
         android:allowBackup="false"
@@ -26,6 +29,17 @@
                 android:name="autoStoreLocales"
                 android:value="true" />
         </service>
+
+        <!-- Hands the verified APK to the package installer; nothing outside this app can read it (SPEC §2.7). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
 
         <activity
             android:name=".MainActivity"

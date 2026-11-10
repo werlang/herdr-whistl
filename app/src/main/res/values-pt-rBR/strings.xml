@@ -275,4 +275,22 @@
     </plurals>
     <string name="machines_problem_missing">Essa máquina não está mais adicionada. Nada foi alterado.</string>
     <string name="add_machine_missing">Essa máquina não está mais adicionada. Feche esta janela e adicione-a de novo.</string>
+    <string name="settings_updates">Atualizações</string>
+    <string name="settings_update_check">Verificar atualizações</string>
+    <string name="settings_update_checking">Verificando…</string>
+    <string name="settings_update_uptodate">Esta é a versão mais nova.</string>
+    <string name="settings_update_available">A versão %1$s está disponível.</string>
+    <string name="settings_update_download">Baixar %1$s</string>
+    <string name="settings_update_downloading">Baixando…</string>
+    <string name="settings_update_install">Instalar</string>
+    <string name="settings_update_ready">%1$s baixada e verificada.</string>
+    <string name="settings_update_needs_permission">Permita que o Whistl instale pacotes para continuar.</string>
+    <string name="settings_update_allow">Permitir</string>
+    <string name="settings_update_refused_checksum">O download não confere com o checksum publicado. Nada foi instalado.</string>
+    <string name="settings_update_refused_signature">O arquivo baixado não está assinado com a chave deste app. Nada foi instalado.</string>
+    <string name="settings_update_refused_oversized">O download era maior do que uma atualização pode ser. Nada foi instalado.</string>
+    <string name="settings_update_failed_network">Não foi possível alcançar o feed de releases.</string>
+    <string name="settings_update_failed_feed">O feed de releases respondeu algo inesperado.</string>
+    <string name="settings_update_failed_noasset">A release mais nova não tem um APK verificável.</string>
+    <string name="settings_update_failed_install">O instalador do sistema recusou o arquivo.</string>
 </resources>

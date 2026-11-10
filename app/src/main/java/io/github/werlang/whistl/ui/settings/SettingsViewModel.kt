@@ -4,15 +4,24 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.werlang.whistl.data.AppLanguage
 import io.github.werlang.whistl.data.FontSize
+import io.github.werlang.whistl.data.DownloadOutcome
 import io.github.werlang.whistl.data.SettingsRepository
+import io.github.werlang.whistl.data.UpdateCheck
+import io.github.werlang.whistl.data.UpdateProblem
+import io.github.werlang.whistl.data.UpdateRelease
+import io.github.werlang.whistl.data.UpdateRepository
+import io.github.werlang.whistl.platform.AppInstaller
 import io.github.werlang.whistl.data.ThemeChoice
 import io.github.werlang.whistl.domain.ShortcutBar
 import io.github.werlang.whistl.domain.ShortcutKey
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * Applies the app language to the running app (SPEC §7): `AppCompatDelegate.setApplicationLocales` in the app, a recorder in
@@ -89,9 +98,16 @@ class SettingsViewModel(
     private val language: LanguageApplier,
     private val demo: DemoControl,
     private val versionName: String,
+    private val updates: UpdateRepository,
+    private val installer: AppInstaller,
 ) : ViewModel() {
     private val sheets = MutableStateFlow(Sheets())
     private val demoOn = MutableStateFlow(demo.enabled)
+    private val updateFlow = MutableStateFlow<UpdateUiState>(UpdateUiState.Idle)
+    private var offered: UpdateRelease? = null
+
+    /** What the update row shows (phase 9, SPEC §2.7). */
+    val update: StateFlow<UpdateUiState> = updateFlow.asStateFlow()
 
     /** The screen's state. */
     val state: StateFlow<SettingsUiState> = combine(settings.settings, sheets, demoOn) { prefs, open, demoEnabled ->
@@ -189,4 +205,69 @@ class SettingsViewModel(
         demoEnabled = false,
         versionName = versionName,
     )
+    /** Asks the feed what the newest release is (phase 9, SPEC §2.7). */
+    fun checkForUpdates() {
+        updateFlow.value = UpdateUiState.Checking
+        viewModelScope.launch {
+            updateFlow.value = when (val check = updates.check()) {
+                is UpdateCheck.Available -> {
+                    offered = check.release
+                    UpdateUiState.Available(check.release.version.toString())
+                }
+                UpdateCheck.UpToDate -> UpdateUiState.UpToDate(versionName)
+                is UpdateCheck.Failed -> UpdateUiState.Failed(check.problem)
+            }
+        }
+    }
+
+    /** Downloads the release the last check offered, and keeps it only if it verifies. */
+    fun downloadUpdate() {
+        val release = offered ?: return
+        updateFlow.value = UpdateUiState.Downloading(0, release.bytes ?: 0)
+        viewModelScope.launch {
+            val outcome = updates.download(release) { read, total ->
+                updateFlow.value = UpdateUiState.Downloading(read, total)
+            }
+            updateFlow.value = when (outcome) {
+                is DownloadOutcome.Ready -> UpdateUiState.Ready(release.version.toString(), outcome.file)
+                is DownloadOutcome.Rejected -> UpdateUiState.Refused(outcome.refusal)
+                is DownloadOutcome.Failed -> UpdateUiState.Failed(outcome.problem)
+            }
+        }
+    }
+
+    /** Hands the verified APK to the installer, or asks for the permission the system requires first. */
+    fun installUpdate() {
+        val ready = updateFlow.value as? UpdateUiState.Ready ?: return
+        if (!installer.canInstall()) {
+            updateFlow.value = UpdateUiState.NeedsPermission(ready.file)
+            installer.requestInstallPermission()
+            return
+        }
+        hand(ready.file)
+    }
+
+    /**
+     * Called when the screen comes back to the front. If the user granted the install permission while it was in the
+     * system screen, the install continues by itself: the alternative is a card that only ever reopens that screen.
+     */
+    fun onReturnedToScreen() {
+        val waiting = updateFlow.value as? UpdateUiState.NeedsPermission ?: return
+        if (!installer.canInstall()) return
+        hand(waiting.file)
+    }
+
+    private fun hand(file: File) {
+        if (!installer.install(file)) {
+            updateFlow.value = UpdateUiState.Failed(UpdateProblem.Install)
+        } else {
+            // The version on the card is the one that was installed, not the one this build carried.
+            updateFlow.value = UpdateUiState.Ready(offered?.version?.toString() ?: versionName, file)
+        }
+    }
+
+    /** Re-opens the system screen where installs from this app are allowed. */
+    fun openInstallPermission() {
+        installer.requestInstallPermission()
+    }
 }

@@ -269,4 +269,22 @@
     </plurals>
     <string name="machines_problem_missing">That machine is no longer added. Nothing was changed.</string>
     <string name="add_machine_missing">That machine is no longer added. Close this sheet and add it again.</string>
+    <string name="settings_updates">Updates</string>
+    <string name="settings_update_check">Check for updates</string>
+    <string name="settings_update_checking">Checking…</string>
+    <string name="settings_update_uptodate">This is the newest version.</string>
+    <string name="settings_update_available">%1$s is available.</string>
+    <string name="settings_update_download">Download %1$s</string>
+    <string name="settings_update_downloading">Downloading…</string>
+    <string name="settings_update_install">Install</string>
+    <string name="settings_update_ready">%1$s downloaded and verified.</string>
+    <string name="settings_update_needs_permission">Allow Whistl to install packages to continue.</string>
+    <string name="settings_update_allow">Allow</string>
+    <string name="settings_update_refused_checksum">The download did not match the published checksum. Nothing was installed.</string>
+    <string name="settings_update_refused_signature">The downloaded file is not signed with this app’s key. Nothing was installed.</string>
+    <string name="settings_update_refused_oversized">The download was larger than an update can be. Nothing was installed.</string>
+    <string name="settings_update_failed_network">Could not reach the release feed.</string>
+    <string name="settings_update_failed_feed">The release feed answered with something unexpected.</string>
+    <string name="settings_update_failed_noasset">The newest release has no APK that can be verified.</string>
+    <string name="settings_update_failed_install">The system installer refused the file.</string>
 </resources>

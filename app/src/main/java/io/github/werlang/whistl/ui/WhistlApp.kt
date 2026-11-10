@@ -358,6 +358,8 @@ private fun SettingsRoute() {
                     language = AppCompatLanguageApplier,
                     demo = AndroidDemoControl(context),
                     versionName = BuildConfig.VERSION_NAME,
+                    updates = container.updates,
+                    installer = container.installer,
                 )
             }
         },
