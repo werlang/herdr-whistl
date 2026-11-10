@@ -173,6 +173,11 @@ internal object TerminalGlyphs {
         '\u2543', '\u2544', '\u2545', '\u2546' -> Glyph(strokes = listOf(horizontal(), vertical(), toRight(heavy = true)))
         '\u2547', '\u2548', '\u2549', '\u254A' -> Glyph(strokes = listOf(horizontal(), vertical(), toLeft(heavy = true)))
         '\u254B' -> Glyph(strokes = listOf(horizontal(heavy = true), vertical(heavy = true)))
+        // Double dashes: two short segments instead of one line, so they read as a dash and not as a solid rule.
+        '\u254C' -> Glyph(filled = listOf(fill(0f, 0.46f, 0.4f, 0.54f), fill(0.6f, 0.46f, 1f, 0.54f)))
+        '\u254D' -> Glyph(filled = listOf(fill(0f, 0.40f, 0.4f, 0.60f), fill(0.6f, 0.40f, 1f, 0.60f)))
+        '\u254E' -> Glyph(filled = listOf(fill(0.46f, 0.15f, 0.54f, 0.40f), fill(0.46f, 0.60f, 0.54f, 0.85f)))
+        '\u254F' -> Glyph(filled = listOf(fill(0.40f, 0.15f, 0.60f, 0.40f), fill(0.40f, 0.60f, 0.60f, 0.85f)))
 
         // ---- box drawing, double -------------------------------------------
         '\u2550' -> Glyph(strokes = listOf(horizontal(double = true)))

@@ -125,6 +125,16 @@ class TerminalGlyphsTest {
         assertTrue(requireNotNull(TerminalGlyphs.glyphFor('\u2500')).strokes.none { it.heavy })
     }
 
+    /** The double dashes are two short segments, not one solid rule. */
+    @Test
+    fun theDoubleDashesAreTwoSegments() {
+        listOf('\u254C', '\u254D', '\u254E', '\u254F').forEach { ch ->
+            val glyph = requireNotNull(TerminalGlyphs.glyphFor(ch)) { "no geometry for $ch" }
+            assertEquals("$ch", 2, glyph.filled.size)
+            assertTrue("$ch", glyph.strokes.isEmpty())
+        }
+    }
+
     /** The rounded corners no longer fall through to the font. */
     @Test
     fun theRoundedCornersAreMapped() {
