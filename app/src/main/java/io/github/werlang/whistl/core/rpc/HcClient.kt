@@ -13,8 +13,10 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.longOrNull
 
 /** Opens a new line pipe for the events channel. Each call is a separate `hc connect` exec. */
 typealias OpenEventsPipe = suspend () -> LinePipe
@@ -261,7 +263,12 @@ class HcClient(
             "terminal.send",
             TerminalSendParams(terminal = terminal, text = text, force = force),
         )
-        return TerminalSent(started = wire.started, status = AgentStatus.fromWire(wire.status), turn = wire.turn)
+        return TerminalSent(
+            // Only a numeric `started` is a timestamp; herdr-core 0.1.14 answers `true` (0.3.0 crash).
+            started = (wire.started as? JsonPrimitive)?.longOrNull,
+            status = AgentStatus.fromWire(wire.status),
+            turn = wire.turn,
+        )
     }
 
     /**

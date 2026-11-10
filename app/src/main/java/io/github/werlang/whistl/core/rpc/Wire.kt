@@ -318,7 +318,12 @@ internal class TerminalReadWire(
 /** `terminal.send` result. Lenient: unknown keys are ignored. */
 @Serializable
 internal class TerminalSendWire(
-    val started: Long? = null,
+    /**
+     * Kept raw because herdr-core answers two shapes: `"started": null` when the recorded fixture was
+     * taken and `"started": true` from 0.1.14 (seen on device, 0.3.0). Only a numeric value is a start
+     * time; a boolean is a flag with no timestamp.
+     */
+    val started: JsonElement? = null,
     val status: String? = null,
     val turn: Long = 0,
 )
