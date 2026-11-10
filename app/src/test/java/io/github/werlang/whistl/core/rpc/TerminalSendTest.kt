@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -67,5 +68,39 @@ class TerminalSendTest {
         }
 
         assertEquals("send with force: true to answer it", error.hint)
+    }
+
+    /**
+     * herdr-core 0.1.14 answers `"started": true` instead of `null`; 0.3.0 crashed on the device parsing it as a Long
+     * ("Failed to parse literal 'true' as a long value at path: $.started").
+     */
+    @Test
+    fun aBooleanStartedInTheReplyIsNotATimestamp() = runTest {
+        val recorded = Fixtures.load("send.json")
+        val result = recorded.response.getValue("result") as JsonObject
+        val response = JsonObject(
+            recorded.response + ("result" to JsonObject(result + ("started" to JsonPrimitive(true)))),
+        )
+
+        val sent = clientWith(command = FakeLinePipe.replaying(recorded, response = response))
+            .terminalSend("t15s", "echo hello-from-whistl")
+
+        assertNull(sent.started)
+        assertEquals(0L, sent.turn)
+    }
+
+    /** A numeric `started` is still a timestamp. */
+    @Test
+    fun aNumericStartedIsStillATimestamp() = runTest {
+        val recorded = Fixtures.load("send.json")
+        val result = recorded.response.getValue("result") as JsonObject
+        val response = JsonObject(
+            recorded.response + ("result" to JsonObject(result + ("started" to JsonPrimitive(1794006623711L)))),
+        )
+
+        val sent = clientWith(command = FakeLinePipe.replaying(recorded, response = response))
+            .terminalSend("t15s", "echo hello-from-whistl")
+
+        assertEquals(1794006623711L, sent.started)
     }
 }
