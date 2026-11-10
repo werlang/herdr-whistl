@@ -57,10 +57,11 @@ class SettingsRepositoryTest {
             repo.settings.value.shortcutBar,
         )
 
+        // A single key steps over the arrow bundle instead of landing inside it.
         repo.moveShortcutUp(ShortcutKey.ENTER)
         assertEquals(
-            listOf(ShortcutKey.TAB, ShortcutKey.ESC, ShortcutKey.CTRL, ShortcutKey.UP, ShortcutKey.DOWN,
-                ShortcutKey.LEFT, ShortcutKey.ENTER, ShortcutKey.RIGHT),
+            listOf(ShortcutKey.TAB, ShortcutKey.ESC, ShortcutKey.CTRL, ShortcutKey.ENTER, ShortcutKey.UP,
+                ShortcutKey.DOWN, ShortcutKey.LEFT, ShortcutKey.RIGHT),
             repo.settings.value.shortcutBar,
         )
         assertEquals(8, repo.settings.value.shortcutBar.toSet().size)

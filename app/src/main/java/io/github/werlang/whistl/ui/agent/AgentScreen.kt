@@ -80,6 +80,7 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.max
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.data.FontSize
+import io.github.werlang.whistl.domain.ShortcutBar
 import io.github.werlang.whistl.domain.ShortcutKey
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.SheetDragHandle
@@ -533,7 +534,15 @@ private fun KeyBar(state: AgentUiState, onKey: (ShortcutKey) -> Unit) {
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        state.keyBar.forEach { key ->
+        var index = 0
+        while (index < state.keyBar.size) {
+            val key = state.keyBar[index]
+            if (ShortcutBar.isArrow(key)) {
+                // The bundle is one cluster: the four arrows share a container instead of four separate buttons.
+                ArrowCluster(enabled = state.canType, onKey = onKey)
+                while (index < state.keyBar.size && ShortcutBar.isArrow(state.keyBar[index])) index++
+                continue
+            }
             val armed = key == ShortcutKey.CTRL && state.ctrlArmed
             val description = if (armed) {
                 stringResource(R.string.agent_ctrl_armed_description)
@@ -554,6 +563,44 @@ private fun KeyBar(state: AgentUiState, onKey: (ShortcutKey) -> Unit) {
                     .semantics { contentDescription = description },
             ) {
                 Text(text = key.label, fontFamily = WhistlMono, style = MaterialTheme.typography.labelLarge)
+            }
+            index++
+        }
+    }
+}
+
+/**
+ * The arrow bundle in one compact cluster: four cells sharing a container, no gaps and no per-key chrome, so the bar keeps
+ * room for the other keys. Each cell is still a 48 dp touch target and still names its key; the bundle is enabled or
+ * disabled as a whole (Settings holds it as one entry).
+ *
+ * @param enabled whether the terminal takes input.
+ * @param onKey called with the arrow that was tapped.
+ */
+@Composable
+private fun ArrowCluster(enabled: Boolean, onKey: (ShortcutKey) -> Unit) {
+    val tokens = LocalWhistlTokens.current
+    Row(
+        modifier = Modifier
+            .heightIn(min = MinTouchTarget)
+            .background(tokens.field, RoundedCornerShape(8.dp)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ShortcutBar.ARROWS.forEach { arrow ->
+            val description = stringResource(keyNameRes(arrow))
+            Box(
+                modifier = Modifier
+                    .size(width = MinTouchTarget, height = MinTouchTarget)
+                    .clickable(enabled = enabled) { onKey(arrow) }
+                    .semantics { contentDescription = description },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = arrow.label,
+                    fontFamily = WhistlMono,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface else tokens.muted,
+                )
             }
         }
     }
