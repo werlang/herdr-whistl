@@ -11,31 +11,56 @@ import org.junit.Test
 /** Pure domain rules: known agents, status and state parsing, and space membership. */
 class DomainTest {
 
-    /** The detection script is byte-for-byte the `argv[2]` recorded in `exec_installed.json`. */
+    /**
+     * The detection call keeps the recorded shape (`sh -lc <script>`) and its script probes every agent in the
+     * table. The fixture's own script is a recording and is not edited; what has to hold is that our script covers
+     * the table (0.3.5: codex, gemini and aider were probed from a shorter list and then dropped by the parser).
+     */
     @Test
-    fun detectionScriptIsByteForByteTheFixtureScript() {
+    fun detectionScriptProbesEveryAgentInTheTable() {
         val argv = Fixtures.load("exec_installed.json").request
             .getValue("params").jsonObject
             .getValue("argv").jsonArray
-        val recorded = argv[2].jsonPrimitive.content
+        assertEquals("sh", argv[0].jsonPrimitive.content)
+        assertEquals("-lc", argv[1].jsonPrimitive.content)
 
-        assertEquals(recorded, KnownAgents.DETECTION_SCRIPT)
-        assertEquals(listOf("sh", "-lc", recorded), KnownAgents.detectionArgv)
+        assertEquals(listOf("sh", "-lc", KnownAgents.DETECTION_SCRIPT), KnownAgents.detectionArgv)
+
+        // The probed list is read out of the script itself: a name added to the table but not to the script (or the
+        // other way round) fails here.
+        val probed = KnownAgents.DETECTION_SCRIPT
+            .substringAfter("for a in ")
+            .substringBefore(";")
+            .split(" ")
+            .filter { it.isNotBlank() }
+        assertEquals(KnownAgents.probedIds, probed)
     }
 
-    /** The table holds exactly the five agents of SPEC §5, each with its command as the argv. */
+    /** The table holds every agent this app names, each with its command as the argv. */
     @Test
-    fun knownAgentsTableHoldsTheFiveSpecAgents() {
-        assertEquals(listOf("claude", "codex", "gemini", "opencode", "aider"), KnownAgents.table.map { it.id })
+    fun knownAgentsTableHoldsEveryNamedAgent() {
+        assertEquals(
+            listOf("claude", "codex", "gemini", "agy", "opencode", "cursor-agent", "aider", "goose", "amp", "crush",
+                "qwen", "copilot", "droid", "cline"),
+            KnownAgents.table.map { it.id },
+        )
         KnownAgents.table.forEach { assertEquals(listOf(it.id), it.argv) }
     }
 
     /** Blank lines and names outside the table are ignored; known names keep output order, once each. */
     @Test
-    fun parseInstalledIgnoresBlankAndUnknownNames() {
-        val parsed = KnownAgents.parseInstalled("\nopencode\n\nmystery-tool\n  claude  \nopencode\n")
+    fun parseInstalledKeepsUnknownNamesAndIgnoresBanners() {
+        // A login banner is not an agent: only lines the script marked with its prefix are read (0.3.5 review).
+        val parsed = KnownAgents.parseInstalled(
+            "\nWelcome to Ubuntu 26.04 LTS\nAGENT:opencode\n\nAGENT:mystery-tool\n  AGENT:claude  \nAGENT:opencode\n",
+        )
 
-        assertEquals(listOf("opencode", "claude"), parsed.map { it.id })
+        // A probe result is a fact about the machine: an agent this table does not name is still offered, labelled
+        // and started by its own command (0.3.5).
+        assertEquals(listOf("opencode", "mystery-tool", "claude"), parsed.map { it.id })
+        val unknown = parsed.single { it.id == "mystery-tool" }
+        assertEquals("mystery-tool", unknown.displayName)
+        assertEquals(listOf("mystery-tool"), unknown.argv)
     }
 
     /** Empty output (no agents) yields an empty list, not an error. */

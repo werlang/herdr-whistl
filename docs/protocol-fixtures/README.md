@@ -4,6 +4,10 @@ Recorded from herdr-core, never hand-edited. The `.json` files are request/respo
 request is a frame, `request`/`response` objects describing the frames). `FixtureCoverageTest` checks that every
 file here is named by a test.
 
+One exception, and it is only the request: in `exec_installed.json` the `argv[2]` script is **authored by the app**
+(it is the probe list from `KnownAgents`), so it is kept in step with that table by hand when the list changes; the
+recorded `response` is untouched. The 0.3.5 update added the agents the app now detects.
+
 Framed mode (SPEC §5.1, measured on hc 0.1.14 on the rpi5):
 
 - `hello_framed.json`: `hello` with `{"framed": true}` and its reply (`"framed": true`). The reply is the last

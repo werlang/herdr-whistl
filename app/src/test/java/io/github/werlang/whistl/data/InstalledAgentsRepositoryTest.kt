@@ -45,7 +45,7 @@ class InstalledAgentsRepositoryTest {
         machines.setState("m1", ConnectionState.Connected(testHello()))
         runCurrent()
 
-        assertEquals(listOf("claude", "opencode"), repo.installed.value.getValue("m1").map { it.id })
+        assertEquals(listOf("claude", "agy", "opencode"), repo.installed.value.getValue("m1").map { it.id })
         assertEquals("one machine.exec", 1, pipe.written.size)
     }
 
@@ -72,7 +72,7 @@ class InstalledAgentsRepositoryTest {
         runCurrent()
 
         assertEquals("the second connection reuses the throttled result", 1, pipe.written.size)
-        assertEquals(listOf("claude", "opencode"), repo.installed.value.getValue("m1").map { it.id })
+        assertEquals(listOf("claude", "agy", "opencode"), repo.installed.value.getValue("m1").map { it.id })
     }
 
     /** Removing a machine leaves its list out of the map. */

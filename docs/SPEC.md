@@ -293,10 +293,17 @@ arrive, and the session skips and counts them without keeping the payload
   screen.
 
 Installed agents: herdr-core has no API for it (Herdr desktop does it itself).
-Run `machine.exec ["sh","-lc", <script>]` with a known list (claude, codex,
-gemini, opencode, aider, …), each checked with `command -v`, at most once a
+Run `machine.exec ["sh","-lc", <script>]` with the list of agents the app knows
+(claude, codex, gemini, agy, opencode, cursor-agent, aider, goose, amp, crush,
+qwen, copilot, droid, cline), each checked with `command -v`, at most once a
 minute per machine. The list lives in one Kotlin table (`KnownAgents`) with
-display name and argv.
+display name and argv, and the script is built from that table so the two cannot
+drift.
+
+Detection is a probe, not a whitelist: whatever the script reports is offered,
+and a name outside the table is labelled and started by its own command. Dropping
+unknown names is how a machine with five CLIs showed only the two that happened
+to be in the table.
 
 The `whistl` document on each machine:
 
