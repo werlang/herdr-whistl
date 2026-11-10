@@ -6,6 +6,7 @@ import io.github.werlang.whistl.data.AppLanguage
 import io.github.werlang.whistl.data.FontSize
 import io.github.werlang.whistl.data.SettingsRepository
 import io.github.werlang.whistl.data.ThemeChoice
+import io.github.werlang.whistl.domain.ShortcutBar
 import io.github.werlang.whistl.domain.ShortcutKey
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -99,7 +100,11 @@ class SettingsViewModel(
             fontSize = prefs.fontSize,
             theme = prefs.theme,
             bar = prefs.shortcutBar,
-            addable = ShortcutKey.entries.filter { it !in prefs.shortcutBar },
+            // The arrow bundle is offered once, under its own name: adding any arrow adds all four, so four rows
+            // promising four single keys would lie (0.3.2 review, P2).
+            addable = ShortcutKey.entries
+                .filter { it !in prefs.shortcutBar }
+                .filter { !ShortcutBar.isArrow(it) || it == ShortcutKey.UP },
             addSheetOpen = open.add,
             licensesOpen = open.licenses,
             demoAvailable = demo.available,

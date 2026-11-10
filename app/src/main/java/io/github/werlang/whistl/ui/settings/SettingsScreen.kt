@@ -403,6 +403,8 @@ private fun AddKeySheet(addable: List<ShortcutKey>, onAdd: (ShortcutKey) -> Unit
             )
         } else {
             addable.forEach { key ->
+                // One row for the whole arrow bundle, with the bundle's name and notation (0.3.2 review, P2).
+                val arrows = ShortcutBar.isArrow(key)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -410,10 +412,14 @@ private fun AddKeySheet(addable: List<ShortcutKey>, onAdd: (ShortcutKey) -> Unit
                         .clickable { onAdd(key) },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    GlyphChip(key.label)
+                    GlyphChip(if (arrows) stringResource(R.string.settings_key_arrows_glyphs) else key.label)
                     Spacer(Modifier.width(12.dp))
                     Text(
-                        text = stringResource(keyNameRes(key)),
+                        text = if (arrows) {
+                            stringResource(R.string.settings_key_arrows)
+                        } else {
+                            stringResource(keyNameRes(key))
+                        },
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
