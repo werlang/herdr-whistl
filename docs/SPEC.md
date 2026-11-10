@@ -81,7 +81,10 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    emulator's cells on a Canvas. Colour (16, 256 and 24-bit), bold, italic,
    underline, strike-through, dim, inverse, the cursor and the alternate screen
    (htop, vim) are drawn as the program sent them. The pane is measured in cells
-   and the core is told the size with a RESIZE frame (§5.1). Each line is also
+   and the core is told the size with a RESIZE frame (§5.1). While the IME is
+   visible the font is 85% of the chosen size, and the cell metrics are derived
+   from it, so the shorter pane reports more rows to the core and the TUI
+   reflows instead of scrolling off the top. Each line is also
    a node of its own, so a screen reader moves line by line (phase 7 r6).
    Output that outruns the redraw never shows half an update: every frame is one
    state of the emulator, redrawn at most every 33 ms.

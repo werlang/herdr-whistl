@@ -10,8 +10,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -266,6 +269,9 @@ private val TERMINAL_PADDING: Dp = 12.dp
 /** Glyphs measured to find one cell's width: a long run averages out the rounding of a single one. */
 private const val CELL_PROBE_GLYPHS: Int = 10
 
+/** How much smaller the terminal font is while the keyboard is open, so the shorter pane still shows readable rows. */
+private const val IME_FONT_SCALE: Float = 0.85f
+
 /** The opacity of dim text. */
 private const val DIM_ALPHA: Float = 0.6f
 
@@ -290,13 +296,17 @@ private class CellMetrics(val cellWidth: Float, val lineHeight: Float)
  * @param onPaneSize called with the pane's size in cells whenever it changes.
  * @param modifier the modifier for the box.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TerminalOutput(state: AgentUiState, onPaneSize: (Int, Int) -> Unit, modifier: Modifier) {
     val scroll = rememberScrollState()
     val description = stringResource(R.string.agent_terminal_description)
     val tokens = LocalWhistlTokens.current
     val density = LocalDensity.current
-    val fontSize = fontSizeFor(state.fontSize)
+    // With the keyboard open the pane is much shorter, so the text steps down instead of the TUI scrolling away: the
+    // rows that fit are rows you can read at a glance (0.3.5).
+    val imeVisible = WindowInsets.isImeVisible
+    val fontSize = fontSizeFor(state.fontSize) * if (imeVisible) IME_FONT_SCALE else 1f
     val style = TextStyle(fontFamily = WhistlMono, fontSize = fontSize)
     val measurer = rememberTextMeasurer()
     val metrics = remember(measurer, style) {
@@ -596,9 +606,9 @@ private fun ArrowCluster(enabled: Boolean, onKey: (ShortcutKey) -> Unit) {
             if (index > 0) {
                 Box(
                     modifier = Modifier
-                        .width(1.dp)
-                        .height(20.dp)
-                        .background(tokens.muted.copy(alpha = 0.35f)),
+                        .width(0.5.dp)
+                        .height(18.dp)
+                        .background(tokens.muted.copy(alpha = 0.30f)),
                 )
             }
             Box(
@@ -611,7 +621,7 @@ private fun ArrowCluster(enabled: Boolean, onKey: (ShortcutKey) -> Unit) {
                 Text(
                     text = arrow.label,
                     fontFamily = WhistlMono,
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.labelMedium,
                     color = ink,
                 )
             }
