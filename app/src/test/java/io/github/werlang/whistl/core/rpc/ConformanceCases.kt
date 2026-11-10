@@ -188,9 +188,10 @@ object ConformanceCases {
             val exec = clientWith(command = FakeLinePipe.replaying(Fixtures.load("exec_installed.json")))
                 .machineExec(KnownAgents.detectionArgv)
             assertEquals(0, exec.code)
-            assertEquals("claude\nopencode\n", exec.stdout)
+            // Re-recorded on the rpi5 with the app's own probe script (which prefixes each hit): it has three CLIs.
+            assertEquals("AGENT:claude\nAGENT:agy\nAGENT:opencode\n", exec.stdout)
             assertEquals("", exec.stderr)
-            assertEquals(listOf("claude", "opencode"), KnownAgents.parseInstalled(exec.stdout).map { it.id })
+            assertEquals(listOf("claude", "agy", "opencode"), KnownAgents.parseInstalled(exec.stdout).map { it.id })
         },
 
         ConformanceCase("doc.get | doc_get.json", "doc.get", "doc_get.json") {
