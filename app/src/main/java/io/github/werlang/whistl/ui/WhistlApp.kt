@@ -3,6 +3,7 @@ package io.github.werlang.whistl.ui
 import android.net.Uri
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -153,6 +154,10 @@ fun WhistlApp(startRoute: String = Routes.MACHINES) {
     )
 
     Scaffold(
+        // The window takes the keyboard as a resize, not as a pan: with adjustResize in the manifest this keeps the
+        // whole screen on-screen and shrinks the terminal, so the pane reports fewer rows and the core reflows the TUI
+        // to fit (0.3.3, seen on device: the terminal kept its size and slid up).
+        modifier = Modifier.imePadding(),
         bottomBar = {
             if (showBar) {
                 NavigationBar {

@@ -580,6 +580,32 @@ private fun KeyBar(state: AgentUiState, onKey: (ShortcutKey) -> Unit) {
 @Composable
 private fun ArrowCluster(enabled: Boolean, onKey: (ShortcutKey) -> Unit) {
     val tokens = LocalWhistlTokens.current
+    // Collapsed it is one key, not four: the bar shows the bundle's notation, and the four arrows appear only while the
+    // user is actually sending one, then it collapses again (0.3.3, seen on device: four 48 dp cells read as four keys).
+    var open by remember { mutableStateOf(false) }
+    val bundleName = stringResource(R.string.settings_key_arrows)
+    if (!open) {
+        Button(
+            onClick = { open = true },
+            enabled = enabled,
+            contentPadding = PaddingValues(horizontal = 8.dp),
+            colors = whistlButtonColors(
+                containerColor = tokens.field,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+            ),
+            modifier = Modifier
+                .heightIn(min = MinTouchTarget)
+                .widthIn(min = MinTouchTarget)
+                .semantics { contentDescription = bundleName },
+        ) {
+            Text(
+                text = stringResource(R.string.settings_key_arrows_glyphs),
+                fontFamily = WhistlMono,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+        return
+    }
     Row(
         modifier = Modifier
             .heightIn(min = MinTouchTarget)
@@ -591,7 +617,10 @@ private fun ArrowCluster(enabled: Boolean, onKey: (ShortcutKey) -> Unit) {
             Box(
                 modifier = Modifier
                     .size(width = MinTouchTarget, height = MinTouchTarget)
-                    .clickable(enabled = enabled) { onKey(arrow) }
+                    .clickable(enabled = enabled) {
+                        onKey(arrow)
+                        open = false
+                    }
                     .semantics { contentDescription = description },
                 contentAlignment = Alignment.Center,
             ) {
