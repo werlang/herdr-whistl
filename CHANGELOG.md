@@ -7,6 +7,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.3.4] - 2026-11-10
+
+### Fixed
+
+- **The arrow bundle does not collapse after one press.** Collapsing meant reopening it for every line you stepped
+  back; it is now a segmented control — four 48 dp segments in one rounded container, separated by hairlines, always
+  available. One tap sends one arrow, and holding it down for repeated presses works.
+
+
 ## [0.3.3] - 2026-11-10
 
 ### Fixed
@@ -108,7 +117,8 @@ Nothing yet.
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/werlang/herdr-whistl/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/werlang/herdr-whistl/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/werlang/herdr-whistl/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/werlang/herdr-whistl/compare/v0.3.0...v0.3.1
