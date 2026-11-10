@@ -7,6 +7,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.3.3] - 2026-11-10
+
+### Fixed
+
+- **The keyboard resizes the terminal.** Opening the keyboard only panned the window: the terminal kept its rows and
+  columns and slid up, so a TUI never reflowed. The activity now resizes for the IME and the pane reports the smaller
+  size, so the core redraws to fit the space above the keyboard.
+- **The arrow bundle is one key in the bar.** It was drawn as four cells at once, which reads as four separate keys.
+  Collapsed it shows the bundle's notation; tapping reveals the four arrows, and sending one collapses it again.
+
+
 ## [0.3.2] - 2026-11-10
 
 ### Added
@@ -97,7 +108,8 @@ Nothing yet.
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/werlang/herdr-whistl/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/werlang/herdr-whistl/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/werlang/herdr-whistl/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/werlang/herdr-whistl/compare/v0.2.0...v0.3.0
