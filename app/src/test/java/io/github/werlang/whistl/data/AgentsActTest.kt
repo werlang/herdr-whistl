@@ -126,6 +126,33 @@ class AgentsActTest {
         assertEquals(ActionResult.Done, agents.act(MACHINE, ADDRESS, AgentAction.Close))
     }
 
+    /** A remove that races the reaping is retried: `StillLive` from hc is not the end of a close. */
+    @Test
+    fun closingRetriesTheRemoveWhileTheCoreStillCountsItLive() = runTest {
+        val stillLive = JsonObject(
+            mapOf(
+                "jsonrpc" to JsonPrimitive("2.0"),
+                "id" to JsonPrimitive(3),
+                "error" to JsonObject(
+                    mapOf(
+                        "code" to JsonPrimitive(-32000),
+                        "message" to JsonPrimitive("terminal is still live"),
+                        "data" to JsonObject(mapOf("kind" to JsonPrimitive("live"))),
+                    ),
+                ),
+            ),
+        )
+        val pipe = scriptedPipe(
+            Exchange("kill", kill.request, kill.response),
+            Exchange("rm still live", rm.request, stillLive),
+            Exchange("rm again", rm.request, rm.response),
+        )
+        val agents = repo(this, pipe)
+
+        assertEquals(ActionResult.Done, agents.act(MACHINE, ADDRESS, AgentAction.Close))
+        assertEquals(3, pipe.written.size)
+    }
+
     /** Rename writes the `whistl.name` label and nothing else, trimmed. */
     @Test
     fun renameWritesTheNameLabel() = runTest {

@@ -94,8 +94,12 @@ fun AgentMenuSheet(
                     Text(stringResource(R.string.agents_rename_save))
                 }
             } else {
-                SheetAction(stringResource(R.string.agents_action_interrupt), onInterrupt)
-                SheetAction(stringResource(R.string.agents_action_stop), onStop)
+                // A finished agent has nothing to interrupt and nothing to stop; offering both would only produce a
+                // "that agent is already gone" for a row the user can see is finished (0.4.0 review, P2).
+                if (menu.row.live) {
+                    SheetAction(stringResource(R.string.agents_action_interrupt), onInterrupt)
+                    SheetAction(stringResource(R.string.agents_action_stop), onStop)
+                }
                 SheetAction(stringResource(R.string.agents_action_close), onClose)
                 SheetAction(stringResource(R.string.agents_action_rename), onStartRename)
             }

@@ -7,6 +7,7 @@ import io.github.werlang.whistl.core.rpc.EventSubscription
 import io.github.werlang.whistl.core.rpc.HcException
 import io.github.werlang.whistl.core.rpc.NotFound
 import io.github.werlang.whistl.core.rpc.SpawnFailed
+import io.github.werlang.whistl.core.rpc.StillLive
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.domain.Agent
 import io.github.werlang.whistl.domain.KnownAgent
@@ -175,6 +176,12 @@ class DefaultAgentsRepository(
          * then backs off instead of retrying each second (p7r8 item 4).
          */
         const val HEALTHY_AFTER_MS: Long = 30_000L
+
+        /** How many times a remove is retried while the core still counts the killed terminal as live. */
+        const val REMOVE_TRIES: Int = 5
+
+        /** How long to wait between those tries. */
+        const val REMOVE_DELAY_MS: Long = 150L
     }
 
     /** One live events subscription: the client it was opened on, and the job that reads it. */
@@ -259,7 +266,7 @@ class DefaultAgentsRepository(
                     } catch (e: NotFound) {
                         // Already finished: the remove below is the part that matters.
                     }
-                    client.terminalRm(address)
+                    removeWhenExited(client, address)
                 }
                 is AgentAction.Rename -> {
                     val name = action.name.trim()
@@ -276,6 +283,30 @@ class DefaultAgentsRepository(
             return ActionResult.Failed(action)
         } finally {
             withContext(NonCancellable) { lease.release() }
+        }
+    }
+
+    /**
+     * Removes a terminal, waiting for the core to consider it exited.
+     *
+     * `terminal.kill` returns before the process is reaped, and `terminal.rm` answers `StillLive` until it is, so a
+     * remove right after a kill is a race the user would see as "the core refused the action" (0.4.0 review, P2). The
+     * wait is short and bounded: five tries, 150 ms apart.
+     *
+     * @param client the live connection.
+     * @param address the terminal to remove.
+     */
+    private suspend fun removeWhenExited(client: HcClient, address: String) {
+        var attempt = 0
+        while (true) {
+            try {
+                client.terminalRm(address)
+                return
+            } catch (e: StillLive) {
+                attempt++
+                if (attempt >= REMOVE_TRIES) throw e
+                delay(REMOVE_DELAY_MS)
+            }
         }
     }
 
