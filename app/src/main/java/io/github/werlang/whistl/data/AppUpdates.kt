@@ -285,7 +285,14 @@ class HttpUpdateRepository(
     private fun readText(url: String, limit: Long): String? {
         val connection = open(url)
         return connection.inputStream.use { input: InputStream ->
-            val text = input.readNBytes(limit.toInt()).toString(Charsets.UTF_8)
+            val buffer = ByteArray(limit.toInt())
+            var read = 0
+            while (read < buffer.size) {
+                val n = input.read(buffer, read, buffer.size - read)
+                if (n < 0) break
+                read += n
+            }
+            val text = String(buffer, 0, read, Charsets.UTF_8)
             if (text.isBlank()) null else text
         }
     }

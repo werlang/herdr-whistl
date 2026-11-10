@@ -57,17 +57,23 @@ class AndroidAppInstaller(private val context: Context) : AppInstaller {
     private val packageName: String = context.packageName
 
     override fun signersOf(file: File): Set<String> {
-        val info = context.packageManager.getPackageArchiveInfo(
-            file.absolutePath,
-            PackageManager.GET_SIGNING_CERTIFICATES,
-        ) ?: return emptySet()
+        val info = context.packageManager.getPackageArchiveInfo(file.absolutePath, signatureFlags()) ?: return emptySet()
         return digests(info)
     }
 
     override fun installedSigners(): Set<String> {
-        val info = context.packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+        val info = context.packageManager.getPackageInfo(packageName, signatureFlags())
         return digests(info)
     }
+
+    /** `GET_SIGNING_CERTIFICATES` exists from API 28; below that the only way to read a signature is the old flag. */
+    private fun signatureFlags(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION")
+            PackageManager.GET_SIGNATURES
+        }
 
     override fun canInstall(): Boolean =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.packageManager.canRequestPackageInstalls() else true
@@ -95,12 +101,13 @@ class AndroidAppInstaller(private val context: Context) : AppInstaller {
         false
     }
 
+    @Suppress("DEPRECATION")
     private fun digests(info: android.content.pm.PackageInfo): Set<String> {
-        val signing = info.signingInfo ?: return emptySet()
-        val certificates = if (signing.hasMultipleSigners()) {
-            signing.apkContentsSigners
+        val certificates = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val signing = info.signingInfo ?: return emptySet()
+            if (signing.hasMultipleSigners()) signing.apkContentsSigners else signing.signingCertificateHistory
         } else {
-            signing.signingCertificateHistory
+            info.signatures ?: return emptySet()
         }
         return certificates.mapNotNull { certificate ->
             runCatching {
