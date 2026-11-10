@@ -223,8 +223,7 @@ private fun ShortcutSection(state: SettingsUiState, viewModel: SettingsViewModel
                     onUp = { viewModel.moveUp(key) },
                     onDown = { viewModel.moveDown(key) },
                     onRemove = { viewModel.remove(key) },
-                    // i18n-ok: the gap between arrow glyphs is notation, not prose (glyphs are never translated).
-                    glyph = if (arrows) ShortcutBar.ARROWS.joinToString(" ") { it.label } else null,
+                    glyph = if (arrows) stringResource(R.string.settings_key_arrows_glyphs) else null,
                     name = if (arrows) stringResource(R.string.settings_key_arrows) else null,
                 )
             }

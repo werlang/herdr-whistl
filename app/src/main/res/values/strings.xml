@@ -108,6 +108,7 @@
     <string name="settings_restore_keys">Restore defaults</string>
     <string name="settings_all_keys_added">Every key is already in the bar.</string>
     <string name="settings_key_arrows">Arrow keys</string>
+    <string name="settings_key_arrows_glyphs" translatable="false">↑ ↓ ← →</string>
     <string name="settings_move_key_up">Move %1$s up</string>
     <string name="settings_move_key_down">Move %1$s down</string>
     <string name="settings_remove_key">Remove %1$s</string>
