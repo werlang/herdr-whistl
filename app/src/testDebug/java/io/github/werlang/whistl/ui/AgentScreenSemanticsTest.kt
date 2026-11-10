@@ -53,8 +53,8 @@ class AgentScreenSemanticsTest : ScreenHarness() {
     }
 
     /**
-     * Each key of the bar names a node in the tree, read from the locale under test. The four arrows are one node
-     * ("Arrow keys"): collapsed, the bar holds the bundle, not four keys (0.3.3).
+     * Each key of the bar names a node in the tree, read from the locale under test. The arrows are always exposed
+     * as four segments of one control, so each one is its own named node (0.3.4).
      */
     private fun assertKeysLabelled() {
         val app = RuntimeEnvironment.getApplication()
@@ -62,7 +62,10 @@ class AgentScreenSemanticsTest : ScreenHarness() {
             R.string.key_esc,
             R.string.key_tab,
             R.string.key_ctrl,
-            R.string.settings_key_arrows,
+            R.string.key_up,
+            R.string.key_down,
+            R.string.key_left,
+            R.string.key_right,
             R.string.key_enter,
         ).map { app.getString(it) }
         labels.forEach { label ->
