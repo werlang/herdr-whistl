@@ -7,6 +7,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.3.5] - 2026-11-10
+
+### Changed
+
+- **The terminal font steps down while the keyboard is open.** With the IME up the pane is roughly half its height and
+  a TUI kept drawing the same rows into it, so the text you were reading scrolled off the top. The font is now 85% of
+  the chosen size while the keyboard is visible, the cell metrics derive from it, and the pane reports the larger
+  column/row count to the core — the TUI reflows into the space instead of the window panning.
+- **The arrow bundle reads as one control.** The four segments keep their 48 dp targets; the glyph drops one type
+  scale and the separators thin from 1 dp to 0.5 dp.
+
 ## [0.3.4] - 2026-11-10
 
 ### Added
