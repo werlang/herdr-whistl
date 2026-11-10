@@ -10,8 +10,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.height
@@ -295,6 +296,7 @@ private class CellMetrics(val cellWidth: Float, val lineHeight: Float)
  * @param onPaneSize called with the pane's size in cells whenever it changes.
  * @param modifier the modifier for the box.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TerminalOutput(state: AgentUiState, onPaneSize: (Int, Int) -> Unit, modifier: Modifier) {
     val scroll = rememberScrollState()
