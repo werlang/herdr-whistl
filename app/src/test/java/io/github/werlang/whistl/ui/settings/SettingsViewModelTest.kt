@@ -6,6 +6,8 @@ import io.github.werlang.whistl.data.FontSize
 import io.github.werlang.whistl.data.ThemeChoice
 import io.github.werlang.whistl.domain.ShortcutBar
 import io.github.werlang.whistl.domain.ShortcutKey
+import io.github.werlang.whistl.support.FakeInstaller
+import io.github.werlang.whistl.support.FakeUpdates
 import io.github.werlang.whistl.support.InMemorySettingsStore
 import io.github.werlang.whistl.support.MainDispatcherRule
 import org.junit.Assert.assertEquals
@@ -44,9 +46,18 @@ class SettingsViewModelTest {
         val store: InMemorySettingsStore = InMemorySettingsStore(),
         val applier: RecordingApplier = RecordingApplier(),
         val demo: FakeDemo = FakeDemo(available = true),
+        val updates: FakeUpdates = FakeUpdates(),
+        val installer: FakeInstaller = FakeInstaller(),
     ) {
         val settings = DefaultSettingsRepository(store)
-        val vm = SettingsViewModel(settings, applier, demo, versionName = "0.1.0")
+        val vm = SettingsViewModel(
+            settings,
+            applier,
+            demo,
+            versionName = "0.1.0",
+            updates = updates,
+            installer = installer,
+        )
     }
 
     /** Each setting is saved, is read back by a fresh repository, and the language is applied to the running app. */

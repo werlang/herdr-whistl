@@ -31,6 +31,11 @@ import io.github.werlang.whistl.platform.SharedPreferencesResolvedFolderCache
 import io.github.werlang.whistl.platform.SharedPreferencesSettingsStore
 import io.github.werlang.whistl.platform.SharedPreferencesSpacesCache
 import io.github.werlang.whistl.core.log.Log
+import io.github.werlang.whistl.data.HttpUpdateRepository
+import io.github.werlang.whistl.data.UpdateRepository
+import io.github.werlang.whistl.domain.AppVersion
+import io.github.werlang.whistl.platform.AndroidAppInstaller
+import io.github.werlang.whistl.platform.AppInstaller
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +82,19 @@ class AppContainer(
 
     /** This device's public key line, for the Add machine sheet. */
     val clientKey: ClientPublicKey = demo?.clientKey ?: live.clientKey
+
+    /** The system side of an update: signatures, the install permission and the installer (SPEC §2.7). */
+    val installer: AppInstaller = AndroidAppInstaller(context.applicationContext)
+
+    /**
+     * The release feed. It is the same in demo mode: an update is about this build, not about the demo data, and a
+     * debug build keeps its own version so it never offers itself a release.
+     */
+    val updates: UpdateRepository = HttpUpdateRepository(
+        currentVersion = AppVersion.parse(BuildConfig.VERSION_NAME) ?: AppVersion(0, 0, 0),
+        installer = installer,
+        cacheDir = context.applicationContext.cacheDir,
+    )
 }
 
 /**

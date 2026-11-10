@@ -78,6 +78,7 @@ const val LICENSES_SHEET_TAG: String = "licenses-sheet"
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel, modifier: Modifier = Modifier) {
     val state by viewModel.state.collectAsState()
+    val update by viewModel.update.collectAsState()
     Column(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 10.dp)) {
             Text(
@@ -98,6 +99,16 @@ fun SettingsScreen(viewModel: SettingsViewModel, modifier: Modifier = Modifier) 
         ) {
             item { GeneralSection(state = state, viewModel = viewModel) }
             item { ShortcutSection(state = state, viewModel = viewModel) }
+            item {
+                UpdateSection(
+                    versionName = state.versionName,
+                    update = update,
+                    onCheck = viewModel::checkForUpdates,
+                    onDownload = viewModel::downloadUpdate,
+                    onInstall = viewModel::installUpdate,
+                    onAllow = viewModel::openInstallPermission,
+                )
+            }
             item { AboutSection(state = state, onLicenses = viewModel::openLicenses) }
             if (state.demoAvailable) {
                 item { DemoSection(state = state, onChange = viewModel::setDemo) }
@@ -129,7 +140,7 @@ private fun SectionTitle(text: String) {
 
 /** A rounded card that groups a section's rows. */
 @Composable
-private fun SettingsCard(content: @Composable () -> Unit) {
+internal fun SettingsCard(content: @Composable () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),

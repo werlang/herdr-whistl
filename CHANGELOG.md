@@ -5,7 +5,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Check for updates, and install the new version from the app.** Settings now has an Updates card: it reads the
+  newest release, offers the download, and hands the file to the installer. Nothing is installed on trust — the APK
+  must hash to the published `sha256` *and* carry exactly the signers of the app that downloaded it, so a tampered
+  release page cannot produce an installable file. Any mismatch deletes the download and says which check refused it.
+  The file travels to the installer through a `FileProvider` restricted to `cache/updates`, and the system still asks
+  the user to allow installs from this app.
 
 ## [0.3.5] - 2026-11-10
 

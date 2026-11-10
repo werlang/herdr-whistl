@@ -103,8 +103,10 @@ The Agents destination shows a badge with the count of agents in `blocked`.
 6. **Settings** — General: Language (System / English / Português), terminal
    font size (S/M/L), theme (System / Dark / Light). Shortcut keys: list in bar
    order with move up / move down / remove, "Add key" sheet listing the keys
-   not in the bar, "Restore defaults". About: name, version, one-line privacy
-   statement, open-source licenses.
+   not in the bar, "Restore defaults". Updates: the version installed and a
+   button that checks the release feed; it only ever offers a release whose
+   APK carries this app's signing key (§6). About: name, version, one-line
+   privacy statement, open-source licenses.
 
 Available shortcut keys: Esc, Tab, Ctrl (modifier), ↑ ↓ ← →, Enter, ^C, ^D,
 Home, End, PgUp, PgDn, `/`, `|`, `~`, `-`. Defaults: Esc, Tab, Ctrl, ↑, ↓, ←, →, Enter.
@@ -325,8 +327,21 @@ Unknown fields are preserved on write (round-trip `JsonObject`).
   encrypted at rest with an AES-256-GCM key in the **Android Keystore**
   (non-exportable). Never logged, never in backups
   (`android:allowBackup="false"`, `dataExtractionRules` excluding everything).
-- No `INTERNET` traffic except SSH to user-configured hosts. No analytics, no
-  crash reporters, no third-party network SDKs.
+- No `INTERNET` traffic except SSH to user-configured hosts and the update
+  check the user asks for. No analytics, no crash reporters, no third-party
+  network SDKs.
+- **Updates are verified twice before they are offered (§2 Screens, Settings).**
+  The newest release is read over HTTPS from `api.github.com`; only the asset
+  `herdr-whistl-<version>.apk` with its published `.sha256` beside it is a
+  candidate, and a link that is not HTTPS is refused. The download is capped at
+  32 MB and its SHA-256 is computed while it streams. Before anything is
+  installed, the APK's signers must be **exactly the signers of the installed
+  app**, read from the file with `PackageManager` — so a tampered release page,
+  a wrong checksum or a swapped file cannot produce an installable APK, because
+  the installed app already knows its own key. Any mismatch deletes the file;
+  the user is told which check refused it. The file reaches the installer
+  through a `FileProvider` restricted to `cache/updates`, and the system still
+  asks the user to allow installs from this app.
 - Shell injection: never build shell strings from user input. `argv` arrays
   only; the one `sh -lc` script for detection is a constant.
 - Validate inputs: host (hostname / IPv4 / IPv6), port 1–65535, user
