@@ -13,8 +13,23 @@ data class Agent(val terminal: Terminal) {
     val spaceId: String?
         get() = terminal.labels[SPACE_LABEL]
 
+    /**
+     * The name to show: the one the user gave it, else the one the core has, else the program's name, else the address.
+     *
+     * The core cannot rename a live terminal, so a rename is a label ([NAME_LABEL]) that wins over the name it was
+     * started with (phase 9, SPEC §2.4).
+     */
+    val displayName: String
+        get() = terminal.labels[NAME_LABEL]?.trim()?.takeIf { it.isNotEmpty() }
+            ?: terminal.name?.trim()?.takeIf { it.isNotEmpty() }
+            ?: terminal.argv.firstOrNull()?.substringAfterLast('/')?.takeIf { it.isNotEmpty() }
+            ?: terminal.address
+
     companion object {
         /** The hc label that ties a terminal to a space. */
         const val SPACE_LABEL: String = "whistl.space"
+
+        /** The hc label that carries a name the user chose. */
+        const val NAME_LABEL: String = "whistl.name"
     }
 }

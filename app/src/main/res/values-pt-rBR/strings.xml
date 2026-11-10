@@ -293,4 +293,19 @@
     <string name="settings_update_failed_feed">O feed de releases respondeu algo inesperado.</string>
     <string name="settings_update_failed_noasset">A release mais nova não tem um APK verificável.</string>
     <string name="settings_update_failed_install">O instalador do sistema recusou o arquivo.</string>
+    <string name="agents_row_menu">Ações do agente</string>
+    <string name="agents_action_interrupt">Interromper</string>
+    <string name="agents_action_stop">Parar</string>
+    <string name="agents_action_close">Fechar e remover</string>
+    <string name="agents_action_rename">Renomear</string>
+    <string name="agents_rename_label">Nome</string>
+    <string name="agents_rename_save">Salvar nome</string>
+    <string name="agents_notice_interrupted">Interrompido.</string>
+    <string name="agents_notice_stopped">Parado.</string>
+    <string name="agents_notice_closed">Fechado e removido.</string>
+    <string name="agents_notice_renamed">Renomeado.</string>
+    <string name="agents_notice_offline">A máquina não está conectada. Nada foi enviado.</string>
+    <string name="agents_notice_gone">Esse agente já não existe.</string>
+    <string name="agents_notice_failed">O core recusou a ação.</string>
+    <string name="agents_notice_dismiss">Dispensar</string>
 </resources>

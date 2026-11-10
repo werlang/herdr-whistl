@@ -2,18 +2,23 @@ package io.github.werlang.whistl.ui.agents
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.werlang.whistl.data.AgentAction
+import io.github.werlang.whistl.data.ActionResult
 import io.github.werlang.whistl.data.AgentsRepository
 import io.github.werlang.whistl.data.MachineAgent
 import io.github.werlang.whistl.data.MachinesRepository
 import io.github.werlang.whistl.data.isWaitingForUser
 import io.github.werlang.whistl.data.sortForAgentsScreen
+import io.github.werlang.whistl.domain.Agent
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.TerminalState
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /**
  * The filter chips of the Agents list (SPEC §2.4). Each chip counts the agents it would show.
@@ -78,7 +83,46 @@ data class AgentsUiState(
     val chips: List<FilterChip>,
     val rows: List<AgentRow>,
     val blockedCount: Int,
+    val menu: AgentMenu? = null,
+    val notice: AgentNotice? = null,
 )
+
+/**
+ * The action sheet of one row (phase 9, SPEC §2.4).
+ *
+ * @property row the agent the sheet acts on.
+ * @property renaming whether the sheet is asking for a new name.
+ * @property draft what the user has typed so far.
+ */
+data class AgentMenu(
+    val row: AgentRow,
+    val renaming: Boolean = false,
+    val draft: String = "",
+)
+
+/** What the list tells the user after an action (phase 9, SPEC §2.4). */
+enum class AgentNotice {
+    /** The agent was interrupted. */
+    Interrupted,
+
+    /** The agent was stopped. */
+    Stopped,
+
+    /** The agent was stopped and removed. */
+    Closed,
+
+    /** The agent's new name was saved. */
+    Renamed,
+
+    /** Nothing was sent: the machine is not connected. */
+    Offline,
+
+    /** The agent is gone already. */
+    Gone,
+
+    /** The core refused the action. */
+    Failed,
+}
 
 /**
  * The Agents list (SPEC §2.4): every agent on a connected machine, filtered by a chip and sorted for the screen. Events in
@@ -88,10 +132,15 @@ data class AgentsUiState(
  * @param machines the machines, for their names.
  */
 class AgentsViewModel(
-    agents: AgentsRepository,
+    private val agents: AgentsRepository,
     machines: MachinesRepository,
 ) : ViewModel() {
     private val filter = MutableStateFlow(AgentsFilter.All)
+    private val open = MutableStateFlow<AgentMenu?>(null)
+    private val notice = MutableStateFlow<AgentNotice?>(null)
+
+    /** The sheet and the last notice, as one flow so the list's state stays a five-way combine. */
+    private val sheet: Flow<Pair<AgentMenu?, AgentNotice?>> = combine(open, notice, ::Pair)
 
     /** The list's state. */
     val state: StateFlow<AgentsUiState> = combine(
@@ -99,13 +148,16 @@ class AgentsViewModel(
         machines.machines(),
         agents.blockedCount,
         filter,
-    ) { list, machineList, blocked, selected ->
+        sheet,
+    ) { list, machineList, blocked, selected, (menu, lastNotice) ->
         AgentsUiState(
             chips = AgentsFilter.entries.map { chip ->
                 FilterChip(filter = chip, count = list.count { chip.matches(it) }, selected = chip == selected)
             },
             rows = sortForAgentsScreen(list.filter { selected.matches(it) }).map { it.toRow(machineList) },
             blockedCount = blocked,
+            menu = menu,
+            notice = lastNotice,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, AgentsUiState(emptyList(), emptyList(), 0))
 
@@ -116,6 +168,72 @@ class AgentsViewModel(
      */
     fun select(chip: AgentsFilter) {
         filter.value = chip
+    }
+
+    /**
+     * Opens the action sheet of a row (phase 9, SPEC §2.4).
+     *
+     * @param row the agent the sheet acts on.
+     */
+    fun openMenu(row: AgentRow) {
+        notice.value = null
+        open.value = AgentMenu(row)
+    }
+
+    /** Closes the action sheet. */
+    fun closeMenu() {
+        open.value = null
+    }
+
+    /** Turns the sheet into a rename field, with the current name already in it. */
+    fun startRename() {
+        val menu = open.value ?: return
+        open.value = menu.copy(renaming = true, draft = menu.row.name)
+    }
+
+    /** @param text what the user has typed so far. */
+    fun renameDraft(text: String) {
+        open.value = open.value?.copy(draft = text)
+    }
+
+    /** Saves the typed name. An empty name is refused here rather than sent to the core. */
+    fun confirmRename() {
+        val menu = open.value ?: return
+        val name = menu.draft.trim()
+        if (name.isEmpty()) return
+        open.value = null
+        run(menu.row, AgentAction.Rename(name), AgentNotice.Renamed)
+    }
+
+    /** Asks the agent to stop what it is doing. */
+    fun interrupt() = act(AgentAction.Interrupt, AgentNotice.Interrupted)
+
+    /** Ends the agent's process. */
+    fun stop() = act(AgentAction.Stop, AgentNotice.Stopped)
+
+    /** Stops the agent and removes it from the list. */
+    fun close() = act(AgentAction.Close, AgentNotice.Closed)
+
+    /** Hides the message the last action left. */
+    fun dismissNotice() {
+        notice.value = null
+    }
+
+    private fun act(action: AgentAction, done: AgentNotice) {
+        val row = open.value?.row ?: return
+        open.value = null
+        run(row, action, done)
+    }
+
+    private fun run(row: AgentRow, action: AgentAction, done: AgentNotice) {
+        viewModelScope.launch {
+            notice.value = when (agents.act(row.machineId, row.address, action)) {
+                ActionResult.Done -> done
+                ActionResult.Offline -> AgentNotice.Offline
+                ActionResult.Gone -> AgentNotice.Gone
+                is ActionResult.Failed -> AgentNotice.Failed
+            }
+        }
     }
 
     private fun AgentsFilter.matches(agent: MachineAgent): Boolean = when (this) {
@@ -130,7 +248,7 @@ class AgentsViewModel(
         return AgentRow(
             machineId = machineId,
             address = terminal.address,
-            name = displayName(terminal.name, terminal.argv, terminal.address),
+            name = displayName(terminal.name, terminal.argv, terminal.address, terminal.labels),
             status = terminal.status,
             waiting = terminal.isWaitingForUser(),
             live = terminal.state == TerminalState.Live,
@@ -148,5 +266,12 @@ class AgentsViewModel(
  * @param address the terminal address.
  * @return the name to show.
  */
-internal fun displayName(name: String?, argv: List<String>, address: String): String =
-    name?.takeIf { it.isNotBlank() } ?: argv.firstOrNull()?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: address
+internal fun displayName(
+    name: String?,
+    argv: List<String>,
+    address: String,
+    labels: Map<String, String> = emptyMap(),
+): String = labels[Agent.NAME_LABEL]?.takeIf { it.isNotBlank() }
+    ?: name?.takeIf { it.isNotBlank() }
+    ?: argv.firstOrNull()?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+    ?: address

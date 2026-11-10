@@ -3,7 +3,9 @@ package io.github.werlang.whistl.demo
 import io.github.werlang.whistl.core.rpc.FramedSession
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.TransportLost
+import io.github.werlang.whistl.data.ActionResult
 import io.github.werlang.whistl.data.AddResult
+import io.github.werlang.whistl.data.AgentAction
 import io.github.werlang.whistl.data.AuthMethod
 import io.github.werlang.whistl.data.ClientPublicKey
 import io.github.werlang.whistl.data.EditResult
@@ -491,6 +493,35 @@ private class FakeState {
         return StartResult.Started(address)
     }
 
+    /**
+     * Acts on a demo agent: the list's menu, on the fake core (phase 9, SPEC §2.4). Stopping finishes the terminal,
+     * closing removes it, renaming writes the `whistl.name` label, and an interrupt changes nothing because the demo
+     * agents are not really running.
+     *
+     * @param machineId the machine.
+     * @param address the terminal address.
+     * @param action what the user asked for.
+     * @return what happened.
+     */
+    @Synchronized
+    fun actTerminal(machineId: String, address: String, action: AgentAction): ActionResult {
+        if (!isConnected(machineId)) return ActionResult.Offline
+        val list = terminals[machineId].orEmpty()
+        if (list.none { it.address == address }) return ActionResult.Gone
+        terminals[machineId] = when (action) {
+            AgentAction.Interrupt -> list
+            AgentAction.Stop -> list.map {
+                if (it.address == address) it.copy(state = TerminalState.Finished, status = null) else it
+            }
+            AgentAction.Close -> list.filterNot { it.address == address }
+            is AgentAction.Rename -> list.map {
+                if (it.address == address) it.copy(labels = it.labels + (Agent.NAME_LABEL to action.name.trim())) else it
+            }
+        }
+        publish()
+        return ActionResult.Done
+    }
+
     /** A new machine id, for a machine added in the demo. */
     @Synchronized
     fun nextMachineId(): String = "demo-${++machineCounter}"
@@ -689,6 +720,9 @@ private class FakeAgents(private val state: FakeState) : AgentsRepository {
 
     override suspend fun start(machineId: String, spaceId: String, choice: StartChoice): StartResult =
         state.startTerminal(machineId, spaceId, choice)
+
+    override suspend fun act(machineId: String, address: String, action: AgentAction): ActionResult =
+        state.actTerminal(machineId, address, action)
 }
 
 /**

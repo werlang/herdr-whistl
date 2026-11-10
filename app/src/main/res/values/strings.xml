@@ -287,4 +287,19 @@
     <string name="settings_update_failed_feed">The release feed answered with something unexpected.</string>
     <string name="settings_update_failed_noasset">The newest release has no APK that can be verified.</string>
     <string name="settings_update_failed_install">The system installer refused the file.</string>
+    <string name="agents_row_menu">Agent actions</string>
+    <string name="agents_action_interrupt">Interrupt</string>
+    <string name="agents_action_stop">Stop</string>
+    <string name="agents_action_close">Close and remove</string>
+    <string name="agents_action_rename">Rename</string>
+    <string name="agents_rename_label">Name</string>
+    <string name="agents_rename_save">Save name</string>
+    <string name="agents_notice_interrupted">Interrupted.</string>
+    <string name="agents_notice_stopped">Stopped.</string>
+    <string name="agents_notice_closed">Closed and removed.</string>
+    <string name="agents_notice_renamed">Renamed.</string>
+    <string name="agents_notice_offline">The machine is not connected. Nothing was sent.</string>
+    <string name="agents_notice_gone">That agent is already gone.</string>
+    <string name="agents_notice_failed">The core refused the action.</string>
+    <string name="agents_notice_dismiss">Dismiss</string>
 </resources>

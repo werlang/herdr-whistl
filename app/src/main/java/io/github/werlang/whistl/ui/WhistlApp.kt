@@ -50,6 +50,7 @@ import io.github.werlang.whistl.ui.agent.AgentScreen
 import io.github.werlang.whistl.ui.agent.AgentViewModel
 import io.github.werlang.whistl.ui.agents.AgentRow
 import io.github.werlang.whistl.ui.agents.AgentsScreen
+import io.github.werlang.whistl.ui.agents.AgentMenuSheet
 import io.github.werlang.whistl.ui.agents.AgentsViewModel
 import io.github.werlang.whistl.ui.machines.MachinesRoute
 import io.github.werlang.whistl.ui.space.SpaceDetailRoute
@@ -300,7 +301,26 @@ private fun AgentsRoute(onOpen: (AgentRow) -> Unit) {
         factory = viewModelFactory { initializer { AgentsViewModel(container.agents, container.machines) } },
     )
     val state by model.state.collectAsState()
-    AgentsScreen(state = state, onSelect = model::select, onOpen = onOpen, modifier = Modifier.fillMaxSize())
+    AgentsScreen(
+        state = state,
+        onSelect = model::select,
+        onOpen = onOpen,
+        onMenu = model::openMenu,
+        onDismissNotice = model::dismissNotice,
+        modifier = Modifier.fillMaxSize(),
+    )
+    state.menu?.let { menu ->
+        AgentMenuSheet(
+            menu = menu,
+            onInterrupt = model::interrupt,
+            onStop = model::stop,
+            onClose = model::close,
+            onStartRename = model::startRename,
+            onDraft = model::renameDraft,
+            onConfirmRename = model::confirmRename,
+            onDismiss = model::closeMenu,
+        )
+    }
 }
 
 /** One agent's screen. Its view model is keyed by the agent, so each agent opens its own terminal. */

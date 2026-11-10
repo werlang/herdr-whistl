@@ -8,6 +8,8 @@ import io.github.werlang.whistl.data.AgentsRepository
 import io.github.werlang.whistl.data.AuthMethod
 import io.github.werlang.whistl.data.ClientPublicKey
 import io.github.werlang.whistl.data.ConfirmResult
+import io.github.werlang.whistl.data.ActionResult
+import io.github.werlang.whistl.data.AgentAction
 import io.github.werlang.whistl.data.ConnectionState
 import io.github.werlang.whistl.data.EditResult
 import io.github.werlang.whistl.data.InstalledAgentsRepository
@@ -188,12 +190,23 @@ class ScriptedMachines : MachinesRepository {
 
 /** Agents that never change: the list the test gives. */
 class StaticAgents(initial: List<MachineAgent> = emptyList()) : AgentsRepository {
-    override val agents: StateFlow<List<MachineAgent>> = MutableStateFlow(initial)
+    override val agents: MutableStateFlow<List<MachineAgent>> = MutableStateFlow(initial)
 
-    override val blockedCount: StateFlow<Int> = MutableStateFlow(0)
+    override val blockedCount: MutableStateFlow<Int> = MutableStateFlow(0)
 
     /** Starting is not part of these tests; a test that needs it uses the real repository. */
     override suspend fun start(machineId: String, spaceId: String, choice: StartChoice): StartResult = StartResult.Offline
+
+    /** The address and action of the last `act`, so a test can assert what the list sent. */
+    var acted: Pair<String, AgentAction>? = null
+
+    /** What `act` answers. */
+    var result: ActionResult = ActionResult.Done
+
+    override suspend fun act(machineId: String, address: String, action: AgentAction): ActionResult {
+        acted = address to action
+        return result
+    }
 }
 
 /** Installed agents that never change: the map the test gives. */
