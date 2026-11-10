@@ -52,6 +52,7 @@ import io.github.werlang.whistl.R
 import io.github.werlang.whistl.data.AppLanguage
 import io.github.werlang.whistl.data.FontSize
 import io.github.werlang.whistl.data.ThemeChoice
+import io.github.werlang.whistl.domain.ShortcutBar
 import io.github.werlang.whistl.domain.ShortcutKey
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.SegmentOption
@@ -209,7 +210,12 @@ private fun ShortcutSection(state: SettingsUiState, viewModel: SettingsViewModel
             modifier = Modifier.padding(horizontal = 4.dp),
         )
         SettingsCard {
+            // The arrow bundle is one entry: four arrows or none, so Settings shows it once and moves or removes it whole.
+            var arrowsDrawn = false
             state.bar.forEachIndexed { index, key ->
+                val arrows = ShortcutBar.isArrow(key)
+                if (arrows && arrowsDrawn) return@forEachIndexed
+                if (arrows) arrowsDrawn = true
                 KeyRow(
                     key = key,
                     canUp = index > 0,
@@ -217,6 +223,8 @@ private fun ShortcutSection(state: SettingsUiState, viewModel: SettingsViewModel
                     onUp = { viewModel.moveUp(key) },
                     onDown = { viewModel.moveDown(key) },
                     onRemove = { viewModel.remove(key) },
+                    glyph = if (arrows) stringResource(R.string.settings_key_arrows_glyphs) else null,
+                    name = if (arrows) stringResource(R.string.settings_key_arrows) else null,
                 )
             }
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -252,8 +260,10 @@ private fun KeyRow(
     onUp: () -> Unit,
     onDown: () -> Unit,
     onRemove: () -> Unit,
+    glyph: String? = null,
+    name: String? = null,
 ) {
-    val name = stringResource(keyNameRes(key))
+    val shown = name ?: stringResource(keyNameRes(key))
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -261,10 +271,10 @@ private fun KeyRow(
             .padding(start = 12.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GlyphChip(key.label)
+        GlyphChip(glyph ?: key.label)
         Spacer(Modifier.width(10.dp))
         Text(
-            text = name,
+            text = shown,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
@@ -274,19 +284,19 @@ private fun KeyRow(
         IconButton(onClick = onUp, enabled = canUp, modifier = Modifier.size(MinTouchTarget)) {
             Icon(
                 Icons.Default.KeyboardArrowUp,
-                contentDescription = stringResource(R.string.settings_move_key_up, name),
+                contentDescription = stringResource(R.string.settings_move_key_up, shown),
             )
         }
         IconButton(onClick = onDown, enabled = canDown, modifier = Modifier.size(MinTouchTarget)) {
             Icon(
                 Icons.Default.KeyboardArrowDown,
-                contentDescription = stringResource(R.string.settings_move_key_down, name),
+                contentDescription = stringResource(R.string.settings_move_key_down, shown),
             )
         }
         IconButton(onClick = onRemove, modifier = Modifier.size(MinTouchTarget)) {
             Icon(
                 Icons.Default.Close,
-                contentDescription = stringResource(R.string.settings_remove_key, name),
+                contentDescription = stringResource(R.string.settings_remove_key, shown),
                 tint = MaterialTheme.colorScheme.error,
             )
         }

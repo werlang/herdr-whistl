@@ -86,8 +86,12 @@ class SettingsViewModelTest {
     fun keyEditingKeepsTheBarOrder() {
         val h = Harness()
 
+        // Enter steps over the whole arrow bundle, which stays together and in bundle order.
         h.vm.moveUp(ShortcutKey.ENTER)
-        assertEquals(ShortcutBar.DEFAULT.take(6) + listOf(ShortcutKey.ENTER, ShortcutKey.RIGHT), h.vm.state.value.bar)
+        assertEquals(
+            listOf(ShortcutKey.ESC, ShortcutKey.TAB, ShortcutKey.CTRL, ShortcutKey.ENTER) + ShortcutBar.ARROWS,
+            h.vm.state.value.bar,
+        )
 
         h.vm.remove(ShortcutKey.ESC)
         assertFalse(ShortcutKey.ESC in h.vm.state.value.bar)

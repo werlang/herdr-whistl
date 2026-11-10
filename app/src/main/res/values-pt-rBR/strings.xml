@@ -110,6 +110,8 @@
     <string name="settings_add_key">Adicionar tecla</string>
     <string name="settings_restore_keys">Restaurar padrão</string>
     <string name="settings_all_keys_added">Todas as teclas já estão na barra.</string>
+    <string name="settings_key_arrows">Teclas de seta</string>
+    <string name="settings_key_arrows_glyphs" translatable="false">↑ ↓ ← →</string>
     <string name="settings_move_key_up">Mover %1$s para cima</string>
     <string name="settings_move_key_down">Mover %1$s para baixo</string>
     <string name="settings_remove_key">Remover %1$s</string>

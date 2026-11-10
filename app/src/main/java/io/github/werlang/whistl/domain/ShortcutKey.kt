@@ -100,6 +100,20 @@ sealed interface ShortcutResult {
  * SPEC default bar.
  */
 object ShortcutBar {
+    /**
+     * The arrow keys as one bundle: they are added, removed and moved together, and the bar draws them as one compact
+     * cluster. A bar never holds two of them without the other two.
+     */
+    val ARROWS: List<ShortcutKey> = listOf(
+        ShortcutKey.UP,
+        ShortcutKey.DOWN,
+        ShortcutKey.LEFT,
+        ShortcutKey.RIGHT,
+    )
+
+    /** Whether [key] belongs to the arrow bundle. */
+    fun isArrow(key: ShortcutKey): Boolean = key in ARROWS
+
     /** The default bar (SPEC §2): Esc, Tab, Ctrl, ↑, ↓, ←, →, Enter. */
     val DEFAULT: List<ShortcutKey> = listOf(
         ShortcutKey.ESC,
@@ -122,6 +136,23 @@ object ShortcutBar {
     fun moveUp(bar: List<ShortcutKey>, key: ShortcutKey): ShortcutResult {
         val index = bar.indexOf(key)
         if (index < 0) return ShortcutResult.NotInBar(key)
+        val block = if (isArrow(key)) arrowBlock(bar) else null
+        if (block != null) {
+            // The bundle moves as one: it passes the whole element above it, never splitting or reordering itself.
+            if (block.first == 0) return ShortcutResult.Ok(bar)
+            val moved = bar.toMutableList()
+            val above = moved.removeAt(block.first - 1)
+            moved.add(block.last, above)
+            return ShortcutResult.Ok(moved)
+        }
+        // A single key steps over the bundle rather than landing inside it: it is taken out and put before the block.
+        if (index - 1 >= 0 && isArrow(bar[index - 1])) {
+            val blockFirst = arrowBlock(bar)?.first ?: index
+            val moved = bar.toMutableList()
+            val stepped = moved.removeAt(index)
+            moved.add(blockFirst, stepped)
+            return ShortcutResult.Ok(moved)
+        }
         if (index == 0) return ShortcutResult.Ok(bar)
         return ShortcutResult.Ok(bar.swap(index, index - 1))
     }
@@ -136,6 +167,22 @@ object ShortcutBar {
     fun moveDown(bar: List<ShortcutKey>, key: ShortcutKey): ShortcutResult {
         val index = bar.indexOf(key)
         if (index < 0) return ShortcutResult.NotInBar(key)
+        val block = if (isArrow(key)) arrowBlock(bar) else null
+        if (block != null) {
+            if (block.last == bar.lastIndex) return ShortcutResult.Ok(bar)
+            val moved = bar.toMutableList()
+            val below = moved.removeAt(block.last + 1)
+            moved.add(block.first, below)
+            return ShortcutResult.Ok(moved)
+        }
+        // A single key steps over the bundle rather than landing inside it: it is taken out and put after the block.
+        if (index + 1 <= bar.lastIndex && isArrow(bar[index + 1])) {
+            val blockLast = arrowBlock(bar)?.last ?: index
+            val moved = bar.toMutableList()
+            val stepped = moved.removeAt(index)
+            moved.add(blockLast, stepped)
+            return ShortcutResult.Ok(moved)
+        }
         if (index == bar.lastIndex) return ShortcutResult.Ok(bar)
         return ShortcutResult.Ok(bar.swap(index, index + 1))
     }
@@ -147,8 +194,12 @@ object ShortcutBar {
      * @param key the key to remove.
      * @return the new bar, or [ShortcutResult.NotInBar].
      */
-    fun remove(bar: List<ShortcutKey>, key: ShortcutKey): ShortcutResult =
-        if (key in bar) ShortcutResult.Ok(bar - key) else ShortcutResult.NotInBar(key)
+    fun remove(bar: List<ShortcutKey>, key: ShortcutKey): ShortcutResult {
+        if (key !in bar) return ShortcutResult.NotInBar(key)
+        // Disabling one arrow disables the bundle: four arrows or none.
+        if (isArrow(key)) return ShortcutResult.Ok(bar.filterNot { it in ARROWS })
+        return ShortcutResult.Ok(bar - key)
+    }
 
     /**
      * Appends [key] to the bar. Only a key not already in the bar may be added.
@@ -157,8 +208,12 @@ object ShortcutBar {
      * @param key the key to add.
      * @return the new bar, or [ShortcutResult.Duplicate].
      */
-    fun add(bar: List<ShortcutKey>, key: ShortcutKey): ShortcutResult =
-        if (key in bar) ShortcutResult.Duplicate(key) else ShortcutResult.Ok(bar + key)
+    fun add(bar: List<ShortcutKey>, key: ShortcutKey): ShortcutResult {
+        if (key in bar) return ShortcutResult.Duplicate(key)
+        // Enabling one arrow enables the bundle, in bundle order.
+        if (isArrow(key)) return ShortcutResult.Ok(bar + ARROWS)
+        return ShortcutResult.Ok(bar + key)
+    }
 
     /**
      * Appends the key called [name] to the bar. The name must match a [ShortcutKey] exactly.
@@ -180,7 +235,29 @@ object ShortcutBar {
      */
     fun parse(names: List<String>): List<ShortcutKey> {
         val known = ShortcutKey.entries.associateBy { it.name }
-        return names.mapNotNull { known[it] }.distinct()
+        return normaliseArrows(names.mapNotNull { known[it] }.distinct())
+    }
+
+    /**
+     * The bar with the arrow bundle whole and contiguous, in bundle order.
+     *
+     * A stored bar from before the bundle existed may hold one, two or three arrows, or the four scattered. The bundle
+     * is completed and gathered at the place of the first arrow, so the bar the user sees never has half a bundle.
+     */
+    fun normaliseArrows(bar: List<ShortcutKey>): List<ShortcutKey> {
+        val block = arrowBlock(bar) ?: return bar
+        val withoutArrows = bar.filterNot { it in ARROWS }
+        val insertAt = bar.subList(0, block.first).count { it !in ARROWS }
+        return withoutArrows.subList(0, insertAt) + ARROWS + withoutArrows.subList(insertAt, withoutArrows.size)
+    }
+
+    /** The run of arrows [bar] holds, or `null` when it holds none. */
+    private fun arrowBlock(bar: List<ShortcutKey>): IntRange? {
+        val first = bar.indexOfFirst { it in ARROWS }
+        if (first < 0) return null
+        var last = first
+        while (last + 1 <= bar.lastIndex && bar[last + 1] in ARROWS) last++
+        return first..last
     }
 
     /**
