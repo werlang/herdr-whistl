@@ -25,10 +25,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontStyle
@@ -75,6 +77,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.max
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.data.FontSize
 import io.github.werlang.whistl.domain.ShortcutKey
@@ -265,6 +268,9 @@ private const val CELL_PROBE_GLYPHS: Int = 10
 /** The opacity of dim text. */
 private const val DIM_ALPHA: Float = 0.6f
 
+/** How much thicker a heavy box line is drawn than a light one. */
+private const val HEAVY_STROKE_FACTOR: Float = 2f
+
 /** How many run layouts are kept before the cache is emptied: a screen of history is far below it. */
 private const val LAYOUT_CACHE_LIMIT: Int = 6_000
 
@@ -297,6 +303,8 @@ private fun TerminalOutput(state: AgentUiState, onPaneSize: (Int, Int) -> Unit, 
         CellMetrics(cellWidth = probe.width.toFloat() / CELL_PROBE_GLYPHS, lineHeight = probe.height.toFloat())
     }
     val layouts = remember(measurer, style) { HashMap<CellRun, TextLayoutResult>() }
+    // Layouts of single characters, for the runs that hold geometry: those are drawn character by character.
+    val charLayouts = remember(measurer, style) { HashMap<Pair<Char, CellStyle>, TextLayoutResult>() }
     val padding = with(density) { TERMINAL_PADDING.toPx() }
     var pane by remember { mutableStateOf(IntSize.Zero) }
     val frame = state.frame
@@ -334,7 +342,9 @@ private fun TerminalOutput(state: AgentUiState, onPaneSize: (Int, Int) -> Unit, 
             frame.lines.forEachIndexed { index, line ->
                 val y = index * metrics.lineHeight
                 if (y + metrics.lineHeight < top || y > bottom) return@forEachIndexed
-                line.forEach { run -> drawRun(run, y, metrics, layouts, tokens.terminal) }
+                line.forEach { run ->
+                    drawRun(run, y, metrics, layouts, charLayouts, measurer, style, tokens.terminal)
+                }
             }
         }
         Column(Modifier.fillMaxWidth()) {
@@ -359,6 +369,9 @@ private fun DrawScope.drawRun(
     y: Float,
     metrics: CellMetrics,
     layouts: Map<CellRun, TextLayoutResult>,
+    charLayouts: MutableMap<Pair<Char, CellStyle>, TextLayoutResult>,
+    measurer: TextMeasurer,
+    style: TextStyle,
     terminal: Color,
 ) {
     val colours = runColours(run, terminal)
@@ -366,7 +379,66 @@ private fun DrawScope.drawRun(
     val width = run.cells * metrics.cellWidth
     colours.background?.let { drawRect(it, Offset(left, y), Size(width, metrics.lineHeight)) }
     val layout = layouts[run] ?: return
-    drawText(layout, color = colours.foreground, topLeft = Offset(left, y))
+    if (run.text.none { TerminalGlyphs.glyphFor(it) != null }) {
+        drawText(layout, color = colours.foreground, topLeft = Offset(left, y))
+        return
+    }
+    // A run that holds block or box glyphs is drawn cell by cell: the geometry as shapes, every character from its own
+    // layout inside its own cell. Drawing from the run's layout would offset each character that follows a geometric
+    // glyph by that glyph's fallback advance, which is exactly the misalignment this fixes (0.3.1, opencode's banner).
+    if (charLayouts.size > LAYOUT_CACHE_LIMIT) charLayouts.clear()
+    run.text.forEachIndexed { index, ch ->
+        val cellLeft = left + index * metrics.cellWidth
+        val glyph = TerminalGlyphs.glyphFor(ch)
+        if (glyph != null) {
+            drawGlyph(glyph, ch, cellLeft, y, metrics, colours.foreground)
+        } else {
+            val charLayout = charLayouts.getOrPut(ch to run.style) {
+                measurer.measure(AnnotatedString(ch.toString()), runStyle(run.style, style), softWrap = false)
+            }
+            clipRect(cellLeft, y, cellLeft + metrics.cellWidth, y + metrics.lineHeight) {
+                drawText(charLayout, color = colours.foreground, topLeft = Offset(cellLeft, y))
+            }
+        }
+    }
+}
+
+/** Draws one geometric glyph, in cell fractions, inside its cell. Shade blocks keep their alpha. */
+private fun DrawScope.drawGlyph(
+    glyph: TerminalGlyphs.Glyph,
+    ch: Char,
+    left: Float,
+    top: Float,
+    metrics: CellMetrics,
+    colour: Color,
+) {
+    val w = metrics.cellWidth
+    val h = metrics.lineHeight
+    val shade = TerminalGlyphs.shadeAlphaFor(ch)
+    val ink = if (shade == null) colour else colour.copy(alpha = colour.alpha * shade)
+    glyph.filled.forEach { part ->
+        drawRect(
+            ink,
+            Offset(left + part.left * w, top + part.top * h),
+            Size((part.right - part.left) * w, (part.bottom - part.top) * h),
+        )
+    }
+    val lightThickness = max(1f, w * 0.08f)
+    glyph.strokes.forEach { line ->
+        // A heavy line is drawn thicker than a light one, so a heavy frame still reads as heavy.
+        val thickness = if (line.heavy) lightThickness * HEAVY_STROKE_FACTOR else lightThickness
+        val shiftX = if (line.double && line.fromX == line.toX) w * 0.18f else 0f
+        val shiftY = if (line.double && line.fromY == line.toY) w * 0.18f else 0f
+        val shift = if (line.double) listOf(-1f, 1f) else listOf(1f)
+        shift.forEach { side ->
+            drawLine(
+                ink,
+                Offset(left + line.fromX * w - side * shiftX, top + line.fromY * h - side * shiftY),
+                Offset(left + line.toX * w - side * shiftX, top + line.toY * h - side * shiftY),
+                strokeWidth = thickness,
+            )
+        }
+    }
 }
 
 /** The colours a run is drawn in: its foreground, and its background when it has one. */
