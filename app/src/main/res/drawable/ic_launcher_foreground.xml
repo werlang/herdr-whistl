@@ -1,11 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Adaptive launcher foreground: a prompt chevron in the SPEC §3 accent, inside the 66dp safe zone. -->
+<!--
+  Adaptive launcher foreground: the Whistl mark, a prompt-carrying ghost on a terminal.
+
+  The geometry is the delivered 1024x1024 art, measured and reproduced as paths, then placed inside the 66 dp safe
+  zone: the mark is 849x728 source pixels, scaled to 56 dp wide and centred, so a circular launcher mask never clips
+  it. The cream of the eye and of the prompt is the launcher background colour, which is why the two must keep the
+  same value (values/colors.xml, ic_launcher_background).
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#5EC2B7"
-        android:pathData="M34,28 L44,28 L64,54 L44,80 L34,80 L54,54 Z" />
+
+    <group
+        android:scaleX="0.06596"
+        android:scaleY="0.06596"
+        android:translateX="20.23"
+        android:translateY="19.83">
+
+        <!-- The body: the upper half of an ellipse 850x854, flat at the bottom. -->
+        <path
+            android:fillColor="#444643"
+            android:pathData="M87,882 A425,427 0 0 1 937,882 Z" />
+
+        <!-- The head: a tombstone whose bottom edge dips up towards the middle. -->
+        <path
+            android:fillColor="#444643"
+            android:pathData="M381,442 L381,270 C381,196 420,154 512,154 C604,154 643,196 643,270 L643,442 C600,442 560,422 512,422 C464,422 424,442 381,442 Z" />
+
+        <!-- The eye. -->
+        <path
+            android:fillColor="#F1EFE3"
+            android:pathData="M512,227 A46,46 0 1 1 512,319 A46,46 0 1 1 512,227 Z" />
+
+        <!-- The prompt: a chevron and an underline, both with round ends. -->
+        <path
+            android:pathData="M332,612 L452,700 L332,752"
+            android:strokeColor="#F1EFE3"
+            android:strokeWidth="45"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M560,705 L687,705"
+            android:strokeColor="#F1EFE3"
+            android:strokeWidth="36"
+            android:strokeLineCap="round" />
+    </group>
 </vector>
