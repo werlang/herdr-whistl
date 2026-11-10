@@ -7,7 +7,7 @@
       "argv": [
         "sh",
         "-lc",
-        "for a in claude codex gemini opencode aider; do command -v \"$a\" >/dev/null 2>&1 && echo \"$a\"; done; exit 0"
+        "for a in claude codex gemini agy opencode cursor-agent aider goose amp crush qwen copilot droid cline; do command -v \"$a\" >/dev/null 2>&1 && echo \"$a\"; done; exit 0"
       ]
     }
   },

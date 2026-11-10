@@ -25,9 +25,15 @@ class DomainTest {
         assertEquals("-lc", argv[1].jsonPrimitive.content)
 
         assertEquals(listOf("sh", "-lc", KnownAgents.DETECTION_SCRIPT), KnownAgents.detectionArgv)
-        KnownAgents.probedIds.forEach { id ->
-            assertEquals("the script does not probe $id", true, KnownAgents.DETECTION_SCRIPT.contains(" $id "))
-        }
+
+        // The probed list is read out of the script itself: a name added to the table but not to the script (or the
+        // other way round) fails here.
+        val probed = KnownAgents.DETECTION_SCRIPT
+            .substringAfter("for a in ")
+            .substringBefore(";")
+            .split(" ")
+            .filter { it.isNotBlank() }
+        assertEquals(KnownAgents.probedIds, probed)
     }
 
     /** The table holds every agent this app names, each with its command as the argv. */
