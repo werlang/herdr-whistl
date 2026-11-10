@@ -107,9 +107,9 @@ Available shortcut keys: Esc, Tab, Ctrl (modifier), ↑ ↓ ← →, Enter, ^C, 
 Home, End, PgUp, PgDn, `/`, `|`, `~`, `-`. Defaults: Esc, Tab, Ctrl, ↑, ↓, ←, →, Enter.
 
 The four arrows are **one bundle**: Settings enables, disables and moves them as a single entry
-("Arrow keys"), and the order inside the bundle is fixed. In the bar the bundle is **one key**
-showing its notation (`↑ ↓ ← →`); tapping it reveals the four arrows, sending one collapses it again,
-and each arrow is a 48 dp target while open. A stored bar that holds a partial bundle is completed on
+("Arrow keys"), and the order inside the bundle is fixed. In the bar the bundle is **one segmented
+control**: four 48 dp segments in a single rounded container, separated by hairlines and never
+collapsed, so one tap sends one arrow and stepping back several lines is one tap per line. A stored bar that holds a partial bundle is completed on
 load, so no bar ever shows one arrow alone. A single key moved past the bundle steps over it instead
 of landing between its arrows.
 

@@ -580,47 +580,31 @@ private fun KeyBar(state: AgentUiState, onKey: (ShortcutKey) -> Unit) {
 @Composable
 private fun ArrowCluster(enabled: Boolean, onKey: (ShortcutKey) -> Unit) {
     val tokens = LocalWhistlTokens.current
-    // Collapsed it is one key, not four: the bar shows the bundle's notation, and the four arrows appear only while the
-    // user is actually sending one, then it collapses again (0.3.3, seen on device: four 48 dp cells read as four keys).
-    var open by remember { mutableStateOf(false) }
-    val bundleName = stringResource(R.string.settings_key_arrows)
-    if (!open) {
-        Button(
-            onClick = { open = true },
-            enabled = enabled,
-            contentPadding = PaddingValues(horizontal = 8.dp),
-            colors = whistlButtonColors(
-                containerColor = tokens.field,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-            ),
-            modifier = Modifier
-                .heightIn(min = MinTouchTarget)
-                .widthIn(min = MinTouchTarget)
-                .semantics { contentDescription = bundleName },
-        ) {
-            Text(
-                text = stringResource(R.string.settings_key_arrows_glyphs),
-                fontFamily = WhistlMono,
-                style = MaterialTheme.typography.labelMedium,
-            )
-        }
-        return
-    }
+    val ink = if (enabled) MaterialTheme.colorScheme.onSurface else tokens.muted
+    // One control, always there: the four arrows are segments of a single rounded container, separated by hairlines
+    // instead of gaps. It never collapses — sending an arrow must stay one tap, and stepping up three lines must not
+    // mean opening the bundle three times (0.3.4). Each segment is a 48 dp target, which is what keeps it this wide;
+    // narrower would either break the touch target or need a popover, and a popover is what made it impractical.
     Row(
         modifier = Modifier
             .heightIn(min = MinTouchTarget)
             .background(tokens.field, RoundedCornerShape(8.dp)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ShortcutBar.ARROWS.forEach { arrow ->
+        ShortcutBar.ARROWS.forEachIndexed { index, arrow ->
             val description = stringResource(keyNameRes(arrow))
+            if (index > 0) {
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(20.dp)
+                        .background(tokens.muted.copy(alpha = 0.35f)),
+                )
+            }
             Box(
                 modifier = Modifier
                     .size(width = MinTouchTarget, height = MinTouchTarget)
-                    .clickable(enabled = enabled) {
-                        onKey(arrow)
-                        open = false
-                    }
+                    .clickable(enabled = enabled) { onKey(arrow) }
                     .semantics { contentDescription = description },
                 contentAlignment = Alignment.Center,
             ) {
@@ -628,7 +612,7 @@ private fun ArrowCluster(enabled: Boolean, onKey: (ShortcutKey) -> Unit) {
                     text = arrow.label,
                     fontFamily = WhistlMono,
                     style = MaterialTheme.typography.labelLarge,
-                    color = if (enabled) MaterialTheme.colorScheme.onSurface else tokens.muted,
+                    color = ink,
                 )
             }
         }
