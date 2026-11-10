@@ -108,8 +108,48 @@ class UpdateFlowTest {
         h.vm.downloadUpdate()
         h.vm.installUpdate()
 
-        assertEquals(UpdateUiState.NeedsPermission, h.vm.update.value)
+        assertEquals(UpdateUiState.NeedsPermission(file), h.vm.update.value)
         assertEquals(1, h.installer.permissionRequests)
+        assertTrue(h.installer.installed.isEmpty())
+    }
+
+    /** Once the permission is granted, coming back to the screen installs without asking again. */
+    @Test
+    fun grantingThePermissionContinuesTheInstall() {
+        val h = Harness()
+        h.installer.allowed = false
+        val file = File.createTempFile("herdr-whistl-0.3.6", ".apk")
+        h.updates.answer = UpdateCheck.Available(release)
+        h.updates.outcome = DownloadOutcome.Ready(file)
+
+        h.vm.checkForUpdates()
+        h.vm.downloadUpdate()
+        h.vm.installUpdate()
+        assertEquals(UpdateUiState.NeedsPermission(file), h.vm.update.value)
+
+        // The user granted it in the system screen and came back.
+        h.installer.allowed = true
+        h.vm.onReturnedToScreen()
+
+        assertEquals(listOf(file), h.installer.installed)
+        assertEquals(1, h.installer.permissionRequests)
+    }
+
+    /** Coming back without the permission changes nothing: the card keeps waiting. */
+    @Test
+    fun comingBackWithoutThePermissionKeepsWaiting() {
+        val h = Harness()
+        h.installer.allowed = false
+        val file = File.createTempFile("herdr-whistl-0.3.6", ".apk")
+        h.updates.answer = UpdateCheck.Available(release)
+        h.updates.outcome = DownloadOutcome.Ready(file)
+
+        h.vm.checkForUpdates()
+        h.vm.downloadUpdate()
+        h.vm.installUpdate()
+        h.vm.onReturnedToScreen()
+
+        assertEquals(UpdateUiState.NeedsPermission(file), h.vm.update.value)
         assertTrue(h.installer.installed.isEmpty())
     }
 

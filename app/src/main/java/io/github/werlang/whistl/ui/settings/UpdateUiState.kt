@@ -39,8 +39,12 @@ sealed interface UpdateUiState {
     /** @property refusal why the downloaded file was thrown away. */
     data class Refused(val refusal: Refusal) : UpdateUiState
 
-    /** The user has not allowed this app to install packages. */
-    data object NeedsPermission : UpdateUiState
+    /**
+     * The user has not allowed this app to install packages, so the install waits.
+     *
+     * @property file the verified APK kept for when the permission arrives.
+     */
+    data class NeedsPermission(val file: File) : UpdateUiState
 
     /** @property problem why the check or the download could not finish. */
     data class Failed(val problem: UpdateProblem) : UpdateUiState

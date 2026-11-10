@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * Applies the app language to the running app (SPEC §7): `AppCompatDelegate.setApplicationLocales` in the app, a recorder in
@@ -239,11 +240,30 @@ class SettingsViewModel(
     fun installUpdate() {
         val ready = updateFlow.value as? UpdateUiState.Ready ?: return
         if (!installer.canInstall()) {
-            updateFlow.value = UpdateUiState.NeedsPermission
+            updateFlow.value = UpdateUiState.NeedsPermission(ready.file)
             installer.requestInstallPermission()
             return
         }
-        if (!installer.install(ready.file)) updateFlow.value = UpdateUiState.Failed(UpdateProblem.Install)
+        hand(ready.file)
+    }
+
+    /**
+     * Called when the screen comes back to the front. If the user granted the install permission while it was in the
+     * system screen, the install continues by itself: the alternative is a card that only ever reopens that screen.
+     */
+    fun onReturnedToScreen() {
+        val waiting = updateFlow.value as? UpdateUiState.NeedsPermission ?: return
+        if (!installer.canInstall()) return
+        hand(waiting.file)
+    }
+
+    private fun hand(file: File) {
+        if (!installer.install(file)) {
+            updateFlow.value = UpdateUiState.Failed(UpdateProblem.Install)
+        } else {
+            // The version on the card is the one that was installed, not the one this build carried.
+            updateFlow.value = UpdateUiState.Ready(offered?.version?.toString() ?: versionName, file)
+        }
     }
 
     /** Re-opens the system screen where installs from this app are allowed. */
