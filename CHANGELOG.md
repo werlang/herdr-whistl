@@ -7,6 +7,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.3.1] - 2026-11-10
+
+### Fixed
+
+- **Sending text to an agent no longer crashes.** herdr-core answers `terminal.send` with
+  `"started": true`, while the client expected a timestamp (`"started": null`, as the recorded fixture
+  has it), so every send that returned a flag died in the decoder with `Failed to parse literal 'true'
+  as a long value at path: $.started`. The field now accepts both shapes; only a numeric value is a
+  start time.
+
+
 ## [0.3.0] - 2026-11-09
 
 ### Added
@@ -69,7 +80,8 @@ Nothing yet.
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/werlang/herdr-whistl/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/werlang/herdr-whistl/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/werlang/herdr-whistl/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/werlang/herdr-whistl/releases/tag/v0.1.0
