@@ -54,7 +54,7 @@ object KnownAgents {
      */
     val DETECTION_SCRIPT: String =
         "for a in " + probedIds.joinToString(" ") +
-            "; do command -v \"\\$a\" >/dev/null 2>&1 && echo \"\\$a\"; done; exit 0"
+            "; do command -v \"\$a\" >/dev/null 2>&1 && echo \"\$a\"; done; exit 0"
 
     /** The complete argv for the detection call: `sh -lc` with [DETECTION_SCRIPT]. */
     val detectionArgv: List<String> = listOf("sh", "-lc", DETECTION_SCRIPT)
