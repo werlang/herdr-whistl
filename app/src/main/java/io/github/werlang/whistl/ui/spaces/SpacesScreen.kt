@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -75,6 +76,7 @@ fun SpacesScreen(
     state: SpacesUiState,
     onOpen: (machineId: String, spaceId: String) -> Unit,
     onMenu: (machineId: String, spaceId: String) -> Unit,
+    onClearFilter: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -90,6 +92,10 @@ fun SpacesScreen(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.semantics { heading() },
             )
+        }
+        // Reached by tapping a machine: the list shows only that machine until the filter is cleared (SPEC §2.2).
+        state.filterName?.let { name ->
+            FilterBanner(name = name, onClear = onClearFilter)
         }
         if (state.isEmpty) {
             EmptySpaces(Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
@@ -322,4 +328,38 @@ fun unresolvedTextRes(reason: io.github.werlang.whistl.data.UnresolvableReason):
     io.github.werlang.whistl.data.UnresolvableReason.NoHome -> R.string.space_unresolved_no_home
     io.github.werlang.whistl.data.UnresolvableReason.HomeUnreadable -> R.string.space_unresolved_home_unreadable
     io.github.werlang.whistl.data.UnresolvableReason.Invalid -> R.string.space_unresolved_invalid
+}
+
+/**
+ * The banner that says the list is filtered to one machine, with the way out (phase 9, SPEC §2.2).
+ *
+ * @param name the machine's name.
+ * @param onClear called when the filter is dropped.
+ */
+@Composable
+private fun FilterBanner(name: String, onClear: () -> Unit) {
+    val tokens = LocalWhistlTokens.current
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = tokens.field,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp, end = 4.dp)) {
+            Text(
+                text = stringResource(R.string.spaces_filter_banner, name),
+                style = MaterialTheme.typography.bodySmall,
+                color = tokens.muted,
+                modifier = Modifier.weight(1f).padding(vertical = 10.dp),
+            )
+            IconButton(onClick = onClear, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = stringResource(R.string.spaces_filter_clear),
+                    tint = tokens.dim,
+                )
+            }
+        }
+    }
 }

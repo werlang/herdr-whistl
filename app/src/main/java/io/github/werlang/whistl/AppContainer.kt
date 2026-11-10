@@ -37,6 +37,7 @@ import io.github.werlang.whistl.domain.AppVersion
 import io.github.werlang.whistl.platform.AndroidAppInstaller
 import io.github.werlang.whistl.platform.AppInstaller
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -82,6 +83,12 @@ class AppContainer(
 
     /** This device's public key line, for the Add machine sheet. */
     val clientKey: ClientPublicKey = demo?.clientKey ?: live.clientKey
+
+    /**
+     * The machine the Spaces screen is filtered to, or `null` for every machine. Tapping a machine card sets it before
+     * navigating, because Spaces is also a bottom destination with no arguments of its own (phase 9, SPEC §2.2).
+     */
+    val spacesFilter: MutableStateFlow<String?> = MutableStateFlow(null)
 
     /** The system side of an update: signatures, the install permission and the installer (SPEC §2.7). */
     val installer: AppInstaller = AndroidAppInstaller(context.applicationContext)

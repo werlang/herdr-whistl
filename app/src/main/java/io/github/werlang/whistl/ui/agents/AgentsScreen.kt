@@ -1,6 +1,7 @@
 package io.github.werlang.whistl.ui.agents
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,12 +11,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,6 +51,7 @@ import io.github.werlang.whistl.ui.theme.WhistlMono
  * @param state what the list shows.
  * @param onSelect called with the chip tapped.
  * @param onOpen called with the row tapped.
+ * @param onMenu called with the row whose action sheet was asked for: the overflow button or a long press.
  * @param modifier the modifier for the screen.
  */
 @Composable
@@ -51,6 +59,8 @@ fun AgentsScreen(
     state: AgentsUiState,
     onSelect: (AgentsFilter) -> Unit,
     onOpen: (AgentRow) -> Unit,
+    onMenu: (AgentRow) -> Unit = {},
+    onDismissNotice: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val labels = mapOf(
@@ -72,6 +82,9 @@ fun AgentsScreen(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.semantics { heading() },
             )
+        }
+        state.notice?.let { notice ->
+            NoticeBar(notice = notice, onDismiss = onDismissNotice)
         }
         Row(
             modifier = Modifier
@@ -104,7 +117,7 @@ fun AgentsScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(state.rows, key = { it.machineId + "/" + it.address }) { row -> // i18n-ok: lazy-list key, never shown
-                    AgentCard(row = row, onClick = { onOpen(row) })
+                    AgentCard(row = row, onClick = { onOpen(row) }, onMenu = { onMenu(row) })
                 }
             }
         }
@@ -118,8 +131,9 @@ fun AgentsScreen(
  * @param row the agent.
  * @param onClick called when the card is tapped.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AgentCard(row: AgentRow, onClick: () -> Unit) {
+private fun AgentCard(row: AgentRow, onClick: () -> Unit, onMenu: () -> Unit) {
     val tokens = LocalWhistlTokens.current
     val place = listOf(
         row.machineName,
@@ -130,7 +144,8 @@ private fun AgentCard(row: AgentRow, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 72.dp)
-            .clickable(onClick = onClick),
+            // Long press opens the same sheet as the overflow button: one way to reach stop/rename/close with a thumb.
+            .combinedClickable(onClick = onClick, onLongClick = onMenu),
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -153,7 +168,14 @@ private fun AgentCard(row: AgentRow, onClick: () -> Unit) {
                     color = tokens.dim,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
+                IconButton(onClick = onMenu, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = stringResource(R.string.agents_row_menu),
+                    )
+                }
             }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 StatusLabel(label = stringResource(status), color = statusColor(row.status, row.live))
@@ -165,6 +187,55 @@ private fun AgentCard(row: AgentRow, onClick: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * What the last action did, said plainly and dismissible (phase 9, SPEC §2.4). It answers "did that work?" without a
+ * dialog, and it is the only place the list reports a refusal.
+ *
+ * @param notice what happened.
+ * @param onDismiss called when the bar is dismissed.
+ */
+@Composable
+private fun NoticeBar(notice: AgentNotice, onDismiss: () -> Unit) {
+    val tokens = LocalWhistlTokens.current
+    val text = stringResource(
+        when (notice) {
+            AgentNotice.Interrupted -> R.string.agents_notice_interrupted
+            AgentNotice.Stopped -> R.string.agents_notice_stopped
+            AgentNotice.Closed -> R.string.agents_notice_closed
+            AgentNotice.Renamed -> R.string.agents_notice_renamed
+            AgentNotice.Offline -> R.string.agents_notice_offline
+            AgentNotice.Gone -> R.string.agents_notice_gone
+            AgentNotice.Failed -> R.string.agents_notice_failed
+        },
+    )
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = tokens.field,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 12.dp, end = 4.dp),
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                color = tokens.muted,
+                modifier = Modifier.weight(1f).padding(vertical = 10.dp),
+            )
+            IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = stringResource(R.string.agents_notice_dismiss),
+                    tint = tokens.dim,
                 )
             }
         }

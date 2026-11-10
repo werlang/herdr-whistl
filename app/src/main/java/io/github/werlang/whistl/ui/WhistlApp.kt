@@ -50,6 +50,7 @@ import io.github.werlang.whistl.ui.agent.AgentScreen
 import io.github.werlang.whistl.ui.agent.AgentViewModel
 import io.github.werlang.whistl.ui.agents.AgentRow
 import io.github.werlang.whistl.ui.agents.AgentsScreen
+import io.github.werlang.whistl.ui.agents.AgentMenuSheet
 import io.github.werlang.whistl.ui.agents.AgentsViewModel
 import io.github.werlang.whistl.ui.machines.MachinesRoute
 import io.github.werlang.whistl.ui.space.SpaceDetailRoute
@@ -149,7 +150,9 @@ fun WhistlApp(startRoute: String = Routes.MACHINES) {
     )
     val spacesModel: SpacesViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { SpacesViewModel(container.spaces, container.agents, container.machines) }
+            initializer {
+                SpacesViewModel(container.spaces, container.agents, container.machines, container.spacesFilter)
+            }
         },
     )
 
@@ -208,6 +211,11 @@ fun WhistlApp(startRoute: String = Routes.MACHINES) {
                     machines = container.machines,
                     clientKey = container.clientKey,
                     clipboard = clipboard,
+                    onOpenSpaces = { machineId ->
+                        // The filter lives in the container because Spaces is a bottom destination without arguments.
+                        container.spacesFilter.value = machineId
+                        navigateTo(navController, Routes.SPACES)
+                    },
                     modifier = Modifier.fillMaxSize(),
                 )
                 // Opens the requested start route once the graph exists; the app starts on Machines, so this is a no-op there.
@@ -218,6 +226,7 @@ fun WhistlApp(startRoute: String = Routes.MACHINES) {
             composable(Routes.SPACES) {
                 SpacesRoute(
                     model = spacesModel,
+                    onClearFilter = { container.spacesFilter.value = null },
                     onOpenSpace = { machineId, spaceId -> navController.navigate(Routes.space(machineId, spaceId)) },
                     onAddMachine = { navigateTo(navController, Routes.MACHINES) },
                     modifier = Modifier.fillMaxSize(),
@@ -300,7 +309,26 @@ private fun AgentsRoute(onOpen: (AgentRow) -> Unit) {
         factory = viewModelFactory { initializer { AgentsViewModel(container.agents, container.machines) } },
     )
     val state by model.state.collectAsState()
-    AgentsScreen(state = state, onSelect = model::select, onOpen = onOpen, modifier = Modifier.fillMaxSize())
+    AgentsScreen(
+        state = state,
+        onSelect = model::select,
+        onOpen = onOpen,
+        onMenu = model::openMenu,
+        onDismissNotice = model::dismissNotice,
+        modifier = Modifier.fillMaxSize(),
+    )
+    state.menu?.let { menu ->
+        AgentMenuSheet(
+            menu = menu,
+            onInterrupt = model::interrupt,
+            onStop = model::stop,
+            onClose = model::close,
+            onStartRename = model::startRename,
+            onDraft = model::renameDraft,
+            onConfirmRename = model::confirmRename,
+            onDismiss = model::closeMenu,
+        )
+    }
 }
 
 /** One agent's screen. Its view model is keyed by the agent, so each agent opens its own terminal. */

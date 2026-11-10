@@ -36,7 +36,9 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    (confirm; spaces of that machine leave the app, agents keep running there).
    Reconnect restarts the session: a connected machine's session is closed and
    connected again (connecting → connected); an offline machine makes one
-   immediate attempt (phase 7 r5).
+   immediate attempt (phase 7 r5). Tapping a card opens **Spaces filtered to
+   that machine** (§2.2), because the question "what is running there?" comes
+   before "edit this machine".
    **Edit machine** (phase 7 P2) opens the Add machine sheet prefilled with the
    stored name, host, user, port and login method, titled "Edit machine", with
    Save in place of Connect. The saved password is never shown: a blank password
@@ -61,7 +63,10 @@ The Agents destination shows a badge with the count of agents in `blocked`.
      machine.
    - **R4, identity:** the machine keeps its id and the machine count is unchanged,
      so its spaces (keyed by machine id) stay listed under it.
-2. **Spaces** — grouped by machine, pinned first, then user order. Row: name,
+2. **Spaces** — grouped by machine, pinned first, then user order. A machine
+   card tapped on the Machines screen shows **only that machine's group**, with
+   a banner naming it and one tap to show every machine again; the filter lives
+   in the container because Spaces is a bottom destination without arguments. Row: name,
    status dots per agent, "waiting" badge if any agent is blocked,
    `N agents · folder`. Offline machine → group subtitle "offline", rows dimmed.
    + opens **New space**: pick an added machine, folder (default `~`), name
@@ -73,6 +78,15 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    machine's shell). No task text box. Tapping an option starts it and opens it.
 4. **Agents** — every agent on connected machines; filter chips All / Needs
    you / Working / Idle with counts; sorted blocked → working → done → idle.
+   Each row has an **action sheet** (its overflow button, or a long press):
+   **Interrupt**, **Stop**, **Close and remove**, **Rename**. The same four
+   actions exist on the agent's own screen. Acting from the list does not open
+   the terminal's stream: it takes the machine's lease, sends one command and
+   releases it. Rename writes the `whistl.name` label — the core cannot rename a
+   live terminal — and the row shows that label over the name the terminal was
+   started with. Every action reports itself under the chips: interrupted,
+   stopped, closed, renamed, machine offline, agent already gone, or the core
+   refused it.
 5. **Agent** — a tmux-like **terminal only**, no chat UI: full-height monospace
    screen, a one-line status bar `[machine] space · agent    status`, then a
    horizontally scrolling **shortcut key bar**, then a text field + Send.

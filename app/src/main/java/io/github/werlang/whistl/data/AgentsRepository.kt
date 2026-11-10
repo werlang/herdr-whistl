@@ -5,7 +5,9 @@ import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.HcEvent
 import io.github.werlang.whistl.core.rpc.EventSubscription
 import io.github.werlang.whistl.core.rpc.HcException
+import io.github.werlang.whistl.core.rpc.NotFound
 import io.github.werlang.whistl.core.rpc.SpawnFailed
+import io.github.werlang.whistl.core.rpc.StillLive
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.domain.Agent
 import io.github.werlang.whistl.domain.KnownAgent
@@ -51,6 +53,46 @@ interface AgentsRepository {
      * @return the new terminal's address, or why it did not start.
      */
     suspend fun start(machineId: String, spaceId: String, choice: StartChoice): StartResult
+
+    /**
+     * Acts on an agent from the list, without opening its screen (phase 9, SPEC §2.4).
+     *
+     * @param machineId the machine the agent runs on.
+     * @param address the agent's terminal address.
+     * @param action what the user asked for.
+     * @return what happened.
+     */
+    suspend fun act(machineId: String, address: String, action: AgentAction): ActionResult
+}
+
+/** What the user can ask of an agent from the list (phase 9, SPEC §2.4). */
+sealed interface AgentAction {
+    /** Sends the interrupt the core defines: the agent stops what it is doing and waits. */
+    data object Interrupt : AgentAction
+
+    /** Ends the agent's process. hc keeps the terminal until it is removed. */
+    data object Stop : AgentAction
+
+    /** Stops the agent and removes the terminal, so it leaves the list. */
+    data object Close : AgentAction
+
+    /** @property name the name to show from now on, as the `whistl.name` label. */
+    data class Rename(val name: String) : AgentAction
+}
+
+/** What came of an action taken from the list. */
+sealed interface ActionResult {
+    /** The core accepted it. */
+    data object Done : ActionResult
+
+    /** The machine is not connected, so nothing was sent. */
+    data object Offline : ActionResult
+
+    /** The agent is gone already: the action had nothing to act on. */
+    data object Gone : ActionResult
+
+    /** @property action what failed, for the message the list shows. */
+    data class Failed(val action: AgentAction) : ActionResult
 }
 
 /**
@@ -134,6 +176,12 @@ class DefaultAgentsRepository(
          * then backs off instead of retrying each second (p7r8 item 4).
          */
         const val HEALTHY_AFTER_MS: Long = 30_000L
+
+        /** How many times a remove is retried while the core still counts the killed terminal as live. */
+        const val REMOVE_TRIES: Int = 5
+
+        /** How long to wait between those tries. */
+        const val REMOVE_DELAY_MS: Long = 150L
     }
 
     /** One live events subscription: the client it was opened on, and the job that reads it. */
@@ -196,6 +244,69 @@ class DefaultAgentsRepository(
             return StartResult.CouldNotStart
         } finally {
             withContext(NonCancellable) { lease.release() }
+        }
+    }
+
+    override suspend fun act(machineId: String, address: String, action: AgentAction): ActionResult {
+        val lease = try {
+            machines.acquire(machineId)
+        } catch (e: NoSuchElementException) {
+            return ActionResult.Offline
+        }
+        try {
+            val client = lease.client() ?: return ActionResult.Offline
+            when (action) {
+                AgentAction.Interrupt -> client.terminalInterrupt(address)
+                AgentAction.Stop -> client.terminalKill(address)
+                // Closing is stop then remove: killing a terminal that already finished is not an error, so the kill's
+                // NotFound is swallowed and the remove is what decides.
+                AgentAction.Close -> {
+                    try {
+                        client.terminalKill(address)
+                    } catch (e: NotFound) {
+                        // Already finished: the remove below is the part that matters.
+                    }
+                    removeWhenExited(client, address)
+                }
+                is AgentAction.Rename -> {
+                    val name = action.name.trim()
+                    if (name.isEmpty()) return ActionResult.Failed(action)
+                    client.terminalLabel(address, mapOf(Agent.NAME_LABEL to name))
+                }
+            }
+            return ActionResult.Done
+        } catch (e: NotFound) {
+            return ActionResult.Gone
+        } catch (e: TransportLost) {
+            return ActionResult.Offline
+        } catch (e: HcException) {
+            return ActionResult.Failed(action)
+        } finally {
+            withContext(NonCancellable) { lease.release() }
+        }
+    }
+
+    /**
+     * Removes a terminal, waiting for the core to consider it exited.
+     *
+     * `terminal.kill` returns before the process is reaped, and `terminal.rm` answers `StillLive` until it is, so a
+     * remove right after a kill is a race the user would see as "the core refused the action" (0.4.0 review, P2). The
+     * wait is short and bounded: five tries, 150 ms apart.
+     *
+     * @param client the live connection.
+     * @param address the terminal to remove.
+     */
+    private suspend fun removeWhenExited(client: HcClient, address: String) {
+        var attempt = 0
+        while (true) {
+            try {
+                client.terminalRm(address)
+                return
+            } catch (e: StillLive) {
+                attempt++
+                if (attempt >= REMOVE_TRIES) throw e
+                delay(REMOVE_DELAY_MS)
+            }
         }
     }
 

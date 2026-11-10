@@ -56,6 +56,10 @@ class SpaceDetailViewModelTest {
         /** The choices the picker started, in order. */
         val started = mutableListOf<StartChoice>()
 
+        /** The list's menu is not part of these tests. */
+        override suspend fun act(machineId: String, address: String, action: io.github.werlang.whistl.data.AgentAction): io.github.werlang.whistl.data.ActionResult =
+            io.github.werlang.whistl.data.ActionResult.Gone
+
         override suspend fun start(machineId: String, spaceId: String, choice: StartChoice): StartResult {
             started += choice
             return answer

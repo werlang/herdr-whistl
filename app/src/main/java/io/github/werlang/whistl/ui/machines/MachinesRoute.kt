@@ -30,10 +30,11 @@ fun MachinesRoute(
     machines: MachinesRepository,
     clientKey: ClientPublicKey,
     clipboard: ClipboardWriter,
+    onOpenSpaces: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val state by model.state.collectAsState()
-    MachinesScreen(state = state, onMenu = model::openMenu, modifier = modifier)
+    MachinesScreen(state = state, onMenu = model::openMenu, onOpenSpaces = onOpenSpaces, modifier = modifier)
     state.menu?.let { menu ->
         MachineMenuSheet(
             menu = menu,
