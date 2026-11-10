@@ -2,5 +2,5 @@
 <resources>
     <!-- Window and launcher background: SPEC §3 dark background, shown before Compose draws. -->
     <color name="whistl_window_background">#121417</color>
-    <color name="ic_launcher_background">#121417</color>
+    <color name="ic_launcher_background">#F1EFE3</color>
 </resources>
