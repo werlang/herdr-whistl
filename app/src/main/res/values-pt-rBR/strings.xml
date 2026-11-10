@@ -308,4 +308,7 @@
     <string name="agents_notice_gone">Esse agente já não existe.</string>
     <string name="agents_notice_failed">O core recusou a ação.</string>
     <string name="agents_notice_dismiss">Dispensar</string>
+    <string name="spaces_filter_banner">Mostrando só %1$s</string>
+    <string name="spaces_filter_clear">Mostrar todas as máquinas</string>
+    <string name="machines_open_spaces">Spaces de %1$s</string>
 </resources>

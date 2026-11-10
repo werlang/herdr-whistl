@@ -222,6 +222,8 @@ data class SpacesUiState(
     val menu: SpaceRef?,
     val rename: RenameUi?,
     val close: CloseUi?,
+    /** The name of the machine the list is filtered to, or `null` when it shows every machine. */
+    val filterName: String? = null,
 )
 
 /**
@@ -288,13 +290,19 @@ class SpacesViewModel(
     private val spaces: SpacesRepository,
     private val agents: AgentsRepository,
     private val machines: MachinesRepository,
+    private val machineFilter: StateFlow<String?> = MutableStateFlow(null),
 ) : ViewModel() {
     private val sheets = MutableStateFlow(Sheets())
 
     /** The screen's state. */
-    val state: StateFlow<SpacesUiState> = combine(spaces.groups(), agents.agents, machines.machines(), sheets) {
-        groups, agentList, machineList, open ->
-        build(groups, agentList, machineList, open)
+    val state: StateFlow<SpacesUiState> = combine(
+        spaces.groups(),
+        agents.agents,
+        machines.machines(),
+        sheets,
+        machineFilter,
+    ) { groups, agentList, machineList, open, filter ->
+        build(groups, agentList, machineList, open, filter)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SpacesUiState(emptyList(), false, true, null, null, null, null))
 
     /** Opens the New space sheet, with the first machine as the one the space goes to. */
@@ -487,8 +495,11 @@ class SpacesViewModel(
         agentList: List<MachineAgent>,
         machineList: List<Machine>,
         open: Sheets,
+        filter: String?,
     ): SpacesUiState {
-        val groupUi = groups.map { group -> groupOf(group, agentList, machineList) }
+        // The filter only hides groups: counts, menus and the machine picker keep working on every machine.
+        val shown = groups.filter { filter == null || it.machineId == filter }
+        val groupUi = shown.map { group -> groupOf(group, agentList, machineList) }
         val choices = machineList.map { machine ->
             MachineChoice(
                 id = machine.id,
@@ -508,6 +519,7 @@ class SpacesViewModel(
             groups = groupUi,
             hasMachines = machineList.isNotEmpty(),
             isEmpty = groupUi.all { it.rows.isEmpty() },
+            filterName = filter?.let { id -> machineList.firstOrNull { it.id == id }?.name ?: id },
             newSpace = open.newSpace?.let { newSpaceUi(it, choices) },
             menu = menuRef,
             rename = renameRef?.let { RenameUi(it, open.renameDraft, open.renameProblem, open.renameMachineOffline) },

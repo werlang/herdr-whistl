@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -61,6 +63,7 @@ fun machineCardTag(id: String): String = "machine-card-$id" // i18n-ok: test tag
 fun MachinesScreen(
     state: MachinesUiState,
     onMenu: (String) -> Unit,
+    onOpenSpaces: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -94,7 +97,7 @@ fun MachinesScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 items(state.cards, key = { it.id }) { card ->
-                    MachineCardView(card = card, onMenu = { onMenu(card.id) })
+                    MachineCardView(card = card, onMenu = { onMenu(card.id) }, onOpen = { onOpenSpaces(card.id) })
                 }
             }
         }
@@ -134,12 +137,16 @@ private fun EmptyMachines(modifier: Modifier) {
  * @param onMenu called when the menu button is tapped.
  */
 @Composable
-private fun MachineCardView(card: MachineCard, onMenu: () -> Unit) {
+private fun MachineCardView(card: MachineCard, onMenu: () -> Unit, onOpen: () -> Unit) {
     val tokens = LocalWhistlTokens.current
+    val openDescription = stringResource(R.string.machines_open_spaces, card.name)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .testTag(machineCardTag(card.id)),
+            .testTag(machineCardTag(card.id))
+            // The whole card opens that machine's spaces; the menu button keeps its own touch target.
+            .clickable(onClick = onOpen)
+            .semantics { contentDescription = openDescription },
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),

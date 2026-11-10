@@ -302,4 +302,7 @@
     <string name="agents_notice_gone">That agent is already gone.</string>
     <string name="agents_notice_failed">The core refused the action.</string>
     <string name="agents_notice_dismiss">Dismiss</string>
+    <string name="spaces_filter_banner">Showing only %1$s</string>
+    <string name="spaces_filter_clear">Show every machine</string>
+    <string name="machines_open_spaces">Spaces of %1$s</string>
 </resources>

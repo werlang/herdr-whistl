@@ -18,6 +18,7 @@ fun SpacesRoute(
     model: SpacesViewModel,
     onOpenSpace: (machineId: String, spaceId: String) -> Unit,
     onAddMachine: () -> Unit,
+    onClearFilter: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val state by model.state.collectAsState()
@@ -25,6 +26,7 @@ fun SpacesRoute(
         state = state,
         onOpen = onOpenSpace,
         onMenu = { machineId, spaceId -> model.openMenu(machineId, spaceId) },
+        onClearFilter = onClearFilter,
         modifier = modifier,
     )
     state.newSpace?.let { ui ->

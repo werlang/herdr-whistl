@@ -150,7 +150,9 @@ fun WhistlApp(startRoute: String = Routes.MACHINES) {
     )
     val spacesModel: SpacesViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { SpacesViewModel(container.spaces, container.agents, container.machines) }
+            initializer {
+                SpacesViewModel(container.spaces, container.agents, container.machines, container.spacesFilter)
+            }
         },
     )
 
@@ -209,6 +211,11 @@ fun WhistlApp(startRoute: String = Routes.MACHINES) {
                     machines = container.machines,
                     clientKey = container.clientKey,
                     clipboard = clipboard,
+                    onOpenSpaces = { machineId ->
+                        // The filter lives in the container because Spaces is a bottom destination without arguments.
+                        container.spacesFilter.value = machineId
+                        navigateTo(navController, Routes.SPACES)
+                    },
                     modifier = Modifier.fillMaxSize(),
                 )
                 // Opens the requested start route once the graph exists; the app starts on Machines, so this is a no-op there.
@@ -219,6 +226,7 @@ fun WhistlApp(startRoute: String = Routes.MACHINES) {
             composable(Routes.SPACES) {
                 SpacesRoute(
                     model = spacesModel,
+                    onClearFilter = { container.spacesFilter.value = null },
                     onOpenSpace = { machineId, spaceId -> navController.navigate(Routes.space(machineId, spaceId)) },
                     onAddMachine = { navigateTo(navController, Routes.MACHINES) },
                     modifier = Modifier.fillMaxSize(),
