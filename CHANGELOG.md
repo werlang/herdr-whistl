@@ -7,6 +7,23 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.3.2] - 2026-11-10
+
+### Added
+
+- **The arrow keys are one bundle.** Enabling or disabling any of the four arrows enables or disables all of
+  them, moving one moves the whole bundle, and Settings shows a single "Arrow keys" entry. In the terminal bar
+  the four share one compact cluster instead of four separate buttons.
+- Block elements and box drawing are drawn as shapes instead of through a font fallback, so a TUI banner and a
+  box border render at the right size: `█ ▀ ▄`, all shades, every light/heavy/double line, rounded corners,
+  diagonals and the partial strokes.
+
+### Fixed
+
+- The `opencode` banner no longer renders as thick misaligned boxes, and text that follows a block character in
+  the same run is no longer offset by the fallback advance.
+
+
 ## [0.3.1] - 2026-11-10
 
 ### Fixed
@@ -80,7 +97,8 @@ Nothing yet.
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/werlang/herdr-whistl/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/werlang/herdr-whistl/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/werlang/herdr-whistl/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/werlang/herdr-whistl/compare/v0.1.0...v0.2.0
