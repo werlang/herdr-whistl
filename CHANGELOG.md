@@ -7,6 +7,23 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.3.4] - 2026-11-10
+
+### Added
+
+- **Every installed agent is detected, not just two.** The probe reported `codex`, `gemini` and `aider` and the parser
+  threw them away because they were not in a two-entry table. Detection now keeps every name the probe prints
+  (labelled and started by its own command), the table names fourteen agents (claude, codex, gemini, agy, opencode,
+  cursor-agent, aider, goose, amp, crush, qwen, copilot, droid, cline), and the probe script is generated from that
+  table so the two cannot drift. Results are prefixed with `AGENT:`, so a login banner is never read as an agent.
+
+### Fixed
+
+- **The arrow bundle does not collapse after one press.** Collapsing meant reopening it for every line you stepped
+  back; it is now a segmented control — four 48 dp segments in one rounded container, separated by hairlines, always
+  available.
+
+
 ## [0.3.3] - 2026-11-10
 
 ### Fixed
@@ -108,7 +125,8 @@ Nothing yet.
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/werlang/herdr-whistl/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/werlang/herdr-whistl/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/werlang/herdr-whistl/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/werlang/herdr-whistl/compare/v0.3.0...v0.3.1
