@@ -500,6 +500,21 @@ class AgentViewModelTest {
         assertTrue("Enter is a key, not a line end in text", h.sent("terminal.send").isEmpty())
     }
 
+    /** Send as keys: the line goes as characters, with no Return, and the field empties (0.6.1). */
+    @Test
+    fun sendAsKeysSendsTheLineWithoutReturn() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onInputChange(TextFieldValue("m"))
+        vm.onSendKeys()
+        runCurrent()
+
+        val pressed = h.sent("terminal.keys").single().keyNames()
+        assertEquals(listOf("m"), pressed)
+        assertTrue("no line is submitted", h.sent("terminal.send").isEmpty())
+        assertEquals("", vm.state.value.input.text)
+    }
+
     /** Ctrl latched on the bar applies to the next character typed on the phone's keyboard: ^C, not `c`. */
     @Test
     fun ctrlAppliesToATypedCharacter() = runTest {

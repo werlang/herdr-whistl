@@ -456,6 +456,26 @@ class AgentViewModel(
         onLeave()
     }
 
+    /**
+     * Sends what is in the field as keys, without Return (0.6.1). A TUI that waits for one key — the `m` after a leader
+     * like Ctrl+X, a `y` in a prompt — needs the character at the cursor, not a submitted line, and the Send button alone
+     * cannot express that.
+     */
+    fun onSendKeys() {
+        val current = state.value
+        if (!current.canType) return
+        val own = interaction.value
+        val text = own.input.text
+        if (text.isEmpty()) return
+        val keystrokes = Keystrokes.of(text)
+        interaction.value = own.copy(input = TextFieldValue(""), ctrlArmed = false)
+        if (keystrokes.dropped.isNotEmpty()) {
+            interaction.value = interaction.value.copy(refusal = AgentNotice.NotTypable)
+        }
+        if (keystrokes.isEmpty) return
+        sendKeys(keystrokes.names)
+    }
+
     private fun sendKeys(names: List<String>) {
         viewModelScope.launch {
             val outcome = handle.value?.keys(names) ?: TerminalAction.Offline

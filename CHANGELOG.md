@@ -7,6 +7,18 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.6.1] - 2026-11-11
+
+### Added
+
+- **Send as keys: hold the Send button.** Tap sends the line with Return, as before; holding sends the same text as
+  keys, without Return, and empties the field. That is what a TUI asks for when it waits on one key — the `m` after a
+  leader like `Ctrl+X` — and the field alone could not express it.
+
+Ctrl on the bar already combined with the next character typed, so `Ctrl` then `x` presses `ctrl+x` without filling the
+field. Together the two give a leader sequence without leaving the screen. Proved on the emulator against a terminal
+running `cat -v`, which printed `^Xm` — the exact bytes of `ctrl+x` followed by a bare `m`.
+
 ## [0.6.0] - 2026-11-11
 
 ### Changed
@@ -327,7 +339,8 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/werlang/herdr-whistl/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/werlang/herdr-whistl/compare/v0.5.9...v0.6.0
 [0.5.9]: https://github.com/werlang/herdr-whistl/compare/v0.5.8...v0.5.9
 [0.5.8]: https://github.com/werlang/herdr-whistl/compare/v0.5.7...v0.5.8

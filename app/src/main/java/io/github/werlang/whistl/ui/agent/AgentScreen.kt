@@ -26,6 +26,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.draw.drawBehind
@@ -158,6 +162,7 @@ fun AgentScreen(
         onKey = viewModel::onKey,
         onInputChange = viewModel::onInputChange,
         onSend = viewModel::onSend,
+        onSendKeys = viewModel::onSendKeys,
         onPaste = viewModel::onPaste,
         onOpenMenu = viewModel::onOpenMenu,
         onCloseMenu = viewModel::onCloseMenu,
@@ -179,6 +184,7 @@ fun AgentContent(
     onKey: (ShortcutKey) -> Unit,
     onInputChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit,
+    onSendKeys: () -> Unit,
     onPaste: (String) -> Unit,
     onOpenMenu: () -> Unit,
     onCloseMenu: () -> Unit,
@@ -216,6 +222,7 @@ fun AgentContent(
                 state = state,
                 onInput = onInputChange,
                 onSend = onSend,
+                onSendKeys = onSendKeys,
                 keyboardRequest = keyboardRequest,
             )
             KeyBar(
@@ -860,6 +867,7 @@ private fun InputRow(
     state: AgentUiState,
     onInput: (TextFieldValue) -> Unit,
     onSend: () -> Unit,
+    onSendKeys: () -> Unit,
     keyboardRequest: Int = 0,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
@@ -931,13 +939,20 @@ private fun InputRow(
             },
         )
         Spacer(Modifier.width(8.dp))
-        IconButton(
-            onClick = onSend,
-            enabled = state.canSend,
+        // Tap sends the line with Return; holding it sends the same text as keys, without Return — the way a TUI asks
+        // for one key after a leader such as Ctrl+X (0.6.1).
+        Box(
             modifier = Modifier
                 .size(INPUT_HEIGHT)
+                .clip(CircleShape)
+                .combinedClickable(
+                    enabled = state.canSend,
+                    onClick = onSend,
+                    onLongClick = onSendKeys,
+                )
                 .testTag(AGENT_SEND_TAG)
                 .semantics { contentDescription = sendLabel },
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 painter = painterResource(R.drawable.ic_send),
