@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # Branch pushes run the gate too: with one developer working trunk-based, the checks have to run before the merge,
+    # not only after it (0.5.0).
+    branches: [main, 'feat/**', 'fix/**', 'chore/**']
   pull_request:
 
 permissions:
