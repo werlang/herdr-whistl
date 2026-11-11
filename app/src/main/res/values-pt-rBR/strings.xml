@@ -327,5 +327,4 @@
     <string name="space_folder_browse_use">Usar esta pasta</string>
     <string name="space_folder_browse_offline">A máquina não está conectada.</string>
     <string name="space_folder_browse_unreadable">Esta pasta não pode ser lida.</string>
-    <string name="agent_pending_send">Enter envia</string>
 </resources>

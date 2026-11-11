@@ -200,7 +200,6 @@ fun AgentContent(
             HintLine(state = state)
             NoticeLine(state = state)
             BlockedHint(state = state)
-            PendingLine(state = state)
             ActionRow(
                 state = state,
                 onKey = onKey,
@@ -360,7 +359,16 @@ private fun TerminalOutput(
     val padding = with(density) { TERMINAL_PADDING.toPx() }
     var pane by remember { mutableStateOf(IntSize.Zero) }
     val frame = state.frame
-    LaunchedEffect(frame) { scroll.scrollTo(scroll.maxValue) }
+    // Follow the output only while the user is at the bottom: a TUI emits frames constantly (cursor, spinner), and
+    // scrolling up used to be undone by the next one (0.5.5).
+    var stickToBottom by remember { mutableStateOf(true) }
+    LaunchedEffect(scroll.value, scroll.maxValue) {
+        val slop = with(density) { 8.dp.toPx() }
+        stickToBottom = scroll.value >= scroll.maxValue - slop
+    }
+    LaunchedEffect(frame) {
+        if (stickToBottom) scroll.scrollTo(scroll.maxValue)
+    }
     val cols = ((pane.width - 2 * padding) / metrics.cellWidth).toInt().coerceAtLeast(1)
     val rows = ((pane.height - 2 * padding) / metrics.lineHeight).toInt().coerceAtLeast(1)
     LaunchedEffect(cols, rows, pane) {
@@ -885,40 +893,3 @@ private fun statusLabelRes(label: AgentStatusLabel): Int = when (label) {
     AgentStatusLabel.Offline -> R.string.machine_status_offline
 }
 
-/**
- * The line being typed, above the keys (0.5.4). Nothing is sent while the user types, so the line has to be visible
- * somewhere: this is that somewhere, and it says that Enter sends it.
- *
- * @param state the screen's state.
- */
-@Composable
-private fun PendingLine(state: AgentUiState) {
-    if (state.pending.isEmpty()) return
-    val tokens = LocalWhistlTokens.current
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = ">", // i18n-ok: the prompt mark, not a word
-            fontFamily = WhistlMono,
-            style = MaterialTheme.typography.bodyMedium,
-            color = tokens.muted,
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = state.pending,
-            fontFamily = WhistlMono,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).testTag(AGENT_PENDING_TAG),
-        )
-        Text(
-            text = stringResource(R.string.agent_pending_send),
-            style = MaterialTheme.typography.labelSmall,
-            color = tokens.dim,
-        )
-    }
-}
-
-/** The test tag of the line being typed. */
-const val AGENT_PENDING_TAG: String = "agent-pending"

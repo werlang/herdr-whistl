@@ -7,6 +7,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.5.5] - 2026-11-11
+
+### Changed
+
+- **Every key goes to the terminal as it is pressed**, the way a keyboard does on a computer: no buffer, no waiting for
+  Enter, no timer. The terminal's own line editor — or the TUI — decides what a character means and echoes it.
+
+### Fixed
+
+- **The terminal scrolls, and stays where you put it.** The view jumped to the bottom on every frame, and a TUI emits
+  frames constantly (cursor, spinner), so scrolling up was undone immediately. Following the output now happens only
+  while the view is already at the bottom.
+
 ## [0.5.4] - 2026-11-11
 
 ### Changed
@@ -237,7 +250,8 @@ Nothing yet.
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.4...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.5...HEAD
+[0.5.5]: https://github.com/werlang/herdr-whistl/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/werlang/herdr-whistl/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/werlang/herdr-whistl/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/werlang/herdr-whistl/compare/v0.5.1...v0.5.2

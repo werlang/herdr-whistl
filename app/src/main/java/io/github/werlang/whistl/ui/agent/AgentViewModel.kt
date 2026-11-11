@@ -117,8 +117,6 @@ data class AgentUiState(
     val frame: TerminalFrame,
     val reach: TerminalReach,
     val input: TextFieldValue,
-    /** What has been typed but not sent yet: it waits for Enter (0.5.4). */
-    val pending: String,
     val ctrlArmed: Boolean,
     val keyBar: List<ShortcutKey>,
     val lastKey: SentKey?,
@@ -144,8 +142,6 @@ data class SentKey(val label: String, val ctrl: Boolean = false)
 /** The screen's own interaction state, combined with the repositories' state. */
 private data class Interaction(
     val input: TextFieldValue = TextFieldValue(""),
-    /** The line being typed, sent only when the user presses Enter (0.5.4). */
-    val pending: String = "",
     val ctrlArmed: Boolean = false,
     val lastKey: SentKey? = null,
     val refusal: AgentNotice? = null,
@@ -279,13 +275,6 @@ class AgentViewModel(
     fun onKey(key: ShortcutKey) {
         val current = state.value
         if (!current.canType) return
-        // A key from the bar is an action, not text: whatever line is being typed goes first, so the order is the one the
-        // user sees on the screen (0.5.4).
-        val pending = interaction.value.pending
-        if (pending.isNotEmpty()) {
-            interaction.value = interaction.value.copy(pending = "")
-            write(pending)
-        }
         val own = interaction.value
         when (val action = key.action()) {
             KeyAction.Modifier -> interaction.value = own.copy(ctrlArmed = !own.ctrlArmed)
@@ -339,19 +328,18 @@ class AgentViewModel(
      */
     fun onType(text: String) {
         if (text.isEmpty()) return
-        // Typing is a line, and a line is sent by the user, not by a timer: the characters collect here and travel when
-        // Enter is pressed (0.5.4). A newline in the input sends what came before it, then the line itself.
-        val newline = text.indexOfFirst { it == '\r' || it == '\n' }
-        if (newline < 0) {
-            val own = interaction.value
-            interaction.value = own.copy(pending = own.pending + text)
+        // Every key goes to the terminal as it is pressed, the way a keyboard on a computer does: the terminal's own
+        // line editor (or TUI) decides what a character means and echoes it (0.5.5).
+        if (text.contains('\r') || text.contains('\n')) {
+            val parts = text.split('\r', '\n')
+            val first = parts.first()
+            if (first.isNotEmpty()) write(first)
+            writeEnter()
+            val rest = parts.drop(1).joinToString("")
+            if (rest.isNotEmpty()) write(rest)
             return
         }
-        val own = interaction.value
-        val line = own.pending + text.take(newline)
-        interaction.value = own.copy(pending = text.drop(newline + 1).filterNot { it == '\r' || it == '\n' })
-        write(line)
-        writeEnter()
+        write(text)
     }
 
     /**
@@ -362,12 +350,7 @@ class AgentViewModel(
      */
     fun onBackspace(count: Int) {
         if (count <= 0) return
-        val own = interaction.value
-        // Backspace edits the line being typed first; only what is left after it reaches the terminal's own line.
-        val fromLine = minOf(count, own.pending.length)
-        interaction.value = own.copy(pending = own.pending.dropLast(fromLine))
-        val onTerminal = count - fromLine
-        if (onTerminal > 0) write("\u007f".repeat(onTerminal))
+        write("\u007f".repeat(count))
     }
 
     /**
@@ -375,11 +358,7 @@ class AgentViewModel(
      */
     fun onPaste(text: String) {
         if (text.isEmpty()) return
-        // A paste is already a deliberate act: it lands on the terminal at once, after whatever line is being typed.
-        val own = interaction.value
-        val line = own.pending
-        interaction.value = own.copy(pending = "")
-        write(line + text)
+        write(text)
     }
 
     private fun writeEnter() = write("\r")
@@ -495,7 +474,6 @@ class AgentViewModel(
             frame = output.frame,
             reach = output.reach,
             input = input,
-            pending = own.pending,
             ctrlArmed = own.ctrlArmed,
             keyBar = keyBar,
             lastKey = own.lastKey,
@@ -530,7 +508,6 @@ class AgentViewModel(
         frame = TerminalFrame.empty(DEFAULT_COLS, DEFAULT_ROWS),
         reach = TerminalReach.Offline,
         input = TextFieldValue(""),
-        pending = "",
         ctrlArmed = false,
         keyBar = emptyList(),
         lastKey = null,

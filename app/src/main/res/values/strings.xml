@@ -321,5 +321,4 @@
     <string name="space_folder_browse_use">Use this folder</string>
     <string name="space_folder_browse_offline">The machine is not connected.</string>
     <string name="space_folder_browse_unreadable">This folder cannot be read.</string>
-    <string name="agent_pending_send">Enter sends</string>
 </resources>
