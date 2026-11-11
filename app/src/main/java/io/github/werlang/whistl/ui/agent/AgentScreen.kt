@@ -200,6 +200,7 @@ fun AgentContent(
             HintLine(state = state)
             NoticeLine(state = state)
             BlockedHint(state = state)
+            PendingLine(state = state)
             ActionRow(
                 state = state,
                 onKey = onKey,
@@ -883,3 +884,41 @@ private fun statusLabelRes(label: AgentStatusLabel): Int = when (label) {
     AgentStatusLabel.Finished -> R.string.status_finished
     AgentStatusLabel.Offline -> R.string.machine_status_offline
 }
+
+/**
+ * The line being typed, above the keys (0.5.4). Nothing is sent while the user types, so the line has to be visible
+ * somewhere: this is that somewhere, and it says that Enter sends it.
+ *
+ * @param state the screen's state.
+ */
+@Composable
+private fun PendingLine(state: AgentUiState) {
+    if (state.pending.isEmpty()) return
+    val tokens = LocalWhistlTokens.current
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = ">", // i18n-ok: the prompt mark, not a word
+            fontFamily = WhistlMono,
+            style = MaterialTheme.typography.bodyMedium,
+            color = tokens.muted,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = state.pending,
+            fontFamily = WhistlMono,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).testTag(AGENT_PENDING_TAG),
+        )
+        Text(
+            text = stringResource(R.string.agent_pending_send),
+            style = MaterialTheme.typography.labelSmall,
+            color = tokens.dim,
+        )
+    }
+}
+
+/** The test tag of the line being typed. */
+const val AGENT_PENDING_TAG: String = "agent-pending"

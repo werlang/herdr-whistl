@@ -466,33 +466,64 @@ class AgentViewModelTest {
         assertEquals(AgentNotice.Gone, vm.state.value.notice)
         assertFalse("nothing can be typed into a terminal that is gone", vm.state.value.canType)
     }
-    /** A burst of typing is one command, not one round trip per key: the agent is a TUI and stuttered on every keystroke. */
+    /** Typing sends nothing: the line waits for the user's own Enter (0.5.4). */
     @Test
-    fun aBurstOfTypingIsOneCommand() = runTest {
+    fun typingSendsNothingUntilEnter() = runTest {
         val (h, vm, _) = openAgent()
 
         vm.onType("l")
         vm.onType("s")
-        vm.onType(" ")
-        vm.onType("-")
-        advanceTimeBy(60)
+        advanceTimeBy(1_000)
         runCurrent()
 
-        val texts = h.sent("terminal.send").map { it.params().getValue("text").jsonPrimitive.content }
-        assertEquals(listOf("ls -"), texts)
+        assertTrue("nothing reached the terminal", h.sent("terminal.send").isEmpty())
+        assertEquals("ls", vm.state.value.pending)
     }
 
-    /** Enter sends what came before it and the carriage return in order, without waiting for the pause. */
+    /** Enter sends the line and the carriage return, in that order, and clears what is pending. */
     @Test
-    fun enterFlushesTheLineAndPressesIt() = runTest {
+    fun enterSendsTheLineAndPressesIt() = runTest {
         val (h, vm, _) = openAgent()
 
-        vm.onType("ls")
+        vm.onType("ls -la")
         vm.onType("\r")
         runCurrent()
 
         val texts = h.sent("terminal.send").map { it.params().getValue("text").jsonPrimitive.content }
-        assertEquals(listOf("ls", "\r"), texts)
+        assertEquals(listOf("ls -la", "\r"), texts)
+        assertEquals("", vm.state.value.pending)
+    }
+
+    /** A backspace edits the line being typed; with nothing pending it deletes on the terminal. */
+    @Test
+    fun backspaceEditsTheLineBeforeItReachesTheTerminal() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onType("ls")
+        vm.onBackspace(1)
+        runCurrent()
+        assertEquals("l", vm.state.value.pending)
+        assertTrue("nothing was sent for the deletion", h.sent("terminal.send").isEmpty())
+
+        vm.onBackspace(5)
+        runCurrent()
+        assertEquals("", vm.state.value.pending)
+        // One character was on the line and four more were asked for: those four delete on the terminal.
+        assertEquals("\u007f".repeat(4), h.sent("terminal.send").single().params().getValue("text").jsonPrimitive.content)
+    }
+
+    /** A key from the bar sends the pending line first, so the order is the one the user sees. */
+    @Test
+    fun aBarKeySendsThePendingLineFirst() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onType("ls")
+        vm.onKey(ShortcutKey.TAB)
+        runCurrent()
+
+        val texts = h.sent("terminal.send").map { it.params().getValue("text").jsonPrimitive.content }
+        assertEquals(listOf("ls"), texts.take(1))
+        assertTrue("the key itself followed", h.sent("terminal.keys").isNotEmpty() || texts.size > 1)
     }
 
     /** A blocked agent takes the keystroke forced, the same way Send delivered text. */
@@ -501,10 +532,10 @@ class AgentViewModelTest {
         val (h, vm, _) = openAgent(status = "blocked")
 
         vm.onType("y")
-        advanceTimeBy(60)
+        vm.onType("\r")
         runCurrent()
 
-        val send = h.sent("terminal.send").single()
+        val send = h.sent("terminal.send").first()
         assertEquals(true, send.params().getValue("force").jsonPrimitive.content.toBoolean())
     }
 
@@ -524,10 +555,11 @@ class AgentViewModelTest {
     fun pasteSendsTheClipboardTextAtTheCursor() = runTest {
         val (h, vm, _) = openAgent()
 
-        vm.onPaste("git status")
+        vm.onType("cd ")
+        vm.onPaste("repo")
         runCurrent()
 
-        assertEquals("git status", h.sent("terminal.send").single().params().getValue("text").jsonPrimitive.content)
+        assertEquals("cd repo", h.sent("terminal.send").single().params().getValue("text").jsonPrimitive.content)
     }
 
     /** Nothing is sent while the terminal cannot take input. */

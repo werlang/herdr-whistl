@@ -7,6 +7,16 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.5.4] - 2026-11-11
+
+### Changed
+
+- **A line is sent by the user, not by a timer.** Typing collects the line and nothing reaches the terminal until Enter
+  is pressed; the line being typed shows above the keys, with "Enter sends" beside it. Backspace edits that line first
+  and only then deletes on the terminal, a key from the bar sends the line before the key, and a paste lands at once.
+  The 40 ms flush of 0.5.3 is gone: guessing when a person is done typing is not a rule that survives contact with a
+  TUI.
+
 ## [0.5.3] - 2026-11-11
 
 ### Fixed
@@ -227,7 +237,8 @@ Nothing yet.
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/werlang/herdr-whistl/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/werlang/herdr-whistl/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/werlang/herdr-whistl/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/werlang/herdr-whistl/compare/v0.5.0...v0.5.1
