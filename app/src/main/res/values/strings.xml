@@ -309,4 +309,16 @@
     <string name="agents_notice_pinned">Pinned.</string>
     <string name="agents_notice_unpinned">Unpinned.</string>
     <string name="agent_paste">Paste</string>
+    <string name="agents_pinned">Pinned</string>
+    <string name="agents_close_title">Close %1$s?</string>
+    <string name="agents_close_text">It will be stopped and removed from the list. This cannot be undone.</string>
+    <string name="agent_keyboard_show">Show keyboard</string>
+    <string name="agent_keyboard_hide">Hide keyboard</string>
+    <string name="space_folder_browse">Browse folders</string>
+    <string name="space_folder_browse_title">Choose a folder</string>
+    <string name="space_folder_browse_loading">Reading the machine…</string>
+    <string name="space_folder_browse_up">Up one folder</string>
+    <string name="space_folder_browse_use">Use this folder</string>
+    <string name="space_folder_browse_offline">The machine is not connected.</string>
+    <string name="space_folder_browse_unreadable">This folder cannot be read.</string>
 </resources>

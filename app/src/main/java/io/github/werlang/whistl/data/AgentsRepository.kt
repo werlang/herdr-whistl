@@ -10,6 +10,7 @@ import io.github.werlang.whistl.core.rpc.SpawnFailed
 import io.github.werlang.whistl.core.rpc.StillLive
 import io.github.werlang.whistl.core.rpc.TransportLost
 import io.github.werlang.whistl.domain.Agent
+import io.github.werlang.whistl.domain.Clock
 import io.github.werlang.whistl.domain.KnownAgent
 import io.github.werlang.whistl.domain.Terminal
 import kotlinx.coroutines.CancellationException
@@ -154,10 +155,15 @@ class DefaultAgentsRepository(
     private val machines: MachinesRepository,
     private val spaces: SpacesRepository,
     private val documentChanges: DocumentChanges,
+    // Monotonic and plain JVM: the recency only compares stamps with each other, and a unit test must not need Android.
+    private val clock: Clock = Clock { System.nanoTime() / 1_000_000 },
 ) : AgentsRepository {
     private val terminals = MutableStateFlow<Map<String, Map<String, Terminal>>>(emptyMap())
     private val watchers = ConcurrentHashMap<String, Job>()
     private val subscriptions = ConcurrentHashMap<String, Subscription>()
+
+    /** When each agent last changed here, keyed `machine/address`: the recency the list sorts by (0.5.1). */
+    private val updated = ConcurrentHashMap<String, Long>()
 
     /** Failed subscription attempts in a row per machine: the backoff grows with it, and a healthy subscription clears it. */
     private val retries = ConcurrentHashMap<String, Int>()
@@ -192,7 +198,7 @@ class DefaultAgentsRepository(
             byMachine[machine.id].orEmpty().values.map { terminal ->
                 // Matched by cwd against the resolved path; a space that did not resolve never matches by cwd (SPEC §1).
                 val space = matchSpace(terminal, spacesOfMachine) { group?.resolvedPathOf(it) }
-                MachineAgent(machine.id, Agent(terminal), space)
+                MachineAgent(machine.id, Agent(terminal), space, updated["${machine.id}/${terminal.address}"] ?: 0L)
             }
         }
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())
@@ -384,7 +390,12 @@ class DefaultAgentsRepository(
                 open = subscription
                 // Folder probes are not agents: the snapshot drops them as the events reducer does.
                 val agentsOnly = subscription.terminals.filterNot { it.isProbe() }
-                terminals.update { all -> all + (id to agentsOnly.associateBy { it.address }) }
+                terminals.update { all ->
+                    val previous = all[id].orEmpty()
+                    val next = agentsOnly.associateBy { it.address }
+                    stampChanged(id, previous, next)
+                    all + (id to next)
+                }
                 // The retry count resets only once the subscription has stayed up for a while (p7r8 item 4).
                 val healthy = launch {
                     delay(HEALTHY_AFTER_MS)
@@ -444,6 +455,26 @@ class DefaultAgentsRepository(
     private fun onEvent(id: String, event: HcEvent) {
         // Any document change is worth a re-read: the whistl document is small and the read is cheap (phase 6 P0-5).
         if (event is HcEvent.DocChanged) documentChanges.notifyChanged(id)
-        terminals.update { all -> all + (id to AgentEventReducer.apply(all[id].orEmpty(), event)) }
+        terminals.update { all ->
+            val previous = all[id].orEmpty()
+            val next = AgentEventReducer.apply(previous, event)
+            stampChanged(id, previous, next)
+            all + (id to next)
+        }
+    }
+
+    /**
+     * Records the moment an agent changed, for the list's order: only the agents whose terminal is not the same object
+     * as before are stamped, so an unrelated event does not make every row look fresh.
+     *
+     * @param machineId the machine the terminals belong to.
+     * @param previous the terminals before the change.
+     * @param next the terminals after it.
+     */
+    private fun stampChanged(machineId: String, previous: Map<String, Terminal>, next: Map<String, Terminal>) {
+        val now = clock.nowMillis()
+        next.forEach { (address, terminal) ->
+            if (previous[address] != terminal) updated["$machineId/$address"] = now
+        }
     }
 }

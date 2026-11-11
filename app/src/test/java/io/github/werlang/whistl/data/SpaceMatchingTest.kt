@@ -121,24 +121,29 @@ class SpaceMatchingTest {
 
     /** The agents screen order: blocked, working, done, idle, error, then no status; equal ranks keep their order. */
     @Test
-    fun agentsScreenOrderIsBlockedWorkingDoneIdleErrorThenNoStatus() {
-        fun entry(address: String, status: AgentStatus?): MachineAgent =
-            MachineAgent("m1", Agent(agent(cwd = null).copy(address = address, status = status)), null)
+    fun agentsScreenOrderPutsWhatNeedsYouFirstAndThenTheMostRecent() {
+        fun entry(address: String, status: AgentStatus?, updatedMs: Long): MachineAgent =
+            MachineAgent(
+                "m1",
+                Agent(agent(cwd = null).copy(address = address, status = status)),
+                null,
+                updatedMs,
+            )
 
         val sorted = sortForAgentsScreen(
             listOf(
-                entry("null-1", null),
-                entry("idle", AgentStatus.Idle),
-                entry("error", AgentStatus.Error),
-                entry("done", AgentStatus.Done),
-                entry("working", AgentStatus.Working),
-                entry("blocked", AgentStatus.Blocked),
-                entry("null-2", null),
+                entry("idle-old", AgentStatus.Idle, 1),
+                entry("error", AgentStatus.Error, 2),
+                entry("working-old", AgentStatus.Working, 3),
+                entry("blocked", AgentStatus.Blocked, 4),
+                entry("working-new", AgentStatus.Working, 5),
+                entry("idle-new", AgentStatus.Idle, 6),
             ),
         )
 
+        // What needs the user first (blocked, error), then the rest by recency — never by status rank (0.5.1).
         assertEquals(
-            listOf("blocked", "working", "done", "idle", "error", "null-1", "null-2"),
+            listOf("blocked", "error", "idle-new", "working-new", "working-old", "idle-old"),
             sorted.map { it.agent.terminal.address },
         )
     }

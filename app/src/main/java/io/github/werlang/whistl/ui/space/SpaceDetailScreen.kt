@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -37,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -50,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.data.StartChoice
 import io.github.werlang.whistl.ui.agentLabelRes
+import io.github.werlang.whistl.ui.agents.AgentCloseSheet
 import io.github.werlang.whistl.ui.agents.AgentMenuSheet
 import io.github.werlang.whistl.ui.agents.NoticeBar
 import io.github.werlang.whistl.ui.components.MinTouchTarget
@@ -125,7 +128,11 @@ fun SpaceDetailRoute(
         modifier = modifier,
     )
     // The same sheet as the Agents list, so the four actions are the same wherever an agent is shown (SPEC §2.4).
-    state.menu?.let { menu ->
+    state.menu?.takeIf { it.confirmingClose }?.let { menu ->
+        // Removing an agent gets the app's standard destructive confirmation, not a second line in the action sheet.
+        AgentCloseSheet(name = menu.row.name, onConfirm = model::close, onCancel = model::cancelClose)
+    }
+    state.menu?.takeIf { !it.confirmingClose }?.let { menu ->
         AgentMenuSheet(
             menu = menu,
             onInterrupt = model::interrupt,
@@ -305,14 +312,26 @@ private fun AgentRowView(agent: DetailAgent, onOpen: () -> Unit, onMenu: () -> U
                 modifier = Modifier.weight(1f).padding(start = 14.dp, top = 12.dp, bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-            Text(
-                text = agent.name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // A pin has to be visible, not only felt in the order (0.5.1).
+                if (agent.pinned) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_pin),
+                        contentDescription = stringResource(R.string.agents_pinned),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
+                Text(
+                    text = agent.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Text(
                 text = agent.address,
                 style = MaterialTheme.typography.bodySmall,

@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -155,6 +156,17 @@ private fun AgentCard(row: AgentRow, onClick: () -> Unit, onMenu: () -> Unit) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    // A pin has to be visible, not only felt in the order (0.5.1).
+                    if (row.pinned) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_pin),
+                            contentDescription = stringResource(R.string.agents_pinned),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                    }
                     Text(
                         text = row.name,
                         style = MaterialTheme.typography.titleMedium,
@@ -163,6 +175,7 @@ private fun AgentCard(row: AgentRow, onClick: () -> Unit, onMenu: () -> Unit) {
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    }
                     Text(
                         text = row.address,
                         style = MaterialTheme.typography.bodySmall,

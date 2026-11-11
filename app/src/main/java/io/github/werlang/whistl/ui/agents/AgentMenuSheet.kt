@@ -82,20 +82,6 @@ fun AgentMenuSheet(
                 color = tokens.dim,
             )
             when {
-                menu.confirmingClose -> {
-                    Text(
-                        text = stringResource(R.string.agents_close_confirm_body),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = tokens.muted,
-                        modifier = Modifier.padding(top = 10.dp),
-                    )
-                    TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                        Text(stringResource(R.string.agents_action_close), modifier = Modifier.fillMaxWidth())
-                    }
-                    TextButton(onClick = onCancelClose, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                        Text(stringResource(R.string.common_cancel), modifier = Modifier.fillMaxWidth())
-                    }
-                }
                 menu.renaming -> {
                     OutlinedTextField(
                         value = menu.draft,

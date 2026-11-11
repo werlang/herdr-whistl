@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -22,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -114,6 +117,7 @@ fun NewSpaceSheet(
     onName: (String) -> Unit,
     onCreate: () -> Unit,
     onAddMachine: () -> Unit,
+    onBrowse: () -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = onDismiss, modifier = Modifier.testTag(NEW_SPACE_SHEET_TAG)) {
@@ -191,6 +195,15 @@ fun NewSpaceSheet(
                 singleLine = true,
                 isError = ui.folderProblem != null,
                 supportingText = problemText(ui.folderProblem),
+                // Typing a path is still possible; browsing it is the point (0.5.1).
+                trailingIcon = {
+                    IconButton(onClick = onBrowse, modifier = Modifier.size(MinTouchTarget)) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_folder),
+                            contentDescription = stringResource(R.string.space_folder_browse),
+                        )
+                    }
+                },
                 modifier = Modifier.fillMaxWidth().testTag(NEW_SPACE_FOLDER_TAG),
             )
             OutlinedTextField(

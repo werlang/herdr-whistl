@@ -315,4 +315,16 @@
     <string name="agents_notice_pinned">Fixado.</string>
     <string name="agents_notice_unpinned">Desafixado.</string>
     <string name="agent_paste">Colar</string>
+    <string name="agents_pinned">Fixado</string>
+    <string name="agents_close_title">Fechar %1$s?</string>
+    <string name="agents_close_text">Ele será parado e removido da lista. Isso não pode ser desfeito.</string>
+    <string name="agent_keyboard_show">Mostrar teclado</string>
+    <string name="agent_keyboard_hide">Ocultar teclado</string>
+    <string name="space_folder_browse">Navegar pastas</string>
+    <string name="space_folder_browse_title">Escolha uma pasta</string>
+    <string name="space_folder_browse_loading">Lendo a máquina…</string>
+    <string name="space_folder_browse_up">Subir uma pasta</string>
+    <string name="space_folder_browse_use">Usar esta pasta</string>
+    <string name="space_folder_browse_offline">A máquina não está conectada.</string>
+    <string name="space_folder_browse_unreadable">Esta pasta não pode ser lida.</string>
 </resources>

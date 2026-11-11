@@ -29,6 +29,15 @@ fun SpacesRoute(
         onClearFilter = onClearFilter,
         modifier = modifier,
     )
+    state.folderPicker?.let { picker ->
+        FolderPickerSheet(
+            ui = picker,
+            onUp = model::folderUp,
+            onEnter = model::folderDown,
+            onUse = model::useFolder,
+            onDismiss = model::closeFolderPicker,
+        )
+    }
     state.newSpace?.let { ui ->
         NewSpaceSheet(
             ui = ui,
@@ -36,6 +45,7 @@ fun SpacesRoute(
             onFolder = model::editFolder,
             onName = model::editName,
             onCreate = model::createSpace,
+            onBrowse = model::browseFolder,
             onAddMachine = {
                 model.closeNewSpace()
                 onAddMachine()

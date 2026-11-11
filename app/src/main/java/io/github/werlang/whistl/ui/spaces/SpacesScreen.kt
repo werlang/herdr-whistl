@@ -104,11 +104,6 @@ fun SpacesScreen(
         state.filterName?.let { name ->
             FilterBanner(name = name, onClear = onClearFilter)
         }
-        // Unfiltered, "no spaces yet" is about the whole app; filtered to a machine, it belongs under that machine's
-        // name, where the group is (SPEC §2.2).
-        if (state.isEmpty && state.filterName == null) {
-            EmptySpaces(Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-        }
         LazyColumn(
             modifier = Modifier.testTag(SPACES_LIST_TAG),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 88.dp),
@@ -127,6 +122,10 @@ fun SpacesScreen(
                 group.rows.forEach { row ->
                     SpaceRowView(row = row, onOpen = { onOpen(row.machineId, row.spaceId) }, onMenu = { onMenu(row.machineId, row.spaceId) })
                 }
+            }
+            // Unfiltered and empty, the message belongs under the machines it is about, not over them (0.5.1).
+            if (state.isEmpty && state.filterName == null) {
+                item { EmptySpaces(Modifier.padding(top = 4.dp)) }
             }
         }
     }

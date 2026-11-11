@@ -17,7 +17,11 @@ class GoldenUniquenessTest {
     fun everyGoldenIsARealFrameAndNoTwoShareAHash() {
         val directory = File("src/test/screenshots")
         assertTrue("the golden directory is missing: ${directory.absolutePath}", directory.isDirectory)
-        val goldens = directory.walkTopDown().filter { it.isFile && it.extension == "png" }.sortedBy { it.name }.toList()
+        // Hidden files are never goldens: copying the images off a Mac brings `._` sidecars along, and they are not frames.
+        val goldens = directory.walkTopDown()
+            .filter { it.isFile && it.extension == "png" && !it.name.startsWith(".") }
+            .sortedBy { it.name }
+            .toList()
         assertTrue("no goldens were found", goldens.isNotEmpty())
 
         val small = goldens.filter { it.length() <= MIN_BYTES }.map { "${it.name} (${it.length()} bytes)" }

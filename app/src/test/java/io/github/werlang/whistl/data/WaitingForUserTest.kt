@@ -64,7 +64,7 @@ class WaitingForUserTest {
      * the status the reducer set.
      */
     @Test
-    fun finishedAgentsSortAfterEveryLiveAgentInTheirInputOrder() {
+    fun finishedAgentsSortAfterEveryLiveAgentWhateverTheirStatus() {
         val sorted = sortForAgentsScreen(
             listOf(
                 entry("fb", TerminalState.Finished, AgentStatus.Blocked),
@@ -75,7 +75,8 @@ class WaitingForUserTest {
             ),
         )
 
-        assertEquals(listOf("lb", "lw", "li", "fb", "fi"), sorted.map { it.agent.terminal.address })
+        // Finished agents come after the live ones, even a finished one whose last status was blocked (0.5.1).
+        assertEquals(listOf("lb", "li", "lw", "fb", "fi"), sorted.map { it.agent.terminal.address })
         assertEquals(AgentStatus.Blocked, sorted[3].agent.terminal.status)
     }
 }

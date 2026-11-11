@@ -4,6 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.werlang.whistl.data.AgentsRepository
 import io.github.werlang.whistl.data.DEFAULT_FOLDER
+import io.github.werlang.whistl.data.ExecFolderBrowser
+import io.github.werlang.whistl.data.FolderBrowser
+import io.github.werlang.whistl.data.FolderListing
+import io.github.werlang.whistl.data.FolderProblem
 import io.github.werlang.whistl.data.FolderResolution
 import io.github.werlang.whistl.data.MachineAgent
 import io.github.werlang.whistl.data.MachineSpaces
@@ -224,6 +228,8 @@ data class SpacesUiState(
     val close: CloseUi?,
     /** The name of the machine the list is filtered to, or `null` when it shows every machine. */
     val filterName: String? = null,
+    /** The folder picker, or `null` when it is not open. */
+    val folderPicker: FolderPickerUi? = null,
 )
 
 /**
@@ -252,6 +258,23 @@ fun problemOf(field: SpaceField, reason: Rejection): SpaceProblem = when (field)
 }
 
 /** The New space sheet's draft, before it is shown: what the user has typed and the last Create's outcome. */
+/**
+ * The folder picker (phase 9, SPEC 2.3): where it is, what is inside, and whether the read is still running.
+ *
+ * @property path the folder being shown, absolute on the machine.
+ * @property parent the folder above it, or `null` at the root.
+ * @property folders the directories inside it.
+ * @property loading whether the read is in flight.
+ * @property problem why it could not be read, or `null`.
+ */
+data class FolderPickerUi(
+    val path: String,
+    val parent: String?,
+    val folders: List<String>,
+    val loading: Boolean = false,
+    val problem: FolderProblem? = null,
+)
+
 private data class NewDraft(
     val selectedId: String? = null,
     val folder: String = "",
@@ -274,6 +297,7 @@ private data class Sheets(
     val renameProblem: SpaceProblem? = null,
     val renameMachineOffline: Boolean = false,
     val closeFor: SpaceKey? = null,
+    val folderPicker: FolderPickerUi? = null,
 )
 
 /**
@@ -291,6 +315,7 @@ class SpacesViewModel(
     private val agents: AgentsRepository,
     private val machines: MachinesRepository,
     private val machineFilter: StateFlow<String?> = MutableStateFlow(null),
+    private val browser: FolderBrowser = ExecFolderBrowser(machines),
 ) : ViewModel() {
     private val sheets = MutableStateFlow(Sheets())
 
@@ -304,6 +329,67 @@ class SpacesViewModel(
     ) { groups, agentList, machineList, open, filter ->
         build(groups, agentList, machineList, open, filter)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SpacesUiState(emptyList(), false, true, null, null, null, null))
+
+    /**
+     * Opens the folder picker at the new space's machine home (phase 9, SPEC 2.3). Nothing happens when the sheet is
+     * closed or the machine is not chosen.
+     */
+    fun browseFolder() {
+        // The sheet starts with no machine chosen: browsing falls back to the first one, which is what the list shows.
+        val machineId = machineForPicker() ?: return
+        sheets.value = sheets.value.copy(folderPicker = FolderPickerUi("", null, emptyList(), loading = true))
+        viewModelScope.launch { show(browser.home(machineId)) }
+    }
+
+    /**
+     * @param name a folder inside the one being shown.
+     */
+    fun folderDown(name: String) {
+        val machineId = machineForPicker() ?: return
+        val path = sheets.value.folderPicker?.path ?: return
+        val next = if (path.endsWith("/")) path + name else "$path/$name" // i18n-ok: a path on the machine, never UI copy
+        sheets.value = sheets.value.copy(folderPicker = FolderPickerUi(next, null, emptyList(), loading = true))
+        viewModelScope.launch { show(browser.list(machineId, next)) }
+    }
+
+    /** Goes up one folder. */
+    fun folderUp() {
+        val machineId = machineForPicker() ?: return
+        val parent = sheets.value.folderPicker?.parent ?: return
+        sheets.value = sheets.value.copy(folderPicker = FolderPickerUi(parent, null, emptyList(), loading = true))
+        viewModelScope.launch { show(browser.list(machineId, parent)) }
+    }
+
+    /** Closes the picker without choosing anything. */
+    fun closeFolderPicker() {
+        sheets.value = sheets.value.copy(folderPicker = null)
+    }
+
+    /** Takes the folder being shown as the new space's folder. */
+    fun useFolder() {
+        val listing = sheets.value.folderPicker ?: return
+        val draft = sheets.value.newSpace ?: return
+        if (listing.loading || listing.problem != null) return
+        sheets.value = sheets.value.copy(
+            newSpace = draft.copy(folder = listing.path, folderProblem = null),
+            folderPicker = null,
+        )
+    }
+
+    /** The machine the picker reads: the one chosen in the sheet, or the first one it offers. */
+    private fun machineForPicker(): String? =
+        sheets.value.newSpace?.selectedId ?: state.value.newSpace?.machines?.firstOrNull()?.id
+
+    private fun show(listing: FolderListing) {
+        sheets.value = sheets.value.copy(
+            folderPicker = FolderPickerUi(
+                path = listing.path,
+                parent = listing.parent,
+                folders = listing.folders,
+                problem = listing.problem,
+            ),
+        )
+    }
 
     /** Opens the New space sheet, with the first machine as the one the space goes to. */
     fun openNewSpace() {
@@ -523,6 +609,7 @@ class SpacesViewModel(
             newSpace = open.newSpace?.let { newSpaceUi(it, choices) },
             menu = menuRef,
             rename = renameRef?.let { RenameUi(it, open.renameDraft, open.renameProblem, open.renameMachineOffline) },
+            folderPicker = open.folderPicker,
             close = closeRef?.let { ref ->
                 val live = agentList.count { it.machineId == ref.machineId && it.spaceId == ref.spaceId && it.agent.terminal.state == TerminalState.Live }
                 CloseUi(ref, live)

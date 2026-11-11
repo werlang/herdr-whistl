@@ -81,7 +81,8 @@ class AgentsViewModelTest {
         )
 
         assertEquals(
-            listOf("t-blocked", "t-working", "t-done", "t-idle", "t-plain", "t-finished"),
+            // What needs you first, then the live ones in the order the snapshot gave them, finished last (0.5.1).
+            listOf("t-blocked", "t-idle", "t-plain", "t-working", "t-done", "t-finished"),
             vm.state.value.rows.map { it.address },
         )
     }

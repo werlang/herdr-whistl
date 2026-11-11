@@ -7,6 +7,30 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.5.1] - 2026-11-11
+
+### Added
+
+- **Browse the machine's folders when creating a space.** The folder field has a browse button: the picker opens at the
+  machine's home, walks down into folders and up again, and "Use this folder" fills the field. The path still can be
+  typed. Reading a folder is `machine.exec` with a constant argv and the path as a positional argument, so a folder
+  name is never part of a command.
+- **A pinned agent looks pinned**: a pin next to its name, in the list and inside its space.
+
+### Changed
+
+- **The order of the agents list** is now: what needs you first (blocked or errored), then by the last change, with
+  finished agents last — inside the pinned group and inside the rest, which are still two separate groups.
+- **The keyboard's row**: show/hide the keyboard is the first icon, paste is the second, then the shortcut keys. Tapping
+  the terminal takes the keyboard too.
+- **Closing an agent asks in the app's standard confirmation sheet** — a title naming the agent, one line saying what
+  happens, Cancel and an error-coloured button — instead of a second line inside the action sheet.
+
+### Fixed
+
+- "No spaces yet" sits under the machines now, not above them.
+- The goldens' uniqueness guard ignores the `._` files a Mac copy brings along.
+
 ## [0.5.0] - 2026-11-11
 
 ### Added
@@ -179,7 +203,8 @@ Nothing yet.
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/werlang/herdr-whistl/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/werlang/herdr-whistl/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/werlang/herdr-whistl/compare/v0.3.5...v0.4.0
 [0.3.4]: https://github.com/werlang/herdr-whistl/compare/v0.3.3...v0.3.4

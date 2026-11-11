@@ -1,6 +1,7 @@
 package io.github.werlang.whistl.ui.agent
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -47,6 +49,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +65,8 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -105,6 +110,7 @@ import io.github.werlang.whistl.ui.theme.WhistlMono
 import io.github.werlang.whistl.ui.theme.WhistlTerminalText
 import kotlin.math.max
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** The test tag of the Agent screen, so a navigation test can see that it opened. */
 const val AGENT_SCREEN_TAG: String = "agent-screen"
@@ -170,9 +176,16 @@ fun AgentContent(
     onPaneSize: (Int, Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
+    // Tapping the terminal is how a terminal asks for the keyboard; the toggle in the row below does the same.
+    var keyboardRequest by remember { mutableStateOf(0) }
     Column(modifier = modifier.fillMaxSize().testTag(AGENT_SCREEN_TAG)) {
         AgentHeader(state = state, onBack = onBack, onOptions = onOpenMenu)
-        TerminalOutput(state = state, onPaneSize = onPaneSize, modifier = Modifier.weight(1f))
+        TerminalOutput(
+            state = state,
+            onPaneSize = onPaneSize,
+            onTap = { keyboardRequest++ },
+            modifier = Modifier.weight(1f),
+        )
         StatusBar(state = state)
         Column(
             modifier = Modifier
@@ -181,11 +194,19 @@ fun AgentContent(
                 .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            KeyBar(state = state, onKey = onKey)
+            // One row: show/hide the keyboard, paste, then the shortcut keys. The keyboard and the clipboard are the
+            // two things a thumb reaches for, so they sit before the keys (0.5.1).
             HintLine(state = state)
             NoticeLine(state = state)
             BlockedHint(state = state)
-            KeyboardSink(state = state, onType = onType, onBackspace = onBackspace, onPaste = onPaste)
+            ActionRow(
+                state = state,
+                onKey = onKey,
+                onType = onType,
+                onBackspace = onBackspace,
+                onPaste = onPaste,
+                keyboardRequest = keyboardRequest,
+            )
         }
     }
     if (state.menuOpen) {
@@ -311,7 +332,12 @@ private class CellMetrics(val cellWidth: Float, val lineHeight: Float)
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TerminalOutput(state: AgentUiState, onPaneSize: (Int, Int) -> Unit, modifier: Modifier) {
+private fun TerminalOutput(
+    state: AgentUiState,
+    onPaneSize: (Int, Int) -> Unit,
+    onTap: () -> Unit = {},
+    modifier: Modifier,
+) {
     val scroll = rememberScrollState()
     val description = stringResource(R.string.agent_terminal_description)
     val tokens = LocalWhistlTokens.current
@@ -355,6 +381,12 @@ private fun TerminalOutput(state: AgentUiState, onPaneSize: (Int, Int) -> Unit, 
             .fillMaxWidth()
             .background(tokens.terminal)
             .onSizeChanged { pane = it }
+            // A tap on the terminal asks for the keyboard, the way tapping a terminal does everywhere.
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onTap,
+            )
             .verticalScroll(scroll)
             .padding(TERMINAL_PADDING)
             .testTag(AGENT_OUTPUT_TAG)
@@ -551,10 +583,10 @@ private fun StatusBar(state: AgentUiState) {
 
 /** The shortcut keys in the order Settings holds them. Ctrl shows armed; a disabled bar does nothing when tapped. */
 @Composable
-private fun KeyBar(state: AgentUiState, onKey: (ShortcutKey) -> Unit) {
+private fun KeyBar(state: AgentUiState, onKey: (ShortcutKey) -> Unit, modifier: Modifier = Modifier) {
     val tokens = LocalWhistlTokens.current
     Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        modifier = modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         var index = 0
@@ -702,33 +734,78 @@ private fun BlockedHint(state: AgentUiState) {
 }
 
 /**
- * The keyboard, as a sink (phase 9, SPEC §2.5): there is no field and no Send button — what the user types goes to the
- * terminal, and the terminal draws the line. The visible field is gone; this one is 1 dp and transparent, and it exists
- * only to receive the IME.
+ * The row a thumb uses: show or hide the keyboard, paste, then the shortcut keys (phase 9, SPEC 2.5).
  *
- * The text in it is a mirror of the line the terminal has, so a deletion can be recognised and sent as DELETE. Enter is
- * `\r`, never a newline in the mirror: the shadow starts again after it.
+ * There is still no text field: the 1 dp transparent box below exists only to receive the IME, and the terminal draws
+ * the line. The keyboard is what the screen is for, so the first icon is its toggle and the second sends the phone's
+ * clipboard at the cursor.
  *
  * @param state the screen's state, for whether input is on.
+ * @param onKey called with a shortcut key from the bar.
  * @param onType called with the characters inserted.
  * @param onBackspace called with how many characters were deleted.
  * @param onPaste called with the clipboard's text.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun KeyboardSink(
+private fun ActionRow(
     state: AgentUiState,
+    onKey: (ShortcutKey) -> Unit,
     onType: (String) -> Unit,
     onBackspace: (Int) -> Unit,
     onPaste: (String) -> Unit,
+    keyboardRequest: Int = 0,
 ) {
     val clipboard = LocalClipboardManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     val focus = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
+    val imeVisible = WindowInsets.isImeVisible
     val shadow = remember { mutableStateOf("") }
-    // The keyboard is the point of the screen: it opens with it, and stays while the terminal takes input.
-    LaunchedEffect(state.canSend) {
-        if (state.canSend) runCatching { focus.requestFocus() }
+
+    fun openKeyboard() {
+        scope.launch {
+            runCatching { focus.requestFocus() }
+            keyboard?.show()
+        }
     }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    // The keyboard is the point of the screen: it opens with it, once the terminal can take input.
+    LaunchedEffect(state.canSend) { if (state.canSend) openKeyboard() }
+    LaunchedEffect(keyboardRequest) { if (keyboardRequest > 0) openKeyboard() }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(
+            onClick = {
+                if (imeVisible) {
+                    keyboard?.hide()
+                    focusManager.clearFocus()
+                } else {
+                    openKeyboard()
+                }
+            },
+            enabled = state.canSend,
+            modifier = Modifier.size(MinTouchTarget).testTag(AGENT_KEYBOARD_TOGGLE_TAG),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_keyboard),
+                contentDescription = stringResource(
+                    if (imeVisible) R.string.agent_keyboard_hide else R.string.agent_keyboard_show,
+                ),
+                tint = if (state.canSend) MaterialTheme.colorScheme.onSurface else LocalWhistlTokens.current.muted,
+            )
+        }
+        IconButton(
+            onClick = { clipboard.getText()?.text?.takeIf { it.isNotEmpty() }?.let(onPaste) },
+            enabled = state.canSend,
+            modifier = Modifier.size(MinTouchTarget),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_paste),
+                contentDescription = stringResource(R.string.agent_paste),
+                tint = if (state.canSend) MaterialTheme.colorScheme.onSurface else LocalWhistlTokens.current.muted,
+            )
+        }
         BasicTextField(
             value = shadow.value,
             onValueChange = { next ->
@@ -751,29 +828,20 @@ private fun KeyboardSink(
                 keyboardType = KeyboardType.Text,
             ),
             modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 1.dp)
+                .requiredSize(1.dp)
                 .alpha(0f)
                 .focusRequester(focus)
-                // A keyboard sink is not a control: it has no name, no size and nothing for a screen reader to land on.
+                // A keyboard sink is not a control: no name, no size, nothing for a screen reader to land on.
                 .clearAndSetSemantics { }
                 .testTag(AGENT_KEYBOARD_TAG),
         )
-        IconButton(
-            onClick = { clipboard.getText()?.text?.takeIf { it.isNotEmpty() }?.let(onPaste) },
-            enabled = state.canSend,
-            modifier = Modifier
-                .size(MinTouchTarget)
-                .border(1.dp, LocalWhistlTokens.current.field, RoundedCornerShape(12.dp)),
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_paste),
-                contentDescription = stringResource(R.string.agent_paste),
-                tint = if (state.canSend) MaterialTheme.colorScheme.onSurface else LocalWhistlTokens.current.muted,
-            )
-        }
+        KeyBar(state = state, onKey = onKey, modifier = Modifier.weight(1f))
     }
 }
+
+/** The test tag of the keyboard toggle. */
+const val AGENT_KEYBOARD_TOGGLE_TAG: String = "agent-keyboard-toggle"
+
 
 /** How many characters the keyboard's mirror keeps; the terminal owns the line, this only recognises deletions. */
 private const val SHADOW_LIMIT: Int = 256

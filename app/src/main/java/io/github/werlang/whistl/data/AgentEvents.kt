@@ -29,6 +29,8 @@ data class MachineAgent(
     val machineId: String,
     val agent: Agent,
     val space: SpaceRecord?,
+    /** When this agent last changed on this device (an event arrived, or the snapshot named it): the recency the list sorts by. */
+    val updatedMs: Long = 0L,
 ) {
     /** The matched space's id, or `null` for "No space". */
     val spaceId: String?
@@ -165,9 +167,26 @@ fun Terminal.isWaitingForUser(): Boolean = state == TerminalState.Live && status
  * @param agents the agents in any order.
  * @return the agents sorted for the screen.
  */
-fun sortForAgentsScreen(agents: List<MachineAgent>): List<MachineAgent> {
-    val (live, notLive) = agents.partition { it.agent.terminal.state == TerminalState.Live }
-    return live.sortedBy { rank(it.agent.terminal.status) } + notLive
+fun sortForAgentsScreen(agents: List<MachineAgent>): List<MachineAgent> =
+    agents.sortedWith(
+        compareBy(
+            { attentionRank(it) },
+            { if (it.agent.terminal.state == TerminalState.Live) 0 else 1 },
+            { -it.updatedMs },
+        ),
+    )
+
+/**
+ * Whether an agent wants the user's eyes, before anything else on the list: a blocked agent is waiting for an answer and
+ * an errored one is broken. Everything else is ranked the same, and the order inside a rank is recency.
+ *
+ * @param agent the agent.
+ * @return 0 for "needs you", 1 for the rest.
+ */
+fun attentionRank(agent: MachineAgent): Int = when {
+    agent.agent.terminal.isWaitingForUser() -> 0
+    agent.agent.terminal.status == AgentStatus.Error -> 0
+    else -> 1
 }
 
 /**

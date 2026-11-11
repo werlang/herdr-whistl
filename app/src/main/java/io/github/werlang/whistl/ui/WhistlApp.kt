@@ -50,6 +50,7 @@ import io.github.werlang.whistl.ui.agent.AgentScreen
 import io.github.werlang.whistl.ui.agent.AgentViewModel
 import io.github.werlang.whistl.ui.agents.AgentRow
 import io.github.werlang.whistl.ui.agents.AgentsScreen
+import io.github.werlang.whistl.ui.agents.AgentCloseSheet
 import io.github.werlang.whistl.ui.agents.AgentMenuSheet
 import io.github.werlang.whistl.ui.agents.AgentsViewModel
 import io.github.werlang.whistl.ui.machines.MachinesRoute
@@ -318,7 +319,12 @@ private fun AgentsRoute(onOpen: (AgentRow) -> Unit) {
         onDismissNotice = model::dismissNotice,
         modifier = Modifier.fillMaxSize(),
     )
-    state.menu?.let { menu ->
+    state.menu?.takeIf { it.confirmingClose }?.let { menu ->
+        // Removing an agent is a destructive question and gets the app's standard confirmation, not a second line
+        // inside the action sheet (SPEC §3).
+        AgentCloseSheet(name = menu.row.name, onConfirm = model::close, onCancel = model::cancelClose)
+    }
+    state.menu?.takeIf { !it.confirmingClose }?.let { menu ->
         AgentMenuSheet(
             menu = menu,
             onInterrupt = model::interrupt,
