@@ -15,6 +15,7 @@ import io.github.werlang.whistl.data.TerminalReach
 import io.github.werlang.whistl.data.TerminalRepository
 import io.github.werlang.whistl.data.TerminalScreen
 import io.github.werlang.whistl.domain.AgentStatus
+import io.github.werlang.whistl.domain.Keystrokes
 import io.github.werlang.whistl.domain.KeyAction
 import io.github.werlang.whistl.domain.ShortcutKey
 import io.github.werlang.whistl.domain.TerminalFrame
@@ -54,6 +55,9 @@ enum class AgentNotice {
 
     /** The last action was refused by hc for another reason. Shown until the next action. */
     Refused,
+
+    /** A typed character is not a key the core can press. Shown until the next action. */
+    NotTypable,
 }
 
 /** The status label the screen shows next to the status dot (SPEC §2.5). */
@@ -321,55 +325,52 @@ class AgentViewModel(
     }
 
     /**
-     * Sends what the user typed straight to the terminal (phase 9, SPEC §2.5). There is no text field and no Send
-     * button any more: a keystroke is a keystroke, and a blocked agent receives it forced, as Send did.
+     * Presses what the user typed, key by key (phase 10, SPEC §2.5). There is no text field and no Send button: a
+     * keystroke is a key name for `terminal.keys`, because text sent with `terminal.send` arrives with Enter and submits
+     * the line (Pablo: "eu aperto, ele envia, como se eu apertasse + enter").
      *
      * @param text the characters the keyboard produced.
      */
     fun onType(text: String) {
         if (text.isEmpty()) return
-        // Every key goes to the terminal as it is pressed, the way a keyboard on a computer does: the terminal's own
-        // line editor (or TUI) decides what a character means and echoes it (0.5.5).
-        if (text.contains('\r') || text.contains('\n')) {
-            val parts = text.split('\r', '\n')
-            val first = parts.first()
-            if (first.isNotEmpty()) write(first)
-            writeEnter()
-            val rest = parts.drop(1).joinToString("")
-            if (rest.isNotEmpty()) write(rest)
-            return
-        }
-        write(text)
+        press(Keystrokes.of(text))
     }
 
     /**
-     * Erases characters the user deleted while typing. The terminal owns the line, so a deletion on the phone has to
-     * travel as the DELETE the terminal understands.
+     * Presses DELETE, as many times as the user erased.
      *
      * @param count how many characters back.
      */
     fun onBackspace(count: Int) {
         if (count <= 0) return
-        write("\u007f".repeat(count))
+        press(Keystrokes.backspaces(count))
     }
 
     /**
-     * @param text the clipboard's text, sent as it is at the cursor.
+     * Presses each character of the clipboard, so a paste lands at the cursor without submitting the line.
+     *
+     * @param text the clipboard's text.
      */
     fun onPaste(text: String) {
         if (text.isEmpty()) return
-        write(text)
+        press(Keystrokes.of(text))
     }
 
-    private fun writeEnter() = write("\r")
-
-    private fun write(text: String) {
+    /**
+     * Presses [keystrokes] on the terminal. A blocked agent takes them forced, as Send did; what the core cannot press as
+     * a key (an accent, an emoji) is reported instead of being sent as text, which would submit the line.
+     *
+     * @param keystrokes the keys to press.
+     */
+    private fun press(keystrokes: Keystrokes) {
         val current = state.value
-        // Input is gated by whether the terminal can take typing, not by whether there is text to send: there is no field.
         if (!current.canType) return
-        val force = current.status == AgentStatus.Blocked
+        if (keystrokes.dropped.isNotEmpty()) {
+            interaction.value = interaction.value.copy(refusal = AgentNotice.NotTypable)
+        }
+        if (keystrokes.isEmpty) return
         viewModelScope.launch {
-            val outcome = handle.value?.send(text, force) ?: TerminalAction.Offline
+            val outcome = handle.value?.keys(keystrokes.names) ?: TerminalAction.Offline
             if (outcome != TerminalAction.Done) {
                 interaction.value = interaction.value.copy(refusal = outcome.notice())
             }

@@ -476,8 +476,12 @@ class AgentViewModelTest {
         vm.onType("s")
         runCurrent()
 
-        val texts = h.sent("terminal.send").map { it.params().getValue("text").jsonPrimitive.content }
-        assertEquals(listOf("l", "s"), texts)
+        val pressed = h.sent("terminal.keys").map { message ->
+            message.params().getValue("keys").jsonArray.map { it.jsonPrimitive.content }
+        }
+        assertEquals(listOf(listOf("l"), listOf("s")), pressed)
+        // A key is a key: nothing may travel as text, which the core would submit with Enter.
+        assertTrue("a key must never be sent as text", h.sent("terminal.send").isEmpty())
     }
 
     /** Enter is the carriage return, sent after whatever was typed before it. */
@@ -489,8 +493,11 @@ class AgentViewModelTest {
         vm.onType("\r")
         runCurrent()
 
-        val texts = h.sent("terminal.send").map { it.params().getValue("text").jsonPrimitive.content }
-        assertEquals(listOf("ls", "\r"), texts)
+        val pressed = h.sent("terminal.keys").map { message ->
+            message.params().getValue("keys").jsonArray.map { it.jsonPrimitive.content }
+        }
+        assertEquals(listOf(listOf("l", "s"), listOf("enter")), pressed)
+        assertTrue("Enter is a key, not a line end in text", h.sent("terminal.send").isEmpty())
     }
 
     /** Backspace is DELETE, straight to the terminal: its own line editor owns the line. */
@@ -501,7 +508,8 @@ class AgentViewModelTest {
         vm.onBackspace(2)
         runCurrent()
 
-        assertEquals("\u007f\u007f", h.sent("terminal.send").single().params().getValue("text").jsonPrimitive.content)
+        val pressed = h.sent("terminal.keys").single().params().getValue("keys").jsonArray.map { it.jsonPrimitive.content }
+        assertEquals(listOf("backspace", "backspace"), pressed)
     }
 
 
@@ -513,8 +521,9 @@ class AgentViewModelTest {
         vm.onType("y")
         runCurrent()
 
-        val send = h.sent("terminal.send").single()
-        assertEquals(true, send.params().getValue("force").jsonPrimitive.content.toBoolean())
+        // A blocked agent takes the key at once: `terminal.keys` does not wait for the program to be idle, and unlike
+        // `terminal.send` it does not submit the line either.
+        assertEquals(listOf("y"), h.sent("terminal.keys").single().keyNames())
     }
 
     /** A deletion travels as DELETE, one per erased character: the terminal owns the line, not the phone. */
@@ -525,7 +534,8 @@ class AgentViewModelTest {
         vm.onBackspace(2)
         runCurrent()
 
-        assertEquals("\u007f\u007f", h.sent("terminal.send").single().params().getValue("text").jsonPrimitive.content)
+        val pressed = h.sent("terminal.keys").single().params().getValue("keys").jsonArray.map { it.jsonPrimitive.content }
+        assertEquals(listOf("backspace", "backspace"), pressed)
     }
 
     /** Pasting sends the clipboard's text as it is, at the cursor. */
@@ -536,7 +546,9 @@ class AgentViewModelTest {
         vm.onPaste("git status")
         runCurrent()
 
-        assertEquals("git status", h.sent("terminal.send").single().params().getValue("text").jsonPrimitive.content)
+        val pressed = h.sent("terminal.keys").single().params().getValue("keys").jsonArray.map { it.jsonPrimitive.content }
+        assertEquals("git status".map { if (it == ' ') "space" else it.toString() }, pressed)
+        assertTrue("a paste must not submit the line", h.sent("terminal.send").isEmpty())
     }
 
     /** Nothing is sent while the terminal cannot take input. */

@@ -713,6 +713,7 @@ private fun NoticeLine(state: AgentUiState) {
         AgentNotice.Offline -> stringResource(R.string.agent_notice_offline, state.machineName)
         AgentNotice.Gone -> stringResource(R.string.agent_notice_gone)
         AgentNotice.Finished -> stringResource(R.string.agent_notice_finished)
+        AgentNotice.NotTypable -> stringResource(R.string.agent_notice_not_typable)
         AgentNotice.Blocked -> stringResource(R.string.agent_notice_blocked)
         AgentNotice.Refused -> stringResource(R.string.agent_notice_refused)
     }

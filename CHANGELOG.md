@@ -7,6 +7,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.5.6] - 2026-11-11
+
+### Fixed
+
+- **Every key arrived as if Enter had been pressed with it.** The core's `terminal.send` pastes text **and then submits it
+  with Enter** — its own schema says so — so sending one character per keystroke pressed Enter once per character. Keys
+  now travel as `terminal.keys` names (`a`, `enter`, `tab`, `space`, `backspace`, `esc`), which press the key and nothing
+  else. Measured on hc 0.1.19: `keys a` + `keys b` + `keys enter` reaches the program as `ab\n`; `send a` + `send b`
+  reaches it as `a\nb\n`.
+- **A character the core cannot press is reported, not sent.** `terminal.keys` takes named keys and a single printable
+  ASCII character; an accent or an emoji has no key name, and sending it as text would submit the line, so it is dropped
+  with a notice instead of corrupting what was typed.
+
 ## [0.5.5] - 2026-11-11
 
 ### Changed
@@ -250,7 +263,8 @@ Nothing yet.
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.5...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.6...HEAD
+[0.5.6]: https://github.com/werlang/herdr-whistl/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/werlang/herdr-whistl/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/werlang/herdr-whistl/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/werlang/herdr-whistl/compare/v0.5.2...v0.5.3

@@ -327,4 +327,5 @@
     <string name="space_folder_browse_use">Usar esta pasta</string>
     <string name="space_folder_browse_offline">A máquina não está conectada.</string>
     <string name="space_folder_browse_unreadable">Esta pasta não pode ser lida.</string>
+    <string name="agent_notice_not_typable">O core não digita este caractere como tecla: use o botão de colar.</string>
 </resources>
