@@ -93,6 +93,8 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
@@ -864,7 +866,11 @@ private fun ActionRow(
     // The field always holds one zero-width sentinel character, so the IME always has something to delete. An empty
     // field swallows backspace — the IME has nothing to remove, so it never reports it — and that is why text already on
     // the terminal's line, which was not typed through this field, could not be erased (0.5.8).
-    val shadow = remember { mutableStateOf(KeyboardSink.empty) }
+    // TextFieldValue, not String: the cursor has to sit after the sentinel, and a reset value would otherwise leave the
+    // caret at the start, where backspace deletes nothing (0.5.9).
+    val shadow = remember {
+        mutableStateOf(TextFieldValue(KeyboardSink.empty, TextRange(KeyboardSink.empty.length)))
+    }
 
     fun openKeyboard() {
         scope.launch {
@@ -902,19 +908,22 @@ private fun ActionRow(
         BasicTextField(
             value = shadow.value,
             onValueChange = { next ->
-                val edit = KeyboardSink.read(shadow.value, next)
+                val edit = KeyboardSink.read(shadow.value.text, next.text)
                 edit.typed?.let(onType)
                 if (edit.backspaces > 0) onBackspace(edit.backspaces)
-                shadow.value = KeyboardSink.empty
+                val kept = KeyboardSink.keep(next.text)
+                shadow.value = TextFieldValue(kept, TextRange(kept.length))
             },
             enabled = state.canType,
             textStyle = LocalTextStyle.current.copy(color = Color.Transparent),
             cursorBrush = SolidColor(Color.Transparent),
+            // A terminal takes the keys it is given: no auto-capitalisation, no smart punctuation, no space after a
+            // period. Ascii is what tells the IME not to help (0.5.9).
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.None,
                 autoCorrectEnabled = false,
                 imeAction = ImeAction.None,
-                keyboardType = KeyboardType.Text,
+                keyboardType = KeyboardType.Ascii,
             ),
             modifier = Modifier
                 .requiredSize(1.dp)

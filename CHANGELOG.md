@@ -7,6 +7,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.5.9] - 2026-11-11
+
+### Fixed
+
+- **Backspace erased only the last key.** Resetting the field to a bare sentinel left the caret before it, so every
+  backspace after the first deleted nothing. The field now keeps what was typed (up to 64 characters) with the sentinel
+  last and the caret after it: each press eats the sentinel, reports the deletion, and the terminal erases its own line —
+  proved on the emulator by typing `abc`, deleting it, and then deleting text that was already in the prompt.
+- **The keyboard no longer helps.** The field is typed as ASCII, so no automatic capitalisation, no smart punctuation and
+  no space after a period: a terminal takes the keys it is given.
+
 ## [0.5.8] - 2026-11-11
 
 ### Fixed
@@ -302,7 +313,8 @@ Nothing yet.
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.8...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.9...HEAD
+[0.5.9]: https://github.com/werlang/herdr-whistl/compare/v0.5.8...v0.5.9
 [0.5.8]: https://github.com/werlang/herdr-whistl/compare/v0.5.7...v0.5.8
 [0.5.7]: https://github.com/werlang/herdr-whistl/compare/v0.5.6...v0.5.7
 [0.5.6]: https://github.com/werlang/herdr-whistl/compare/v0.5.5...v0.5.6
