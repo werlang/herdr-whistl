@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.data
 
+import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.HcException
 import io.github.werlang.whistl.core.rpc.TransportLost
 import kotlinx.coroutines.CancellationException
@@ -30,7 +31,7 @@ data class FolderListing(
     val problem: FolderProblem? = null,
 )
 
-/** Reads a machine's directories, for choosing a space's folder without typing it (phase 9, SPEC §2.3). */
+/** Reads a machine's directories, for choosing a space's folder without typing it (phase 9, SPEC 2.3). */
 interface FolderBrowser {
     /**
      * Starts at the machine's home folder.
@@ -42,7 +43,7 @@ interface FolderBrowser {
 
     /**
      * @param machineId the machine to read.
-     * @param path an absolute path on that machine.
+     * @param path an absolute path on that machine, or one starting with `~`.
      * @return the folder and its subfolders.
      */
     suspend fun list(machineId: String, path: String): FolderListing
@@ -64,10 +65,9 @@ class ExecFolderBrowser(private val machines: MachinesRepository) : FolderBrowse
         }
         try {
             val client = lease.client() ?: return FolderListing(DEFAULT_HOME, null, emptyList(), FolderProblem.Offline)
-            // `cd -- "$1" && pwd` resolves `~` and symlinks; the folder travels as a positional argument, quoted.
-            val resolved = client.machineExec(listOf("sh", "-lc", RESOLVE, "sh", "~"))
-            if (resolved.code != 0) return FolderListing(DEFAULT_HOME, null, emptyList(), FolderProblem.Unreadable)
-            return listOn(client, resolved.stdout.trim().ifEmpty { DEFAULT_HOME })
+            val homePath = expandHome(client, DEFAULT_HOME)
+                ?: return FolderListing(DEFAULT_HOME, null, emptyList(), FolderProblem.Unreadable)
+            return listOn(client, homePath)
         } catch (e: TransportLost) {
             return FolderListing(DEFAULT_HOME, null, emptyList(), FolderProblem.Offline)
         } catch (e: CancellationException) {
@@ -87,7 +87,9 @@ class ExecFolderBrowser(private val machines: MachinesRepository) : FolderBrowse
         }
         try {
             val client = lease.client() ?: return FolderListing(path, null, emptyList(), FolderProblem.Offline)
-            return listOn(client, path)
+            val absolute = expandHome(client, path)
+                ?: return FolderListing(path, null, emptyList(), FolderProblem.Unreadable)
+            return listOn(client, absolute)
         } catch (e: TransportLost) {
             return FolderListing(path, null, emptyList(), FolderProblem.Offline)
         } catch (e: CancellationException) {
@@ -99,7 +101,25 @@ class ExecFolderBrowser(private val machines: MachinesRepository) : FolderBrowse
         }
     }
 
-    private suspend fun listOn(client: io.github.werlang.whistl.core.rpc.HcClient, path: String): FolderListing {
+    /**
+     * Expands a leading `~` with the machine's own `$HOME`. A shell does not expand a tilde that is already inside a
+     * variable, which is what made the home folder unreadable on the device: `cd "$1"` with `$1="~"` looks for a
+     * directory literally called `~`. The script is fixed and takes no arguments.
+     *
+     * @param client the live connection.
+     * @param path an absolute path, `~`, or `~/something`.
+     * @return the absolute path, or `null` when the machine cannot say what its home is.
+     */
+    private suspend fun expandHome(client: HcClient, path: String): String? {
+        if (path != "~" && !path.startsWith("~/")) return path
+        val home = client.machineExec(listOf("sh", "-lc", PRINT_HOME))
+        if (home.code != 0) return null
+        val root = home.stdout.trim()
+        if (root.isEmpty()) return null
+        return if (path == "~") root else "$root/${path.removePrefix("~/")}" // i18n-ok: a path on the machine
+    }
+
+    private suspend fun listOn(client: HcClient, path: String): FolderListing {
         // `-p` marks the directories with a `/`, so the picker never offers a file as a folder.
         val listed = client.machineExec(listOf("ls", "-1Ap", "--", path))
         if (listed.code != 0) return FolderListing(path, parentOf(path), emptyList(), FolderProblem.Unreadable)
@@ -123,7 +143,7 @@ class ExecFolderBrowser(private val machines: MachinesRepository) : FolderBrowse
     private companion object {
         const val DEFAULT_HOME = "~"
 
-        /** Fixed script; the folder arrives as `$1` and is always quoted. */
-        const val RESOLVE = "cd -- \"$1\" 2>/dev/null && pwd"
+        /** Fixed script, no arguments: it only prints the machine's home. */
+        const val PRINT_HOME = "printf %s \"\$HOME\""
     }
 }

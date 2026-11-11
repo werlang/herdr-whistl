@@ -38,7 +38,8 @@ fun SpacesRoute(
             onDismiss = model::closeFolderPicker,
         )
     }
-    state.newSpace?.let { ui ->
+    // One sheet at a time: while the picker is open it stands in front of the sheet it fills.
+    state.newSpace?.takeIf { state.folderPicker == null }?.let { ui ->
         NewSpaceSheet(
             ui = ui,
             onPick = model::pickMachine,

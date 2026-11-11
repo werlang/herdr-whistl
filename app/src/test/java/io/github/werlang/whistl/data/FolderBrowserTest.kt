@@ -61,7 +61,7 @@ class FolderBrowserTest {
     @Test
     fun homeResolvesAndListsOnlyDirectories() = runTest {
         val pipe = scriptedPipe(
-            Exchange("resolve home", request("sh", "-lc", "cd -- \"$1\" 2>/dev/null && pwd", "sh", "~"), reply(0, "/home/pablo\n")),
+            Exchange("print home", request("sh", "-lc", "printf %s \"\$HOME\""), reply(0, "/home/pablo\n")),
             Exchange(
                 "list home",
                 request("ls", "-1Ap", "--", "/home/pablo"),

@@ -7,6 +7,22 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.5.2] - 2026-11-11
+
+### Fixed
+
+- **The folder picker could not read the home folder.** `cd -- "$1"` with the path `~` looks for a directory literally
+  named `~`, because a shell does not expand a tilde that is already inside a variable — the picker opened on "~" and
+  said it could not be read. The home comes from `printf %s "$HOME"` now, and a typed `~/…` path is expanded the same
+  way before it is listed. Reproduced and verified against the machine: `cd -- "~"` fails, `printf %s "$HOME"` does not.
+- **The keyboard never came up in the agent.** The invisible field was enabled only while there was text to send, which
+  is never, so it could not take focus; the paste button had the same gate. Both follow the terminal's ability to take
+  typing now, and the IME is asked for one frame after the focus lands instead of in the same frame.
+- **The terminal did not scroll.** A tap handler added for the keyboard sat in front of the scroll: it ate the drag.
+  It is gone; the keyboard has its own button.
+- **"Choose a folder" could do nothing** when the New space sheet had not emitted its state yet: the machine now comes
+  from the machines themselves, and a picker with no machine says why instead of staying silent.
+
 ## [0.5.1] - 2026-11-11
 
 ### Added
@@ -203,7 +219,8 @@ Nothing yet.
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/werlang/herdr-whistl/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/werlang/herdr-whistl/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/werlang/herdr-whistl/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/werlang/herdr-whistl/compare/v0.3.5...v0.4.0

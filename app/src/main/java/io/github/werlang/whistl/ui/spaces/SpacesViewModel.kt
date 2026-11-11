@@ -336,7 +336,7 @@ class SpacesViewModel(
      */
     fun browseFolder() {
         // The sheet starts with no machine chosen: browsing falls back to the first one, which is what the list shows.
-        val machineId = machineForPicker() ?: return
+        val machineId = machineForPicker() ?: return openFolderProblem(FolderProblem.Offline)
         sheets.value = sheets.value.copy(folderPicker = FolderPickerUi("", null, emptyList(), loading = true))
         viewModelScope.launch { show(browser.home(machineId)) }
     }
@@ -376,9 +376,21 @@ class SpacesViewModel(
         )
     }
 
-    /** The machine the picker reads: the one chosen in the sheet, or the first one it offers. */
+    /**
+     * The machine the picker reads: the one chosen in the sheet, otherwise the first one, read from the machines
+     * themselves so a sheet that has not emitted its first state yet cannot leave the button doing nothing (0.5.2).
+     */
     private fun machineForPicker(): String? =
-        sheets.value.newSpace?.selectedId ?: state.value.newSpace?.machines?.firstOrNull()?.id
+        sheets.value.newSpace?.selectedId
+            ?: state.value.newSpace?.selectedId
+            ?: state.value.newSpace?.machines?.firstOrNull()?.id
+            ?: machines.machines().value.firstOrNull()?.id
+
+    /** Opens the picker already saying why it cannot read anything, instead of a button that does nothing. */
+    private fun openFolderProblem(problem: FolderProblem) {
+        if (sheets.value.newSpace == null) return
+        sheets.value = sheets.value.copy(folderPicker = FolderPickerUi("", null, emptyList(), problem = problem))
+    }
 
     private fun show(listing: FolderListing) {
         sheets.value = sheets.value.copy(

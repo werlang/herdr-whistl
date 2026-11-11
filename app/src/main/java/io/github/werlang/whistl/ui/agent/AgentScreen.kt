@@ -50,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -381,12 +382,6 @@ private fun TerminalOutput(
             .fillMaxWidth()
             .background(tokens.terminal)
             .onSizeChanged { pane = it }
-            // A tap on the terminal asks for the keyboard, the way tapping a terminal does everywhere.
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onTap,
-            )
             .verticalScroll(scroll)
             .padding(TERMINAL_PADDING)
             .testTag(AGENT_OUTPUT_TAG)
@@ -767,11 +762,13 @@ private fun ActionRow(
     fun openKeyboard() {
         scope.launch {
             runCatching { focus.requestFocus() }
+            // The IME is asked for after the focus has been applied: asking in the same frame is a race the device loses.
+            withFrameNanos { }
             keyboard?.show()
         }
     }
     // The keyboard is the point of the screen: it opens with it, once the terminal can take input.
-    LaunchedEffect(state.canSend) { if (state.canSend) openKeyboard() }
+    LaunchedEffect(state.canType) { if (state.canType) openKeyboard() }
     LaunchedEffect(keyboardRequest) { if (keyboardRequest > 0) openKeyboard() }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -784,7 +781,7 @@ private fun ActionRow(
                     openKeyboard()
                 }
             },
-            enabled = state.canSend,
+            enabled = state.canType,
             modifier = Modifier.size(MinTouchTarget).testTag(AGENT_KEYBOARD_TOGGLE_TAG),
         ) {
             Icon(
@@ -797,7 +794,7 @@ private fun ActionRow(
         }
         IconButton(
             onClick = { clipboard.getText()?.text?.takeIf { it.isNotEmpty() }?.let(onPaste) },
-            enabled = state.canSend,
+            enabled = state.canType,
             modifier = Modifier.size(MinTouchTarget),
         ) {
             Icon(
@@ -818,7 +815,7 @@ private fun ActionRow(
                 // Enter starts a new line on the terminal: the mirror forgets the finished one.
                 shadow.value = if (added.contains('\n')) "" else next.takeLast(SHADOW_LIMIT)
             },
-            enabled = state.canSend,
+            enabled = state.canType,
             textStyle = LocalTextStyle.current.copy(color = Color.Transparent),
             cursorBrush = SolidColor(Color.Transparent),
             keyboardOptions = KeyboardOptions(
