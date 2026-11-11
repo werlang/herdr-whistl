@@ -102,7 +102,11 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    a node of its own, so a screen reader moves line by line (phase 7 r6).
    Output that outruns the redraw never shows half an update: every frame is one
    state of the emulator, redrawn at most every 33 ms.
-   Typed text is sent to the terminal (Send = text + Enter). `Ctrl` is a
+   There is no text field and no Send button: the keyboard writes to the terminal
+   directly. A 1 dp transparent field holds focus only to receive the IME, and
+   keeps a mirror of the line the terminal has, so a deletion is recognised and
+   sent as DELETE and Enter travels as a carriage return. A paste button sends the
+   phone's clipboard at the cursor. `Ctrl` is a
    sticky modifier: armed, the next bar key is sent with Ctrl (`ctrl+<key>`).
    With Ctrl armed and the field empty, one typed letter is sent as its Ctrl
    combination (`s` → `ctrl+s`), is not inserted, and Ctrl disarms; a digit or
