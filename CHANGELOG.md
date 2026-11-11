@@ -7,6 +7,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.5.3] - 2026-11-11
+
+### Fixed
+
+- **Typing sent one command per key.** Every character was its own `terminal.send`, and a TUI redrew between them: in
+  opencode the line stuttered and the agent answered keystroke by keystroke. A burst of typing now goes as one command
+  after a 40 ms pause; Enter sends what came before it and the carriage return, in order, without waiting.
+
 ## [0.5.2] - 2026-11-11
 
 ### Fixed
@@ -219,7 +227,8 @@ Nothing yet.
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/werlang/herdr-whistl/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/werlang/herdr-whistl/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/werlang/herdr-whistl/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/werlang/herdr-whistl/compare/v0.4.0...v0.5.0

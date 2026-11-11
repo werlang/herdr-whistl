@@ -466,17 +466,33 @@ class AgentViewModelTest {
         assertEquals(AgentNotice.Gone, vm.state.value.notice)
         assertFalse("nothing can be typed into a terminal that is gone", vm.state.value.canType)
     }
-    /** Typed text goes straight to the terminal: there is no field, so a keystroke is a `terminal.send`. */
+    /** A burst of typing is one command, not one round trip per key: the agent is a TUI and stuttered on every keystroke. */
     @Test
-    fun typedTextGoesStraightToTheTerminal() = runTest {
+    fun aBurstOfTypingIsOneCommand() = runTest {
         val (h, vm, _) = openAgent()
 
         vm.onType("l")
         vm.onType("s")
+        vm.onType(" ")
+        vm.onType("-")
+        advanceTimeBy(60)
         runCurrent()
 
         val texts = h.sent("terminal.send").map { it.params().getValue("text").jsonPrimitive.content }
-        assertEquals(listOf("l", "s"), texts)
+        assertEquals(listOf("ls -"), texts)
+    }
+
+    /** Enter sends what came before it and the carriage return in order, without waiting for the pause. */
+    @Test
+    fun enterFlushesTheLineAndPressesIt() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onType("ls")
+        vm.onType("\r")
+        runCurrent()
+
+        val texts = h.sent("terminal.send").map { it.params().getValue("text").jsonPrimitive.content }
+        assertEquals(listOf("ls", "\r"), texts)
     }
 
     /** A blocked agent takes the keystroke forced, the same way Send delivered text. */
@@ -485,6 +501,7 @@ class AgentViewModelTest {
         val (h, vm, _) = openAgent(status = "blocked")
 
         vm.onType("y")
+        advanceTimeBy(60)
         runCurrent()
 
         val send = h.sent("terminal.send").single()

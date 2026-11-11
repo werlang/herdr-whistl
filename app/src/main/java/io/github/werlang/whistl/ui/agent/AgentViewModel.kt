@@ -24,6 +24,8 @@ import io.github.werlang.whistl.domain.ctrlCombination
 import io.github.werlang.whistl.domain.letterCombination
 import io.github.werlang.whistl.ui.agents.displayName
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -326,7 +328,23 @@ class AgentViewModel(
      */
     fun onType(text: String) {
         if (text.isEmpty()) return
-        write(text)
+        // A burst of typing is one command, not one per key: the agent is a TUI, and a round trip per character made it
+        // stutter (0.5.3).
+        val newline = text.indexOfFirst { it == '\r' || it == '\n' }
+        if (newline < 0) {
+            buffer.append(text)
+            scheduleFlush()
+            return
+        }
+        // What came before the first Enter travels with it, so the line arrives complete and in order.
+        buffer.append(text.take(newline))
+        flush()
+        writeEnter()
+        val rest = text.drop(newline + 1).filterNot { it == '\r' || it == '\n' }
+        if (rest.isNotEmpty()) {
+            buffer.append(rest)
+            scheduleFlush()
+        }
     }
 
     /**
@@ -337,6 +355,7 @@ class AgentViewModel(
      */
     fun onBackspace(count: Int) {
         if (count <= 0) return
+        flush()
         write("\u007f".repeat(count))
     }
 
@@ -345,8 +364,35 @@ class AgentViewModel(
      */
     fun onPaste(text: String) {
         if (text.isEmpty()) return
+        flush()
         write(text)
     }
+
+    /** What the user typed since the last flush, sent as one command (0.5.3). */
+    private val buffer = StringBuilder()
+
+    /** The flush that is waiting for the typing to pause. */
+    private var flushJob: Job? = null
+
+    private fun scheduleFlush() {
+        flushJob?.cancel()
+        flushJob = viewModelScope.launch {
+            delay(TYPE_FLUSH_MS)
+            flush()
+        }
+    }
+
+    /** Sends whatever was typed, at once. Order matters, so anything waiting goes before what follows it. */
+    private fun flush() {
+        flushJob?.cancel()
+        flushJob = null
+        if (buffer.isEmpty()) return
+        val text = buffer.toString()
+        buffer.clear()
+        write(text)
+    }
+
+    private fun writeEnter() = write("\r")
 
     private fun write(text: String) {
         val current = state.value
@@ -359,6 +405,11 @@ class AgentViewModel(
                 interaction.value = interaction.value.copy(refusal = outcome.notice())
             }
         }
+    }
+
+    /** How long a burst of typing waits before it goes as one command. */
+    private companion object {
+        const val TYPE_FLUSH_MS: Long = 40L
     }
 
     /** Interrupt: Ctrl+C through `terminal.interrupt`. */
