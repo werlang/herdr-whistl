@@ -10,7 +10,7 @@ class ShortcutKeyTest {
     @Test
     fun keysAreExactlyTheSpecSet() {
         assertEquals(
-            listOf("Esc", "Tab", "Ctrl", "↑", "↓", "←", "→", "Enter", "^C", "^D", "Home", "End", "PgUp", "PgDn", "/", "|", "~", "-", "Paste"),
+            listOf("Esc", "Tab", "Ctrl", "↑", "↓", "←", "→", "Enter", "^C", "^D", "Home", "End", "PgUp", "PgDn", "/", "|", "~", "-", "⌫"),
             ShortcutKey.entries.map { it.label },
         )
     }
@@ -19,7 +19,7 @@ class ShortcutKeyTest {
     @Test
     fun defaultBarIsTheSpecDefault() {
         assertEquals(
-            listOf("Esc", "Tab", "Ctrl", "↑", "↓", "←", "→", "Enter"),
+            listOf("Esc", "⌫", "Tab", "Ctrl", "↑", "↓", "←", "→", "Enter"),
             ShortcutBar.DEFAULT.map { it.label },
         )
     }

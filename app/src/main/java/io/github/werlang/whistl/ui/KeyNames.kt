@@ -30,5 +30,5 @@ fun keyNameRes(key: ShortcutKey): Int = when (key) {
     ShortcutKey.PIPE -> R.string.key_pipe
     ShortcutKey.TILDE -> R.string.key_tilde
     ShortcutKey.MINUS -> R.string.key_dash
-    ShortcutKey.PASTE -> R.string.key_paste
+    ShortcutKey.DELETE -> R.string.key_delete
 }

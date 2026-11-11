@@ -7,6 +7,27 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.6.2] - 2026-11-11
+
+### Added
+
+- **A ⌫ key on the bar.** The field's own backspace only edits what was typed there; the program's prompt is the
+  program's line, and erasing it needs DELETE from a keyboard. The new key sends exactly that.
+- **The hold gesture is taught once.** The first line a user sends says, in the status bar for two seconds, that holding
+  Send presses the text as keys — the visible half of the button was all anyone could find.
+
+### Fixed
+
+- **Ctrl takes the next letter even with text in the field.** The combination only applied to an empty field, so with a
+  half-written line `Ctrl` then `x` inserted an `x` instead of pressing `ctrl+x`. What the Ctrl press takes is the
+  character just typed, and the line already there is left alone.
+- **The Agents list shows only agents a space claims.** The unfiltered list was filled with bare terminals — probes and
+  anything started outside the app — that no space holds and nobody opened from here.
+
+### Removed
+
+- **Paste.** The clipboard key is out of the bar and out of Settings for this iteration.
+
 ## [0.6.1] - 2026-11-11
 
 ### Added
@@ -339,7 +360,8 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/werlang/herdr-whistl/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/werlang/herdr-whistl/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/werlang/herdr-whistl/compare/v0.5.9...v0.6.0
 [0.5.9]: https://github.com/werlang/herdr-whistl/compare/v0.5.8...v0.5.9

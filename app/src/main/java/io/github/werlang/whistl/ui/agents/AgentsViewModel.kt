@@ -158,11 +158,15 @@ class AgentsViewModel(
         filter,
         sheet,
     ) { list, machineList, blocked, selected, (menu, lastNotice, pinnedKeys) ->
+        // Only terminals a space claims: a bare terminal — one started outside the app — is not an agent of this app, and
+        // the unfiltered list used to drown in them (0.6.2). The label is what the app writes when it opens a terminal in a
+        // space, so it also keeps a terminal whose space record was removed.
+        val bound = list.filter { it.space != null || it.agent.spaceId != null }
         AgentsUiState(
             chips = AgentsFilter.entries.map { chip ->
-                FilterChip(filter = chip, count = list.count { chip.matches(it) }, selected = chip == selected)
+                FilterChip(filter = chip, count = bound.count { chip.matches(it) }, selected = chip == selected)
             },
-            rows = sortWithPinned(list.filter { selected.matches(it) }, pinnedKeys).map { it.toRow(machineList, pinnedKeys) },
+            rows = sortWithPinned(bound.filter { selected.matches(it) }, pinnedKeys).map { it.toRow(machineList, pinnedKeys) },
             blockedCount = blocked,
             menu = menu,
             notice = lastNotice,

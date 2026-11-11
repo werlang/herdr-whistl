@@ -12,7 +12,8 @@ fun terminalJson(
     address: String,
     state: String = "live",
     status: String? = null,
-    labels: Map<String, String> = emptyMap(),
+    // A space label by default: the Agents list only shows terminals a space holds (0.6.2).
+    labels: Map<String, String> = mapOf("whistl.space" to "web"),
     cwd: String? = null,
     title: String = "",
     keep: Boolean = false,

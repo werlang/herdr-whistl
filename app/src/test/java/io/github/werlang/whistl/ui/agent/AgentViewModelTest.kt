@@ -132,7 +132,8 @@ class AgentViewModelTest {
 
         val send = h.sent("terminal.send").single()
         assertEquals(true, send.params().getValue("force").jsonPrimitive.content.toBoolean())
-        assertNull(vm.state.value.notice)
+        // The first send also teaches the hold gesture; it is a hint, not a failure (0.6.2).
+        assertEquals(AgentNotice.HoldToSendKeys, vm.state.value.notice)
     }
 
     /**
@@ -171,7 +172,7 @@ class AgentViewModelTest {
 
     /** Ctrl armed with text in the field, then a typed letter: it is inserted, nothing is sent, and Ctrl stays armed. */
     @Test
-    fun ctrlWithTextInTheFieldInsertsTheLetterAndStaysArmed() = runTest {
+    fun ctrlTakesTheNextLetterEvenWithTextInTheField() = runTest {
         val (h, vm, _) = openAgent()
 
         vm.onInputChange(TextFieldValue("l"))
@@ -179,9 +180,10 @@ class AgentViewModelTest {
         vm.onInputChange(TextFieldValue("ls"))
         runCurrent()
 
-        assertEquals("ls", vm.state.value.input.text)
-        assertTrue(vm.state.value.ctrlArmed)
-        assertTrue(h.sent("terminal.keys").isEmpty())
+        // The `s` is the combination, not a character of the line: the field keeps what was already typed (0.6.2).
+        assertEquals("l", vm.state.value.input.text)
+        assertEquals(listOf("ctrl+s"), h.sent("terminal.keys").single().keyNames())
+        assertFalse(vm.state.value.ctrlArmed)
     }
 
     /** Ctrl armed on an empty field, then a pasted word (more than one character): it is inserted, and Ctrl stays armed. */

@@ -58,6 +58,9 @@ enum class AgentNotice {
 
     /** A typed character is not a key the core can press. Shown until the next action. */
     NotTypable,
+
+    /** Shown once, after the first line is sent: holding Send presses the text as keys (0.6.2). */
+    HoldToSendKeys,
 }
 
 /** The status label the screen shows next to the status dot (SPEC §2.5). */
@@ -156,6 +159,8 @@ private data class Interaction(
     val menuOpen: Boolean = false,
     val confirmStop: Boolean = false,
     val closed: Boolean = false,
+    /** Whether the hold-to-send hint has already been shown for this screen (0.6.2). */
+    val taughtHold: Boolean = false,
 )
 
 /**
@@ -268,15 +273,18 @@ class AgentViewModel(
      */
     fun onInputChange(newValue: TextFieldValue) {
         val own = interaction.value
-        val combination = if (own.ctrlArmed && state.value.canType && own.input.text.isEmpty() && newValue.text.length == 1) {
-            letterCombination(newValue.text[0])
-        } else {
-            null
+        // Ctrl takes the character that was just typed, whatever is already in the field: with a half-written line, `Ctrl`
+        // then `x` used to insert an `x` instead of pressing `ctrl+x` (0.6.2).
+        val added = newValue.text.removePrefix(own.input.text)
+        val combination = when {
+            !own.ctrlArmed || !state.value.canType -> null
+            added.length == 1 -> letterCombination(added[0])
+            else -> null
         }
         if (combination == null) {
             interaction.value = own.copy(input = newValue)
         } else {
-            val letter = newValue.text[0].uppercaseChar().toString()
+            val letter = added[0].uppercaseChar().toString()
             interaction.value = own.copy(ctrlArmed = false, lastKey = SentKey(letter, ctrl = true))
             sendKeys(listOf(combination))
         }
@@ -293,8 +301,7 @@ class AgentViewModel(
         val own = interaction.value
         when (val action = key.action()) {
             KeyAction.Modifier -> interaction.value = own.copy(ctrlArmed = !own.ctrlArmed)
-            // The clipboard belongs to the screen; the bar reads it and calls onPaste.
-            KeyAction.Paste -> Unit
+
             is KeyAction.Insert -> interaction.value = own.copy(
                 input = own.input.insertAtCursor(action.char.toString()),
                 ctrlArmed = false,
@@ -331,7 +338,13 @@ class AgentViewModel(
         viewModelScope.launch {
             val outcome = handle.value?.send(text, force) ?: TerminalAction.Offline
             when (outcome) {
-                TerminalAction.Done -> interaction.value = interaction.value.copy(input = TextFieldValue(""), refusal = null)
+                TerminalAction.Done -> {
+                    val now = interaction.value
+                    // The first line a user sends teaches the gesture nobody would guess: sending is the visible half of
+                    // the button (0.6.2).
+                    val hint = if (own.taughtHold) null else AgentNotice.HoldToSendKeys
+                    interaction.value = now.copy(input = TextFieldValue(""), refusal = hint, taughtHold = true)
+                }
                 else -> interaction.value = interaction.value.copy(refusal = outcome.notice())
             }
         }

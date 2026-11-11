@@ -163,7 +163,6 @@ fun AgentScreen(
         onInputChange = viewModel::onInputChange,
         onSend = viewModel::onSend,
         onSendKeys = viewModel::onSendKeys,
-        onPaste = viewModel::onPaste,
         onOpenMenu = viewModel::onOpenMenu,
         onCloseMenu = viewModel::onCloseMenu,
         onInterrupt = viewModel::onInterrupt,
@@ -185,7 +184,6 @@ fun AgentContent(
     onInputChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit,
     onSendKeys: () -> Unit,
-    onPaste: (String) -> Unit,
     onOpenMenu: () -> Unit,
     onCloseMenu: () -> Unit,
     onInterrupt: () -> Unit,
@@ -197,8 +195,6 @@ fun AgentContent(
 ) {
     // Tapping the terminal asks for the keyboard, which is the only way in while the field is the way in (0.6.0).
     var keyboardRequest by remember { mutableStateOf(0) }
-    val clipboard = LocalClipboardManager.current
-    val clipboardText = clipboard.getText()?.text.orEmpty()
     Column(modifier = modifier.fillMaxSize().testTag(AGENT_SCREEN_TAG)) {
         AgentHeader(state = state, onBack = onBack, onOptions = onOpenMenu)
         TerminalOutput(
@@ -225,11 +221,7 @@ fun AgentContent(
                 onSendKeys = onSendKeys,
                 keyboardRequest = keyboardRequest,
             )
-            KeyBar(
-                state = state,
-                onKey = onKey,
-                onPaste = { onPaste(clipboardText) },
-            )
+            KeyBar(state = state, onKey = onKey)
         }
     }
     if (state.menuOpen) {
@@ -615,6 +607,7 @@ private fun noticeText(notice: AgentNotice, machineName: String): String = when 
     AgentNotice.Gone -> stringResource(R.string.agent_notice_gone)
     AgentNotice.Finished -> stringResource(R.string.agent_notice_finished)
     AgentNotice.NotTypable -> stringResource(R.string.agent_notice_not_typable)
+    AgentNotice.HoldToSendKeys -> stringResource(R.string.agent_notice_hold_to_send_keys)
     AgentNotice.Blocked -> stringResource(R.string.agent_notice_blocked)
     AgentNotice.Refused -> stringResource(R.string.agent_notice_refused)
 }
@@ -676,7 +669,6 @@ private fun StatusBar(state: AgentUiState) {
 private fun KeyBar(
     state: AgentUiState,
     onKey: (ShortcutKey) -> Unit,
-    onPaste: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val tokens = LocalWhistlTokens.current
@@ -698,22 +690,6 @@ private fun KeyBar(
                 stringResource(R.string.agent_ctrl_armed_description)
             } else {
                 stringResource(keyNameRes(key))
-            }
-            if (key == ShortcutKey.PASTE) {
-                // Paste is a bar key like the others, so it scrolls with them and can be taken out in Settings (0.5.8).
-                IconButton(
-                    onClick = onPaste,
-                    enabled = state.canType,
-                    modifier = Modifier.size(MinTouchTarget).semantics { contentDescription = description },
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_paste),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                index++
-                continue
             }
             Button(
                 onClick = { onKey(key) },
@@ -849,17 +825,15 @@ private fun sentKeyText(key: SentKey): String =
     if (key.ctrl) stringResource(R.string.agent_key_ctrl, key.label) else key.label
 
 /**
- * The row a thumb uses: show or hide the keyboard, paste, then the shortcut keys (phase 9, SPEC 2.5).
+ * The one line a thumb types in (0.6.0): a compact field with the machine's user as its placeholder, and Send beside it.
+ * Tap sends the line with Return; holding it presses the same text as keys, without Return (0.6.1), which is what a TUI
+ * that waits on one key needs.
  *
- * There is still no text field: the 1 dp transparent box below exists only to receive the IME, and the terminal draws
- * the line. The keyboard is what the screen is for, so the first icon is its toggle and the second sends the phone's
- * clipboard at the cursor.
- *
- * @param state the screen's state, for whether input is on.
- * @param onKey called with a shortcut key from the bar.
- * @param onType called with the characters inserted.
- * @param onBackspace called with how many characters were deleted.
- * @param onPaste called with the clipboard's text.
+ * @param state the screen's state, for whether input is on and what is typed.
+ * @param onInput called with the field's value as the user edits it.
+ * @param onSend called to send the line, with Return.
+ * @param onSendKeys called to press the text as keys, without Return.
+ * @param keyboardRequest bumped when the terminal is tapped, to bring the keyboard back.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

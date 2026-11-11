@@ -100,7 +100,8 @@ class SettingsViewModelTest {
         // Enter steps over the whole arrow bundle, which stays together and in bundle order.
         h.vm.moveUp(ShortcutKey.ENTER)
         assertEquals(
-            listOf(ShortcutKey.ESC, ShortcutKey.TAB, ShortcutKey.CTRL, ShortcutKey.ENTER) + ShortcutBar.ARROWS,
+            listOf(ShortcutKey.ESC, ShortcutKey.DELETE, ShortcutKey.TAB, ShortcutKey.CTRL, ShortcutKey.ENTER) +
+                ShortcutBar.ARROWS,
             h.vm.state.value.bar,
         )
 
@@ -108,7 +109,7 @@ class SettingsViewModelTest {
         assertFalse(ShortcutKey.ESC in h.vm.state.value.bar)
 
         h.vm.moveDown(ShortcutKey.TAB)
-        assertEquals(ShortcutKey.CTRL, h.vm.state.value.bar.first())
+        assertEquals(ShortcutKey.DELETE, h.vm.state.value.bar.first())
 
         h.vm.add(ShortcutKey.ESC)
         assertEquals(ShortcutKey.ESC, h.vm.state.value.bar.last())

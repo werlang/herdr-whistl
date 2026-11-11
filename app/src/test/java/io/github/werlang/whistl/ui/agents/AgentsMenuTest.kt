@@ -6,6 +6,7 @@ import io.github.werlang.whistl.data.AgentAction
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.Agent
 import io.github.werlang.whistl.domain.Machine
+import io.github.werlang.whistl.data.SpaceRecord
 import io.github.werlang.whistl.domain.Terminal
 import io.github.werlang.whistl.domain.TerminalState
 import io.github.werlang.whistl.support.FakePins
@@ -25,6 +26,9 @@ import org.junit.Test
  * and that a rename never sends an empty name.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
+/** A space the fixtures' agents belong to: an agent this app lists is one a space holds (0.6.2). */
+private val TEST_SPACE = SpaceRecord(id = "sp1", name = "web", folder = "/tmp", pinned = false, order = 0)
+
 class AgentsMenuTest {
 
     @get:Rule
@@ -54,7 +58,7 @@ class AgentsMenuTest {
 
     private suspend fun frame(agents: StaticAgents, terminals: List<Terminal> = listOf(terminal())): Pair<AgentsViewModel, MachineAgent> {
         val machines = ScriptedMachines().apply { put(machine, ConnectionState.Offline) }
-        agents.agents.value = listOf(MachineAgent(MACHINE, Agent(terminals.first()), null))
+        agents.agents.value = listOf(MachineAgent(MACHINE, Agent(terminals.first()), TEST_SPACE))
         val vm = AgentsViewModel(agents, machines, FakePins())
         return vm to agents.agents.value.first()
     }
@@ -155,7 +159,7 @@ class AgentsMenuTest {
     fun aRenamedAgentShowsItsNewName() = runTest {
         val agents = StaticAgents()
         val named = terminal(labels = mapOf(Agent.NAME_LABEL to "deploy"))
-        agents.agents.value = listOf(MachineAgent(MACHINE, Agent(named), null))
+        agents.agents.value = listOf(MachineAgent(MACHINE, Agent(named), TEST_SPACE))
         val vm = AgentsViewModel(agents, ScriptedMachines().apply { put(machine, ConnectionState.Offline) }, FakePins())
 
         assertEquals("deploy", vm.state.value.rows.single().name)
