@@ -7,6 +7,25 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.5.7] - 2026-11-11
+
+### Added
+
+- **An arrow keeps sending while it is held.** One tap is one key, as before; holding walks the cursor back through a
+  long line instead of needing one tap per column.
+- **A drag pages a full-screen program.** With no lines above its screen there is nothing to scroll, so the pane has
+  nothing to move — a drag now sends `pageup`/`pagedown` to the program, which scrolls its own view.
+
+### Fixed
+
+- **Ctrl works on the phone's keyboard.** The bar's Ctrl latch only reached bar keys, so Ctrl then `c` typed on the
+  soft keyboard sent a plain `c`. The latch now combines with the next typed letter: `ctrl+c`, measured as SIGINT on
+  the machine.
+- **Shift produces uppercase.** The core lowercases a bare uppercase letter, so `A` arrived as `a`; it now travels as
+  `shift+a`. Measured on hc 0.1.19: `shift+a` reaches the program as `A`.
+- **A freshly opened terminal scrolls.** The core keeps the scrollback, but the app never asked for it, so a terminal
+  opened now had nothing above its screen; the stream now attaches with the core's history.
+
 ## [0.5.6] - 2026-11-11
 
 ### Fixed
@@ -263,7 +282,8 @@ Nothing yet.
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.6...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.7...HEAD
+[0.5.7]: https://github.com/werlang/herdr-whistl/compare/v0.5.6...v0.5.7
 [0.5.6]: https://github.com/werlang/herdr-whistl/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/werlang/herdr-whistl/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/werlang/herdr-whistl/compare/v0.5.3...v0.5.4

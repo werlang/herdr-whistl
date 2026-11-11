@@ -30,10 +30,21 @@ class KeystrokesTest {
         assertEquals(listOf("backspace", "backspace"), Keystrokes.backspaces(2).names)
     }
 
-    /** Punctuation is a key as it is: the core takes any printable ASCII character. */
+    /** Unshifted punctuation is a key as it is; a shifted symbol is not a key the core takes. */
     @Test
     fun punctuationIsAKey() {
-        assertEquals(listOf("c", "d", "space", "~", "/", "a"), Keystrokes.of("cd ~/a").names)
+        val typed = Keystrokes.of("ls /tmp/x")
+        assertEquals(listOf("l", "s", "space", "/", "t", "m", "p", "/", "x"), typed.names)
+        // `!` and `~` need Shift, and `shift+1` arrives as `1` on hc 0.1.19: they are reported, not typed.
+        val shifted = Keystrokes.of("a!|~")
+        assertEquals(listOf("a"), shifted.names)
+        assertEquals("!|~", shifted.dropped)
+    }
+
+    /** An uppercase letter is Shift plus the letter: a bare `A` arrives as `a` from the core. */
+    @Test
+    fun uppercaseIsShift() {
+        assertEquals(listOf("shift+h", "i", "shift+o"), Keystrokes.of("HiO").names)
     }
 
     /** An accent cannot be a key: it is reported, never sent as text. */

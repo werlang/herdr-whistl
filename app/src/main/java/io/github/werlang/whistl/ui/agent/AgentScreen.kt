@@ -28,6 +28,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -184,6 +189,7 @@ fun AgentContent(
         TerminalOutput(
             state = state,
             onPaneSize = onPaneSize,
+            onPage = { forward -> onKey(if (forward) ShortcutKey.PG_DN else ShortcutKey.PG_UP) },
             onTap = { keyboardRequest++ },
             modifier = Modifier.weight(1f),
         )
@@ -301,6 +307,15 @@ private fun AgentHeader(state: AgentUiState, onBack: () -> Unit, onOptions: () -
 /** The terminal's padding inside its box, in dp. */
 private val TERMINAL_PADDING: Dp = 12.dp
 
+/** How long an arrow waits before it repeats while held (0.5.7). */
+private const val ARROW_REPEAT_MS: Long = 90L
+
+/**
+ * How far a finger travels before the pane pages the screen instead of scrolling it (0.5.7). A full-screen program keeps
+ * no scrollback — there is nothing above its screen — so a drag there pages the program's own view.
+ */
+private val SCROLL_PAGE_STEP: Dp = 28.dp
+
 /** Glyphs measured to find one cell's width: a long run averages out the rounding of a single one. */
 private const val CELL_PROBE_GLYPHS: Int = 10
 
@@ -336,6 +351,7 @@ private class CellMetrics(val cellWidth: Float, val lineHeight: Float)
 private fun TerminalOutput(
     state: AgentUiState,
     onPaneSize: (Int, Int) -> Unit,
+    onPage: (forward: Boolean) -> Unit,
     onTap: () -> Unit = {},
     modifier: Modifier,
 ) {
@@ -392,6 +408,24 @@ private fun TerminalOutput(
             .background(tokens.terminal)
             .onSizeChanged { pane = it }
             .verticalScroll(scroll)
+            // With nothing above the screen — a full-screen program — a drag pages the program itself, which is the only
+            // view scrolling it has (0.5.7).
+            .pointerInput(scroll.maxValue, frame.lines.size) {
+                if (scroll.maxValue > 0) return@pointerInput
+                var carried = 0f
+                val step = SCROLL_PAGE_STEP.toPx()
+                detectVerticalDragGestures { _, delta ->
+                    carried += delta
+                    while (carried <= -step) {
+                        carried += step
+                        onPage(true)
+                    }
+                    while (carried >= step) {
+                        carried -= step
+                        onPage(false)
+                    }
+                }
+            }
             .padding(TERMINAL_PADDING)
             .testTag(AGENT_OUTPUT_TAG)
             .semantics { contentDescription = description },
@@ -663,7 +697,20 @@ private fun ArrowCluster(enabled: Boolean, onKey: (ShortcutKey) -> Unit) {
             Box(
                 modifier = Modifier
                     .size(width = MinTouchTarget, height = MinTouchTarget)
-                    .clickable(enabled = enabled) { onKey(arrow) }
+                    // Press sends one key; holding it repeats, which is what walking back through a long line needs
+                    // (0.5.7). The first press is immediate, then the key repeats every [ARROW_REPEAT_MS].
+                    .pointerInput(arrow, enabled) {
+                        if (!enabled) return@pointerInput
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            onKey(arrow)
+                            var released = false
+                            while (!released) {
+                                released = withTimeoutOrNull(ARROW_REPEAT_MS) { waitForUpOrCancellation() } != null
+                                if (!released) onKey(arrow)
+                            }
+                        }
+                    }
                     .semantics { contentDescription = description },
                 contentAlignment = Alignment.Center,
             ) {

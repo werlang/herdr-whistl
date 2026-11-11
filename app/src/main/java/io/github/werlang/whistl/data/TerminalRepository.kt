@@ -256,13 +256,28 @@ class DefaultTerminalRepository(
                     val opened = lease.openStream()
                     framed = opened
                     val size = viewer.value
-                    val attach = HcClient(opened.rpc, { error("events do not run on a terminal stream") }, scope).terminalAttach(
-                        terminal = address,
-                        cols = size.cols,
-                        rows = size.rows,
-                        display = display,
-                        resumed = if (resume) true else null,
-                    )
+                    val stream = HcClient(opened.rpc, { error("events do not run on a terminal stream") }, scope)
+                    // The core keeps the scrollback; without asking, a freshly opened terminal has nothing to scroll until
+                    // it has printed a screenful itself (0.5.7). An older core that does not take `history` still opens
+                    // the terminal: the second attempt asks for none.
+                    val attach = runCatching {
+                        stream.terminalAttach(
+                            terminal = address,
+                            cols = size.cols,
+                            rows = size.rows,
+                            display = display,
+                            history = SCROLLBACK_LINES,
+                            resumed = if (resume) true else null,
+                        )
+                    }.getOrElse {
+                        stream.terminalAttach(
+                            terminal = address,
+                            cols = size.cols,
+                            rows = size.rows,
+                            display = display,
+                            resumed = if (resume) true else null,
+                        )
+                    }
                     val live = opened.channel(attach.channel)
                     channel = live
                     attachedBefore = true
@@ -393,6 +408,9 @@ class DefaultTerminalRepository(
 
         /** The fewest milliseconds between two redraws of the screen: about 30 frames a second. */
         const val FRAME_INTERVAL_MS: Long = 33L
+
+        /** How many lines of the core's scrollback to ask for when attaching: enough to scroll back through a build. */
+        const val SCROLLBACK_LINES: Int = 1_000
 
         /** How long a stream waits before it attaches again, while the machine is not connected or the attach failed. */
         const val RECONNECT_DELAY_MS: Long = 500L

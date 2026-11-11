@@ -32,7 +32,12 @@ data class Keystrokes(val names: List<String>, val dropped: String = "") {
                     character == '\u007f' || character == '\b' -> names += "backspace"
                     character == '\u001b' -> names += "esc"
                     character == ' ' -> names += "space"
-                    character in ' '..'~' -> names += character.toString()
+                    // Measured on hc 0.1.19: a bare uppercase letter arrives lowercase, `shift+a` arrives as `A`, and
+                    // `shift+1` still arrives as `1` — Shift only reaches letters, so a shifted symbol is not a key.
+                    character in 'A'..'Z' -> names += "shift+" + character.lowercaseChar()
+                    character in 'a'..'z' -> names += character.toString()
+                    character in '0'..'9' -> names += character.toString()
+                    character in UNSHIFTED -> names += character.toString()
                     else -> dropped.append(character)
                 }
             }
@@ -41,5 +46,11 @@ data class Keystrokes(val names: List<String>, val dropped: String = "") {
 
         /** [count] times the backspace key. */
         fun backspaces(count: Int): Keystrokes = Keystrokes(List(count) { "backspace" })
+
+        /**
+         * The printable ASCII characters that are a key on their own, measured on hc 0.1.19. Everything a US layout needs
+         * Shift for (`! | ~ _ + " ( ) @ # $ % & * ^ { } : < >`) is refused by `terminal.keys`.
+         */
+        private val UNSHIFTED: Set<Char> = " \t-=/\\[];',.`".filterNot { it == ' ' || it == '\t' }.toSet()
     }
 }

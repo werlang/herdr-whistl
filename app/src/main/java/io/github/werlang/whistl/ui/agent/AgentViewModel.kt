@@ -368,9 +368,24 @@ class AgentViewModel(
         if (keystrokes.dropped.isNotEmpty()) {
             interaction.value = interaction.value.copy(refusal = AgentNotice.NotTypable)
         }
-        if (keystrokes.isEmpty) return
+        // Ctrl is latched by the bar and has no effect on the phone's own keyboard: Ctrl then `c` typed here is the
+        // interrupt, the same combination the bar's ^C sends (0.5.7).
+        val armed = interaction.value.ctrlArmed
+        val names = if (armed && keystrokes.names.size == 1) {
+            val only = keystrokes.names.single()
+            val letter = only.removePrefix("shift+").lowercase()
+            if (letter.length == 1 && letter.single() in 'a'..'z') {
+                listOf("ctrl+$letter") // i18n-ok: the core's key name, not a word
+            } else {
+                keystrokes.names
+            }
+        } else {
+            keystrokes.names
+        }
+        if (armed) interaction.value = interaction.value.copy(ctrlArmed = false)
+        if (names.isEmpty()) return
         viewModelScope.launch {
-            val outcome = handle.value?.keys(keystrokes.names) ?: TerminalAction.Offline
+            val outcome = handle.value?.keys(names) ?: TerminalAction.Offline
             if (outcome != TerminalAction.Done) {
                 interaction.value = interaction.value.copy(refusal = outcome.notice())
             }

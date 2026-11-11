@@ -500,6 +500,19 @@ class AgentViewModelTest {
         assertTrue("Enter is a key, not a line end in text", h.sent("terminal.send").isEmpty())
     }
 
+    /** Ctrl latched on the bar applies to the next character typed on the phone's keyboard: ^C, not `c`. */
+    @Test
+    fun ctrlAppliesToATypedCharacter() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onKey(ShortcutKey.CTRL)
+        vm.onType("c")
+        runCurrent()
+
+        assertEquals(listOf("ctrl+c"), h.sent("terminal.keys").single().keyNames())
+        assertFalse("Ctrl is spent on the key it combined with", vm.state.value.ctrlArmed)
+    }
+
     /** Backspace is DELETE, straight to the terminal: its own line editor owns the line. */
     @Test
     fun backspaceIsDelete() = runTest {
