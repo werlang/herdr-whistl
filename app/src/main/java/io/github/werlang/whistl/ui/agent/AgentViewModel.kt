@@ -282,6 +282,8 @@ class AgentViewModel(
         val own = interaction.value
         when (val action = key.action()) {
             KeyAction.Modifier -> interaction.value = own.copy(ctrlArmed = !own.ctrlArmed)
+            // The clipboard belongs to the screen; the bar reads it and calls onPaste.
+            KeyAction.Paste -> Unit
             is KeyAction.Insert -> interaction.value = own.copy(
                 input = own.input.insertAtCursor(action.char.toString()),
                 ctrlArmed = false,

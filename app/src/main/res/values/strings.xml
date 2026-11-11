@@ -322,4 +322,5 @@
     <string name="space_folder_browse_offline">The machine is not connected.</string>
     <string name="space_folder_browse_unreadable">This folder cannot be read.</string>
     <string name="agent_notice_not_typable">The core cannot press this character as a key: paste it instead.</string>
+    <string name="key_paste">Paste</string>
 </resources>

@@ -60,6 +60,9 @@ enum class ShortcutKey(val label: String) {
 
     /** Minus. */
     MINUS("-"),
+
+    /** Paste: the clipboard lands at the cursor. Optional in the bar, so it can be removed from it (0.5.8). */
+    PASTE("Paste"),
 }
 
 /**
@@ -116,6 +119,7 @@ object ShortcutBar {
 
     /** The default bar (SPEC §2): Esc, Tab, Ctrl, ↑, ↓, ←, →, Enter. */
     val DEFAULT: List<ShortcutKey> = listOf(
+        ShortcutKey.PASTE,
         ShortcutKey.ESC,
         ShortcutKey.TAB,
         ShortcutKey.CTRL,
@@ -297,6 +301,9 @@ sealed interface KeyAction {
 
     /** Ctrl: it arms the sticky modifier and sends nothing itself. */
     data object Modifier : KeyAction
+
+    /** Paste: the screen reads the clipboard and types it; the core has no paste RPC that keeps the line (0.5.8). */
+    data object Paste : KeyAction
 }
 
 /**
@@ -323,6 +330,7 @@ fun ShortcutKey.action(): KeyAction = when (this) {
     ShortcutKey.PIPE -> KeyAction.Insert('|')
     ShortcutKey.TILDE -> KeyAction.Insert('~')
     ShortcutKey.MINUS -> KeyAction.Insert('-')
+    ShortcutKey.PASTE -> KeyAction.Paste
 }
 
 /**

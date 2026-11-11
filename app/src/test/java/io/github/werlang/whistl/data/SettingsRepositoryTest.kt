@@ -52,19 +52,19 @@ class SettingsRepositoryTest {
 
         repo.moveShortcutDown(ShortcutKey.ESC)
         assertEquals(
-            listOf(ShortcutKey.TAB, ShortcutKey.ESC, ShortcutKey.CTRL, ShortcutKey.UP, ShortcutKey.DOWN,
-                ShortcutKey.LEFT, ShortcutKey.RIGHT, ShortcutKey.ENTER),
+            listOf(ShortcutKey.PASTE, ShortcutKey.TAB, ShortcutKey.ESC, ShortcutKey.CTRL, ShortcutKey.UP,
+                ShortcutKey.DOWN, ShortcutKey.LEFT, ShortcutKey.RIGHT, ShortcutKey.ENTER),
             repo.settings.value.shortcutBar,
         )
 
         // A single key steps over the arrow bundle instead of landing inside it.
         repo.moveShortcutUp(ShortcutKey.ENTER)
         assertEquals(
-            listOf(ShortcutKey.TAB, ShortcutKey.ESC, ShortcutKey.CTRL, ShortcutKey.ENTER, ShortcutKey.UP,
-                ShortcutKey.DOWN, ShortcutKey.LEFT, ShortcutKey.RIGHT),
+            listOf(ShortcutKey.PASTE, ShortcutKey.TAB, ShortcutKey.ESC, ShortcutKey.CTRL, ShortcutKey.ENTER,
+                ShortcutKey.UP, ShortcutKey.DOWN, ShortcutKey.LEFT, ShortcutKey.RIGHT),
             repo.settings.value.shortcutBar,
         )
-        assertEquals(8, repo.settings.value.shortcutBar.toSet().size)
+        assertEquals(9, repo.settings.value.shortcutBar.toSet().size)
     }
 
     /** Remove drops a key; adding it back places it at the end; the bar keeps its order otherwise. */
@@ -126,7 +126,7 @@ class SettingsRepositoryTest {
 
         assertEquals(ShortcutResult.Ok(ShortcutBar.DEFAULT), result)
         assertEquals(
-            listOf("Esc", "Tab", "Ctrl", "↑", "↓", "←", "→", "Enter"),
+            listOf("Paste", "Esc", "Tab", "Ctrl", "↑", "↓", "←", "→", "Enter"),
             repo.settings.value.shortcutBar.map { it.label },
         )
     }

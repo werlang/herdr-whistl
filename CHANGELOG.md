@@ -7,6 +7,26 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.5.8] - 2026-11-11
+
+### Fixed
+
+- **Backspace now erases text that was not typed on the phone.** The invisible keyboard field was empty, and a text field
+  with nothing in it gives the IME nothing to delete: pressing backspace reported nothing, so the key was lost. The field
+  now always keeps one zero-width character, so every backspace deletes something and reaches the terminal — which is what
+  a prompt, a paste or anything already on the line needed.
+- **A drag never fires a key.** An arrow sent on touch-down, so sliding a thumb along the bar pressed whatever it crossed.
+  A tap now sends its key on release, and a drag sends nothing.
+- **A single tap is never a repeat.** An arrow held for 400 ms starts repeating every 120 ms; shorter than that it is one
+  key.
+
+### Changed
+
+- **The message line is gone.** What was sent, or why input is off, now shows for two seconds in the status bar, in place
+  of the status, which comes back on its own; a line of chrome above the keys cost a row of terminal all the time.
+- **Paste is a bar key.** It scrolls with the other keys and can be added or removed in Settings, like any of them.
+- **Narrower arrows.** Each arrow cell is 40 dp wide instead of 48 dp, so the bundle takes less of the bar.
+
 ## [0.5.7] - 2026-11-11
 
 ### Added
@@ -282,7 +302,8 @@ Nothing yet.
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.7...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.8...HEAD
+[0.5.8]: https://github.com/werlang/herdr-whistl/compare/v0.5.7...v0.5.8
 [0.5.7]: https://github.com/werlang/herdr-whistl/compare/v0.5.6...v0.5.7
 [0.5.6]: https://github.com/werlang/herdr-whistl/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/werlang/herdr-whistl/compare/v0.5.4...v0.5.5

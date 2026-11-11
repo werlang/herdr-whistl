@@ -100,14 +100,17 @@ class SettingsViewModelTest {
         // Enter steps over the whole arrow bundle, which stays together and in bundle order.
         h.vm.moveUp(ShortcutKey.ENTER)
         assertEquals(
-            listOf(ShortcutKey.ESC, ShortcutKey.TAB, ShortcutKey.CTRL, ShortcutKey.ENTER) + ShortcutBar.ARROWS,
+            listOf(ShortcutKey.PASTE, ShortcutKey.ESC, ShortcutKey.TAB, ShortcutKey.CTRL, ShortcutKey.ENTER) +
+                ShortcutBar.ARROWS,
             h.vm.state.value.bar,
         )
 
         h.vm.remove(ShortcutKey.ESC)
         assertFalse(ShortcutKey.ESC in h.vm.state.value.bar)
 
+        // Paste is at the head of the default bar; once TAB steps down, Ctrl comes first.
         h.vm.moveDown(ShortcutKey.TAB)
+        h.vm.moveDown(ShortcutKey.PASTE)
         assertEquals(ShortcutKey.CTRL, h.vm.state.value.bar.first())
 
         h.vm.add(ShortcutKey.ESC)
@@ -139,7 +142,8 @@ class SettingsViewModelTest {
         h.vm.state.value.addable.forEach { h.vm.add(it) }
 
         assertEquals(emptyList<ShortcutKey>(), h.vm.state.value.addable)
-        assertEquals(ShortcutKey.entries, h.vm.state.value.bar)
+        // Every key is in the bar; the order is the user's, which starts from the default bar.
+        assertEquals(ShortcutKey.entries.toSet(), h.vm.state.value.bar.toSet())
     }
 
     /** Restore defaults brings back the SPEC bar, whatever was edited. */

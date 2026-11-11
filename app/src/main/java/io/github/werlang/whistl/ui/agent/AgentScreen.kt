@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -99,6 +100,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.werlang.whistl.R
+import io.github.werlang.whistl.domain.KeyboardSink
 import io.github.werlang.whistl.data.FontSize
 import io.github.werlang.whistl.domain.CellColor
 import io.github.werlang.whistl.domain.CellRun
@@ -201,11 +203,9 @@ fun AgentContent(
                 .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // One row: show/hide the keyboard, paste, then the shortcut keys. The keyboard and the clipboard are the
-            // two things a thumb reaches for, so they sit before the keys (0.5.1).
-            HintLine(state = state)
-            NoticeLine(state = state)
-            BlockedHint(state = state)
+            // One row: show/hide the keyboard, then the shortcut keys. Messages live in the status bar, not in a line of
+            // their own: a line of chrome above the thumb costs a row of terminal for every second it is not needed
+            // (0.5.8).
             ActionRow(
                 state = state,
                 onKey = onKey,
@@ -307,8 +307,14 @@ private fun AgentHeader(state: AgentUiState, onBack: () -> Unit, onOptions: () -
 /** The terminal's padding inside its box, in dp. */
 private val TERMINAL_PADDING: Dp = 12.dp
 
-/** How long an arrow waits before it repeats while held (0.5.7). */
-private const val ARROW_REPEAT_MS: Long = 90L
+/** How long an arrow is held before it starts repeating, long enough that a tap is never a repeat (0.5.8). */
+private const val ARROW_HOLD_MS: Long = 400L
+
+/** How fast a held arrow repeats once the hold has begun (0.5.8). */
+private const val ARROW_REPEAT_MS: Long = 120L
+
+/** The width of one arrow cell: narrower than a 48 dp target, tall as one, so four arrows still fit a thumb's reach. */
+private val ARROW_CELL_WIDTH: Dp = 40.dp
 
 /**
  * How far a finger travels before the pane pages the screen instead of scrolling it (0.5.7). A full-screen program keeps
@@ -583,9 +589,39 @@ private fun CellColor.colourOrNull(): Color? = when (this) {
     is CellColor.Rgb -> Color(0xFF000000L or value.toLong())
 }
 
-/** The one-line status bar, on the accent colour: `[machine] space · agent` and the status. */
+/** How long a message stays in the status bar before the status comes back (0.5.8). */
+private const val FLASH_MS: Long = 2_000L
+
+/** The words for a notice, shown in the status bar (0.5.8). */
+@Composable
+private fun noticeText(notice: AgentNotice, machineName: String): String = when (notice) {
+    AgentNotice.Offline -> stringResource(R.string.agent_notice_offline, machineName)
+    AgentNotice.Gone -> stringResource(R.string.agent_notice_gone)
+    AgentNotice.Finished -> stringResource(R.string.agent_notice_finished)
+    AgentNotice.NotTypable -> stringResource(R.string.agent_notice_not_typable)
+    AgentNotice.Blocked -> stringResource(R.string.agent_notice_blocked)
+    AgentNotice.Refused -> stringResource(R.string.agent_notice_refused)
+}
+
+/**
+ * The one-line status bar, on the accent colour: `[machine] space · agent`, and on the right either the status or, for a
+ * moment, what was just sent or refused (0.5.8). A message used to have a line of its own above the keys, which cost a
+ * row of terminal all the time to show something for a second.
+ */
 @Composable
 private fun StatusBar(state: AgentUiState) {
+    val flash = remember { mutableStateOf<String?>(null) }
+    val ctrlHint = stringResource(R.string.agent_ctrl_on)
+    val sentHint = state.lastKey?.let { key -> stringResource(R.string.agent_key_sent, sentKeyText(key)) }
+    val noticeHint = state.notice?.let { notice -> noticeText(notice, state.machineName) }
+    val message = noticeHint ?: sentHint
+    LaunchedEffect(message, state.ctrlArmed) {
+        flash.value = if (state.ctrlArmed) ctrlHint else message
+        if (message != null && !state.ctrlArmed) {
+            delay(FLASH_MS)
+            flash.value = null
+        }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -610,7 +646,7 @@ private fun StatusBar(state: AgentUiState) {
         )
         Spacer(Modifier.width(12.dp))
         Text(
-            text = stringResource(statusLabelRes(state.statusLabel)),
+            text = flash.value ?: stringResource(statusLabelRes(state.statusLabel)),
             style = MaterialTheme.typography.labelMedium,
             fontFamily = WhistlMono,
             color = MaterialTheme.colorScheme.onPrimary,
@@ -621,7 +657,12 @@ private fun StatusBar(state: AgentUiState) {
 
 /** The shortcut keys in the order Settings holds them. Ctrl shows armed; a disabled bar does nothing when tapped. */
 @Composable
-private fun KeyBar(state: AgentUiState, onKey: (ShortcutKey) -> Unit, modifier: Modifier = Modifier) {
+private fun KeyBar(
+    state: AgentUiState,
+    onKey: (ShortcutKey) -> Unit,
+    onPaste: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val tokens = LocalWhistlTokens.current
     Row(
         modifier = modifier.horizontalScroll(rememberScrollState()),
@@ -641,6 +682,22 @@ private fun KeyBar(state: AgentUiState, onKey: (ShortcutKey) -> Unit, modifier: 
                 stringResource(R.string.agent_ctrl_armed_description)
             } else {
                 stringResource(keyNameRes(key))
+            }
+            if (key == ShortcutKey.PASTE) {
+                // Paste is a bar key like the others, so it scrolls with them and can be taken out in Settings (0.5.8).
+                IconButton(
+                    onClick = onPaste,
+                    enabled = state.canType,
+                    modifier = Modifier.size(MinTouchTarget).semantics { contentDescription = description },
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_paste),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                index++
+                continue
             }
             Button(
                 onClick = { onKey(key) },
@@ -696,18 +753,58 @@ private fun ArrowCluster(enabled: Boolean, onKey: (ShortcutKey) -> Unit) {
             }
             Box(
                 modifier = Modifier
-                    .size(width = MinTouchTarget, height = MinTouchTarget)
-                    // Press sends one key; holding it repeats, which is what walking back through a long line needs
-                    // (0.5.7). The first press is immediate, then the key repeats every [ARROW_REPEAT_MS].
+                    .size(width = ARROW_CELL_WIDTH, height = MinTouchTarget)
+                    // A tap sends exactly one key, on release, so a finger that slides along the bar never fires one
+                    // (0.5.8). Held past [ARROW_HOLD_MS] the key repeats every [ARROW_REPEAT_MS], which is what walking
+                    // back through a long line needs.
                     .pointerInput(arrow, enabled) {
                         if (!enabled) return@pointerInput
                         awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            onKey(arrow)
-                            var released = false
-                            while (!released) {
-                                released = withTimeoutOrNull(ARROW_REPEAT_MS) { waitForUpOrCancellation() } != null
-                                if (!released) onKey(arrow)
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            var dragged = false
+                            var releasedEarly = false
+                            val held = withTimeoutOrNull(ARROW_HOLD_MS) {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull { it.id == down.id }
+                                        ?: return@withTimeoutOrNull true
+                                    if (change.positionChange().getDistance() > viewConfiguration.touchSlop) {
+                                        dragged = true
+                                        return@withTimeoutOrNull true
+                                    }
+                                    if (!change.pressed) {
+                                        releasedEarly = true
+                                        return@withTimeoutOrNull true
+                                    }
+                                }
+                                @Suppress("UNREACHABLE_CODE")
+                                true
+                            }
+                            when {
+                                held == null -> {
+                                    // Still down: the hold has begun.
+                                    onKey(arrow)
+                                    var finished = false
+                                    while (!finished) {
+                                        val tick = withTimeoutOrNull(ARROW_REPEAT_MS) {
+                                            while (true) {
+                                                val event = awaitPointerEvent()
+                                                val change = event.changes.firstOrNull { it.id == down.id }
+                                                    ?: return@withTimeoutOrNull true
+                                                if (!change.pressed) return@withTimeoutOrNull true
+                                                if (change.positionChange().getDistance() > viewConfiguration.touchSlop) {
+                                                    return@withTimeoutOrNull true
+                                                }
+                                            }
+                                            @Suppress("UNREACHABLE_CODE")
+                                            true
+                                        }
+                                        finished = tick != null
+                                        if (!finished) onKey(arrow)
+                                    }
+                                }
+                                releasedEarly && !dragged -> onKey(arrow)
+                                else -> Unit
                             }
                         }
                     }
@@ -725,20 +822,6 @@ private fun ArrowCluster(enabled: Boolean, onKey: (ShortcutKey) -> Unit) {
     }
 }
 
-/** What the screen is doing: the Ctrl hint, the last key sent, or nothing. */
-@Composable
-private fun HintLine(state: AgentUiState) {
-    val lastKey = state.lastKey
-    val text = when {
-        state.ctrlArmed -> stringResource(R.string.agent_ctrl_on)
-        lastKey != null -> stringResource(R.string.agent_key_sent, sentKeyText(lastKey))
-        else -> null
-    }
-    if (text != null) {
-        Text(text = text, style = MaterialTheme.typography.bodySmall, color = LocalWhistlTokens.current.muted, modifier = Modifier.padding(horizontal = 4.dp))
-    }
-}
-
 /**
  * The key as the hint shows it: its name, with "Ctrl+" in front when it was sent with Ctrl.
  *
@@ -748,42 +831,6 @@ private fun HintLine(state: AgentUiState) {
 @Composable
 private fun sentKeyText(key: SentKey): String =
     if (key.ctrl) stringResource(R.string.agent_key_ctrl, key.label) else key.label
-
-/**
- * The notice line: why input is off, or the last refusal (red), or, for a blocked agent, what Send does. Nothing shows when the
- * terminal is ready.
- */
-@Composable
-private fun NoticeLine(state: AgentUiState) {
-    val notice = state.notice ?: return
-    val text = when (notice) {
-        AgentNotice.Offline -> stringResource(R.string.agent_notice_offline, state.machineName)
-        AgentNotice.Gone -> stringResource(R.string.agent_notice_gone)
-        AgentNotice.Finished -> stringResource(R.string.agent_notice_finished)
-        AgentNotice.NotTypable -> stringResource(R.string.agent_notice_not_typable)
-        AgentNotice.Blocked -> stringResource(R.string.agent_notice_blocked)
-        AgentNotice.Refused -> stringResource(R.string.agent_notice_refused)
-    }
-    val color = if (notice == AgentNotice.Blocked || notice == AgentNotice.Refused) {
-        MaterialTheme.colorScheme.error
-    } else {
-        LocalWhistlTokens.current.muted
-    }
-    Text(text = text, style = MaterialTheme.typography.bodySmall, color = color, modifier = Modifier.padding(horizontal = 4.dp))
-}
-
-/** For a blocked agent, while nothing else is noticed: what Send does (it goes in forced). */
-@Composable
-private fun BlockedHint(state: AgentUiState) {
-    if (state.notice == null && state.blockedAgent) {
-        Text(
-            text = stringResource(R.string.agent_hint_blocked),
-            style = MaterialTheme.typography.bodySmall,
-            color = LocalWhistlTokens.current.blocked,
-            modifier = Modifier.padding(horizontal = 4.dp),
-        )
-    }
-}
 
 /**
  * The row a thumb uses: show or hide the keyboard, paste, then the shortcut keys (phase 9, SPEC 2.5).
@@ -814,7 +861,10 @@ private fun ActionRow(
     val focus = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
     val imeVisible = WindowInsets.isImeVisible
-    val shadow = remember { mutableStateOf("") }
+    // The field always holds one zero-width sentinel character, so the IME always has something to delete. An empty
+    // field swallows backspace — the IME has nothing to remove, so it never reports it — and that is why text already on
+    // the terminal's line, which was not typed through this field, could not be erased (0.5.8).
+    val shadow = remember { mutableStateOf(KeyboardSink.empty) }
 
     fun openKeyboard() {
         scope.launch {
@@ -849,28 +899,13 @@ private fun ActionRow(
                 tint = if (state.canSend) MaterialTheme.colorScheme.onSurface else LocalWhistlTokens.current.muted,
             )
         }
-        IconButton(
-            onClick = { clipboard.getText()?.text?.takeIf { it.isNotEmpty() }?.let(onPaste) },
-            enabled = state.canType,
-            modifier = Modifier.size(MinTouchTarget),
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_paste),
-                contentDescription = stringResource(R.string.agent_paste),
-                tint = if (state.canSend) MaterialTheme.colorScheme.onSurface else LocalWhistlTokens.current.muted,
-            )
-        }
         BasicTextField(
             value = shadow.value,
             onValueChange = { next ->
-                val prev = shadow.value
-                val common = prev.commonPrefixWith(next).length
-                val removed = prev.length - common
-                if (removed > 0) onBackspace(removed)
-                val added = next.substring(common)
-                if (added.isNotEmpty()) onType(added.replace("\n", "\r"))
-                // Enter starts a new line on the terminal: the mirror forgets the finished one.
-                shadow.value = if (added.contains('\n')) "" else next.takeLast(SHADOW_LIMIT)
+                val edit = KeyboardSink.read(shadow.value, next)
+                edit.typed?.let(onType)
+                if (edit.backspaces > 0) onBackspace(edit.backspaces)
+                shadow.value = KeyboardSink.empty
             },
             enabled = state.canType,
             textStyle = LocalTextStyle.current.copy(color = Color.Transparent),
@@ -889,7 +924,12 @@ private fun ActionRow(
                 .clearAndSetSemantics { }
                 .testTag(AGENT_KEYBOARD_TAG),
         )
-        KeyBar(state = state, onKey = onKey, modifier = Modifier.weight(1f))
+        KeyBar(
+            state = state,
+            onKey = onKey,
+            onPaste = { clipboard.getText()?.text?.takeIf { it.isNotEmpty() }?.let(onPaste) },
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -899,6 +939,8 @@ const val AGENT_KEYBOARD_TOGGLE_TAG: String = "agent-keyboard-toggle"
 
 /** How many characters the keyboard's mirror keeps; the terminal owns the line, this only recognises deletions. */
 private const val SHADOW_LIMIT: Int = 256
+
+
 
 /** The test tag of the invisible field that receives the keyboard. */
 const val AGENT_KEYBOARD_TAG: String = "agent-keyboard"
