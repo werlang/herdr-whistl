@@ -314,4 +314,5 @@
     <string name="agents_close_confirm_body">Ele será parado e removido da lista. Isso não pode ser desfeito.</string>
     <string name="agents_notice_pinned">Fixado.</string>
     <string name="agents_notice_unpinned">Desafixado.</string>
+    <string name="agent_paste">Colar</string>
 </resources>

@@ -318,6 +318,49 @@ class AgentViewModel(
         }
     }
 
+    /**
+     * Sends what the user typed straight to the terminal (phase 9, SPEC §2.5). There is no text field and no Send
+     * button any more: a keystroke is a keystroke, and a blocked agent receives it forced, as Send did.
+     *
+     * @param text the characters the keyboard produced.
+     */
+    fun onType(text: String) {
+        if (text.isEmpty()) return
+        write(text)
+    }
+
+    /**
+     * Erases characters the user deleted while typing. The terminal owns the line, so a deletion on the phone has to
+     * travel as the DELETE the terminal understands.
+     *
+     * @param count how many characters back.
+     */
+    fun onBackspace(count: Int) {
+        if (count <= 0) return
+        write("\u007f".repeat(count))
+    }
+
+    /**
+     * @param text the clipboard's text, sent as it is at the cursor.
+     */
+    fun onPaste(text: String) {
+        if (text.isEmpty()) return
+        write(text)
+    }
+
+    private fun write(text: String) {
+        val current = state.value
+        // Input is gated by whether the terminal can take typing, not by whether there is text to send: there is no field.
+        if (!current.canType) return
+        val force = current.status == AgentStatus.Blocked
+        viewModelScope.launch {
+            val outcome = handle.value?.send(text, force) ?: TerminalAction.Offline
+            if (outcome != TerminalAction.Done) {
+                interaction.value = interaction.value.copy(refusal = outcome.notice())
+            }
+        }
+    }
+
     /** Interrupt: Ctrl+C through `terminal.interrupt`. */
     fun onInterrupt() {
         interaction.value = interaction.value.copy(menuOpen = false, lastKey = SentKey("^C"))

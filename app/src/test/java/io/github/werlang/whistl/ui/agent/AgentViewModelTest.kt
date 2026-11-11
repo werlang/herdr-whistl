@@ -466,4 +466,64 @@ class AgentViewModelTest {
         assertEquals(AgentNotice.Gone, vm.state.value.notice)
         assertFalse("nothing can be typed into a terminal that is gone", vm.state.value.canType)
     }
+    /** Typed text goes straight to the terminal: there is no field, so a keystroke is a `terminal.send`. */
+    @Test
+    fun typedTextGoesStraightToTheTerminal() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onType("l")
+        vm.onType("s")
+        runCurrent()
+
+        val texts = h.sent("terminal.send").map { it.params().getValue("text").jsonPrimitive.content }
+        assertEquals(listOf("l", "s"), texts)
+    }
+
+    /** A blocked agent takes the keystroke forced, the same way Send delivered text. */
+    @Test
+    fun aBlockedAgentTakesKeystrokesForced() = runTest {
+        val (h, vm, _) = openAgent(status = "blocked")
+
+        vm.onType("y")
+        runCurrent()
+
+        val send = h.sent("terminal.send").single()
+        assertEquals(true, send.params().getValue("force").jsonPrimitive.content.toBoolean())
+    }
+
+    /** A deletion travels as DELETE, one per erased character: the terminal owns the line, not the phone. */
+    @Test
+    fun aDeletionTravelsAsDelete() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onBackspace(2)
+        runCurrent()
+
+        assertEquals("\u007f\u007f", h.sent("terminal.send").single().params().getValue("text").jsonPrimitive.content)
+    }
+
+    /** Pasting sends the clipboard's text as it is, at the cursor. */
+    @Test
+    fun pasteSendsTheClipboardTextAtTheCursor() = runTest {
+        val (h, vm, _) = openAgent()
+
+        vm.onPaste("git status")
+        runCurrent()
+
+        assertEquals("git status", h.sent("terminal.send").single().params().getValue("text").jsonPrimitive.content)
+    }
+
+    /** Nothing is sent while the terminal cannot take input. */
+    @Test
+    fun typingIsIgnoredWhileTheTerminalCannotTakeIt() = runTest {
+        val (h, vm, _) = openAgent(state = "finished")
+
+        vm.onType("l")
+        vm.onBackspace(1)
+        vm.onPaste("x")
+        runCurrent()
+
+        assertTrue(h.sent("terminal.send").isEmpty())
+    }
+
 }

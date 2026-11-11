@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.ui.agent
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -7,47 +8,24 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.Canvas
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.text
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import io.github.werlang.whistl.domain.CellColor
-import io.github.werlang.whistl.domain.CellRun
-import io.github.werlang.whistl.domain.CellStyle
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -57,6 +35,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -66,23 +45,53 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.max
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.data.FontSize
+import io.github.werlang.whistl.domain.CellColor
+import io.github.werlang.whistl.domain.CellRun
+import io.github.werlang.whistl.domain.CellStyle
 import io.github.werlang.whistl.domain.ShortcutBar
 import io.github.werlang.whistl.domain.ShortcutKey
 import io.github.werlang.whistl.ui.components.MinTouchTarget
@@ -94,6 +103,8 @@ import io.github.werlang.whistl.ui.statusColor
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
 import io.github.werlang.whistl.ui.theme.WhistlTerminalText
+import kotlin.math.max
+import kotlinx.coroutines.delay
 
 /** The test tag of the Agent screen, so a navigation test can see that it opened. */
 const val AGENT_SCREEN_TAG: String = "agent-screen"
@@ -126,8 +137,9 @@ fun AgentScreen(
         state = state,
         onBack = onBack,
         onKey = viewModel::onKey,
-        onInputChange = viewModel::onInputChange,
-        onSend = viewModel::onSend,
+        onType = viewModel::onType,
+        onBackspace = viewModel::onBackspace,
+        onPaste = viewModel::onPaste,
         onOpenMenu = viewModel::onOpenMenu,
         onCloseMenu = viewModel::onCloseMenu,
         onInterrupt = viewModel::onInterrupt,
@@ -146,8 +158,9 @@ fun AgentContent(
     state: AgentUiState,
     onBack: () -> Unit,
     onKey: (ShortcutKey) -> Unit,
-    onInputChange: (androidx.compose.ui.text.input.TextFieldValue) -> Unit,
-    onSend: () -> Unit,
+    onType: (String) -> Unit,
+    onBackspace: (Int) -> Unit,
+    onPaste: (String) -> Unit,
     onOpenMenu: () -> Unit,
     onCloseMenu: () -> Unit,
     onInterrupt: () -> Unit,
@@ -172,7 +185,7 @@ fun AgentContent(
             HintLine(state = state)
             NoticeLine(state = state)
             BlockedHint(state = state)
-            InputRow(state = state, onInputChange = onInputChange, onSend = onSend)
+            KeyboardSink(state = state, onType = onType, onBackspace = onBackspace, onPaste = onPaste)
         }
     }
     if (state.menuOpen) {
@@ -688,47 +701,85 @@ private fun BlockedHint(state: AgentUiState) {
     }
 }
 
-/** The text field and Send. Input is off while the terminal cannot take it; Send needs text. */
+/**
+ * The keyboard, as a sink (phase 9, SPEC §2.5): there is no field and no Send button — what the user types goes to the
+ * terminal, and the terminal draws the line. The visible field is gone; this one is 1 dp and transparent, and it exists
+ * only to receive the IME.
+ *
+ * The text in it is a mirror of the line the terminal has, so a deletion can be recognised and sent as DELETE. Enter is
+ * `\r`, never a newline in the mirror: the shadow starts again after it.
+ *
+ * @param state the screen's state, for whether input is on.
+ * @param onType called with the characters inserted.
+ * @param onBackspace called with how many characters were deleted.
+ * @param onPaste called with the clipboard's text.
+ */
 @Composable
-private fun InputRow(
+private fun KeyboardSink(
     state: AgentUiState,
-    onInputChange: (androidx.compose.ui.text.input.TextFieldValue) -> Unit,
-    onSend: () -> Unit,
+    onType: (String) -> Unit,
+    onBackspace: (Int) -> Unit,
+    onPaste: (String) -> Unit,
 ) {
-    val inputDescription = stringResource(R.string.agent_input_description)
+    val clipboard = LocalClipboardManager.current
+    val focus = remember { FocusRequester() }
+    val shadow = remember { mutableStateOf("") }
+    // The keyboard is the point of the screen: it opens with it, and stays while the terminal takes input.
+    LaunchedEffect(state.canSend) {
+        if (state.canSend) runCatching { focus.requestFocus() }
+    }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
-            value = state.input,
-            onValueChange = onInputChange,
-            enabled = state.canType,
-            singleLine = true,
-            placeholder = { Text(stringResource(R.string.agent_input_placeholder, state.name)) },
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
-            shape = RoundedCornerShape(12.dp),
+        BasicTextField(
+            value = shadow.value,
+            onValueChange = { next ->
+                val prev = shadow.value
+                val common = prev.commonPrefixWith(next).length
+                val removed = prev.length - common
+                if (removed > 0) onBackspace(removed)
+                val added = next.substring(common)
+                if (added.isNotEmpty()) onType(added.replace("\n", "\r"))
+                // Enter starts a new line on the terminal: the mirror forgets the finished one.
+                shadow.value = if (added.contains('\n')) "" else next.takeLast(SHADOW_LIMIT)
+            },
+            enabled = state.canSend,
+            textStyle = LocalTextStyle.current.copy(color = Color.Transparent),
+            cursorBrush = SolidColor(Color.Transparent),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.None,
+                autoCorrectEnabled = false,
+                imeAction = ImeAction.None,
+                keyboardType = KeyboardType.Text,
+            ),
             modifier = Modifier
                 .weight(1f)
-                .heightIn(min = MinTouchTarget)
-                .semantics { contentDescription = inputDescription },
+                .heightIn(min = 1.dp)
+                .alpha(0f)
+                .focusRequester(focus)
+                // A keyboard sink is not a control: it has no name, no size and nothing for a screen reader to land on.
+                .clearAndSetSemantics { }
+                .testTag(AGENT_KEYBOARD_TAG),
         )
         IconButton(
-            onClick = onSend,
+            onClick = { clipboard.getText()?.text?.takeIf { it.isNotEmpty() }?.let(onPaste) },
             enabled = state.canSend,
             modifier = Modifier
                 .size(MinTouchTarget)
-                .border(1.dp, LocalWhistlTokens.current.field, RoundedCornerShape(12.dp))
-                .background(
-                    if (state.canSend) MaterialTheme.colorScheme.primary else LocalWhistlTokens.current.field,
-                    RoundedCornerShape(12.dp),
-                ),
+                .border(1.dp, LocalWhistlTokens.current.field, RoundedCornerShape(12.dp)),
         ) {
             Icon(
-                Icons.AutoMirrored.Filled.Send,
-                contentDescription = stringResource(R.string.agent_send),
-                tint = if (state.canSend) MaterialTheme.colorScheme.onPrimary else LocalWhistlTokens.current.muted,
+                painter = painterResource(R.drawable.ic_paste),
+                contentDescription = stringResource(R.string.agent_paste),
+                tint = if (state.canSend) MaterialTheme.colorScheme.onSurface else LocalWhistlTokens.current.muted,
             )
         }
     }
 }
+
+/** How many characters the keyboard's mirror keeps; the terminal owns the line, this only recognises deletions. */
+private const val SHADOW_LIMIT: Int = 256
+
+/** The test tag of the invisible field that receives the keyboard. */
+const val AGENT_KEYBOARD_TAG: String = "agent-keyboard"
 
 /** One row of the overflow menu sheet; a danger row is red. Touch target: the whole row, at least 48 dp. */
 @Composable
