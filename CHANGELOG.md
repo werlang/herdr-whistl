@@ -5,6 +5,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.4.0] - 2026-11-10
+
 ### Added
 
 - **A menu on every agent row.** Overflow button or long press opens Interrupt, Stop, Close and remove, and Rename —
@@ -151,7 +155,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/werlang/herdr-whistl/compare/v0.3.5...v0.4.0
 [0.3.4]: https://github.com/werlang/herdr-whistl/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/werlang/herdr-whistl/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/werlang/herdr-whistl/compare/v0.3.1...v0.3.2
