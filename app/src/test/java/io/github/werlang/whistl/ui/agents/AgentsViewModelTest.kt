@@ -1,6 +1,7 @@
 package io.github.werlang.whistl.ui.agents
 
 import io.github.werlang.whistl.domain.AgentStatus
+import io.github.werlang.whistl.support.FakePins
 import io.github.werlang.whistl.support.MainDispatcherRule
 import io.github.werlang.whistl.support.RepoStack
 import io.github.werlang.whistl.support.eventsSnapshot
@@ -29,7 +30,7 @@ class AgentsViewModelTest {
         h.connector.eventsPipeFactory = { snapshotPipe(eventsSnapshot(1, terminals.toList())) }
         h.addMachine()
         runCurrent()
-        val vm = AgentsViewModel(h.agents, h.machines)
+        val vm = AgentsViewModel(h.agents, h.machines, FakePins())
         runCurrent()
         return h to vm
     }

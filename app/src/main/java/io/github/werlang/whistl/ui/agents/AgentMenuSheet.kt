@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -28,19 +29,20 @@ import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 const val AGENT_ACTIONS_SHEET_TAG: String = "agent-actions-sheet"
 
 /**
- * The action sheet of one agent in the list (phase 9, SPEC §2.4): interrupt, stop, close, rename.
+ * The action sheet of one agent (phase 9, SPEC §2.4): Interrupt, Close & Remove, Rename, Pin.
  *
- * The same sheet opens from the row's overflow button and from a long press. Closing and stopping are destructive, so
- * each says what it does with the agent; nothing is asked twice, because the sheet is already the confirmation of
- * intent.
+ * The same sheet opens from the Agents list and from a space's agent rows, so the four actions are the same wherever an
+ * agent is shown. Close & Remove asks once, in the sheet itself, because removing an agent cannot be undone.
  *
- * @param menu the row and, when renaming, the draft.
+ * @param menu the row and, when renaming or confirming, the draft and the question.
  * @param onInterrupt asks the agent to stop what it is doing.
- * @param onStop ends its process.
- * @param onClose stops it and removes it from the list.
+ * @param onAskClose turns the sheet into the close question.
+ * @param onCancelClose goes back from the question.
+ * @param onClose stops the agent and removes it.
  * @param onStartRename turns the sheet into the rename field.
  * @param onDraft receives every keystroke of the new name.
  * @param onConfirmRename saves the typed name.
+ * @param onTogglePin pins the agent, or unpins it.
  * @param onDismiss closes the sheet.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,11 +50,13 @@ const val AGENT_ACTIONS_SHEET_TAG: String = "agent-actions-sheet"
 fun AgentMenuSheet(
     menu: AgentMenu,
     onInterrupt: () -> Unit,
-    onStop: () -> Unit,
+    onAskClose: () -> Unit,
+    onCancelClose: () -> Unit,
     onClose: () -> Unit,
     onStartRename: () -> Unit,
     onDraft: (String) -> Unit,
     onConfirmRename: () -> Unit,
+    onTogglePin: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val tokens = LocalWhistlTokens.current
@@ -77,31 +81,50 @@ fun AgentMenuSheet(
                 style = MaterialTheme.typography.bodySmall,
                 color = tokens.dim,
             )
-            if (menu.renaming) {
-                OutlinedTextField(
-                    value = menu.draft,
-                    onValueChange = onDraft,
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.agents_rename_label)) },
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Done),
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 56.dp),
-                )
-                TextButton(
-                    onClick = onConfirmRename,
-                    enabled = menu.draft.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                ) {
-                    Text(stringResource(R.string.agents_rename_save))
+            when {
+                menu.confirmingClose -> {
+                    Text(
+                        text = stringResource(R.string.agents_close_confirm_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = tokens.muted,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                    TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text(stringResource(R.string.agents_action_close), modifier = Modifier.fillMaxWidth())
+                    }
+                    TextButton(onClick = onCancelClose, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text(stringResource(R.string.common_cancel), modifier = Modifier.fillMaxWidth())
+                    }
                 }
-            } else {
-                // A finished agent has nothing to interrupt and nothing to stop; offering both would only produce a
-                // "that agent is already gone" for a row the user can see is finished (0.4.0 review, P2).
-                if (menu.row.live) {
-                    SheetAction(stringResource(R.string.agents_action_interrupt), onInterrupt)
-                    SheetAction(stringResource(R.string.agents_action_stop), onStop)
+                menu.renaming -> {
+                    OutlinedTextField(
+                        value = menu.draft,
+                        onValueChange = onDraft,
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.agents_rename_label)) },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 56.dp),
+                    )
+                    TextButton(
+                        onClick = onConfirmRename,
+                        enabled = menu.draft.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    ) {
+                        Text(stringResource(R.string.agents_rename_save))
+                    }
                 }
-                SheetAction(stringResource(R.string.agents_action_close), onClose)
-                SheetAction(stringResource(R.string.agents_action_rename), onStartRename)
+                else -> {
+                    // A finished agent has nothing to interrupt; the other three always make sense.
+                    if (menu.row.live) {
+                        SheetAction(stringResource(R.string.agents_action_interrupt), onInterrupt)
+                    }
+                    SheetAction(stringResource(R.string.agents_action_close), onAskClose)
+                    SheetAction(stringResource(R.string.agents_action_rename), onStartRename)
+                    SheetAction(
+                        stringResource(if (menu.row.pinned) R.string.agents_action_unpin else R.string.agents_action_pin),
+                        onTogglePin,
+                    )
+                }
             }
         }
     }

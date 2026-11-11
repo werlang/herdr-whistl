@@ -295,13 +295,11 @@
     <string name="settings_update_failed_install">O instalador do sistema recusou o arquivo.</string>
     <string name="agents_row_menu">Ações do agente</string>
     <string name="agents_action_interrupt">Interromper</string>
-    <string name="agents_action_stop">Parar</string>
     <string name="agents_action_close">Fechar e remover</string>
     <string name="agents_action_rename">Renomear</string>
     <string name="agents_rename_label">Nome</string>
     <string name="agents_rename_save">Salvar nome</string>
     <string name="agents_notice_interrupted">Interrompido.</string>
-    <string name="agents_notice_stopped">Parado.</string>
     <string name="agents_notice_closed">Fechado e removido.</string>
     <string name="agents_notice_renamed">Renomeado.</string>
     <string name="agents_notice_offline">A máquina não está conectada. Nada foi enviado.</string>
@@ -311,4 +309,9 @@
     <string name="spaces_filter_banner">Mostrando só %1$s</string>
     <string name="spaces_filter_clear">Mostrar todas as máquinas</string>
     <string name="machines_open_spaces">Spaces de %1$s</string>
+    <string name="agents_action_pin">Fixar agente</string>
+    <string name="agents_action_unpin">Desafixar agente</string>
+    <string name="agents_close_confirm_body">Ele será parado e removido da lista. Isso não pode ser desfeito.</string>
+    <string name="agents_notice_pinned">Fixado.</string>
+    <string name="agents_notice_unpinned">Desafixado.</string>
 </resources>

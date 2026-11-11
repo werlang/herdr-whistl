@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Whistl mark on its own, for headers: the same geometry as the launcher foreground, scaled to fill the square
+  instead of sitting inside the adaptive icon's safe zone (see ic_launcher_foreground.xml and design/README.md).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group
+        android:scaleX="0.10601"
+        android:scaleY="0.10601"
+        android:translateX="-0.28"
+        android:translateY="-0.91">
+
+        <path
+            android:fillColor="#444643"
+            android:pathData="M87,882 A425,427 0 0 1 937,882 Z" />
+        <path
+            android:fillColor="#444643"
+            android:pathData="M381,442 L381,270 C381,196 420,154 512,154 C604,154 643,196 643,270 L643,442 C600,442 560,422 512,422 C464,422 424,442 381,442 Z" />
+        <path
+            android:fillColor="#F1EFE3"
+            android:pathData="M512,227 A46,46 0 1 1 512,319 A46,46 0 1 1 512,227 Z" />
+        <path
+            android:pathData="M332,612 L452,700 L332,752"
+            android:strokeColor="#F1EFE3"
+            android:strokeWidth="45"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M560,705 L687,705"
+            android:strokeColor="#F1EFE3"
+            android:strokeWidth="36"
+            android:strokeLineCap="round" />
+    </group>
+</vector>

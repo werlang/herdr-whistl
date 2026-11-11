@@ -19,15 +19,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -48,6 +50,8 @@ import androidx.compose.ui.unit.dp
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.data.StartChoice
 import io.github.werlang.whistl.ui.agentLabelRes
+import io.github.werlang.whistl.ui.agents.AgentMenuSheet
+import io.github.werlang.whistl.ui.agents.NoticeBar
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.SheetDragHandle
 import io.github.werlang.whistl.ui.components.StatusLabel
@@ -116,8 +120,25 @@ fun SpaceDetailRoute(
         onOpenAgent = onOpenAgent,
         onNewAgent = model::openPicker,
         onBack = onBack,
+        onMenu = model::openMenu,
+        onDismissNotice = model::dismissNotice,
         modifier = modifier,
     )
+    // The same sheet as the Agents list, so the four actions are the same wherever an agent is shown (SPEC §2.4).
+    state.menu?.let { menu ->
+        AgentMenuSheet(
+            menu = menu,
+            onInterrupt = model::interrupt,
+            onAskClose = model::askClose,
+            onCancelClose = model::cancelClose,
+            onClose = model::close,
+            onStartRename = model::startRename,
+            onDraft = model::renameDraft,
+            onConfirmRename = model::confirmRename,
+            onTogglePin = model::togglePin,
+            onDismiss = model::closeMenu,
+        )
+    }
     state.picker?.let { picker ->
         PickerSheet(
             picker = picker,
@@ -143,6 +164,8 @@ fun SpaceDetailScreen(
     onOpenAgent: (String) -> Unit,
     onNewAgent: () -> Unit,
     onBack: () -> Unit,
+    onMenu: (DetailAgent) -> Unit = {},
+    onDismissNotice: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize().testTag(SPACE_DETAIL_TAG)) {
@@ -162,6 +185,7 @@ fun SpaceDetailScreen(
                 return@Box
             }
             Header(state)
+            state.notice?.let { notice -> NoticeBar(notice = notice, onDismiss = onDismissNotice) }
             if (state.agents.isEmpty()) {
                 EmptyAgents(Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             }
@@ -170,7 +194,7 @@ fun SpaceDetailScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 items(state.agents, key = { it.address }) { agent ->
-                    AgentRowView(agent = agent, onOpen = { onOpenAgent(agent.address) })
+                    AgentRowView(agent = agent, onOpen = { onOpenAgent(agent.address) }, onMenu = { onMenu(agent) })
                 }
             }
         }
@@ -266,7 +290,7 @@ private fun EmptyAgents(modifier: Modifier) {
  * @param onOpen called when the row is tapped.
  */
 @Composable
-private fun AgentRowView(agent: DetailAgent, onOpen: () -> Unit) {
+private fun AgentRowView(agent: DetailAgent, onOpen: () -> Unit, onMenu: () -> Unit) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -276,10 +300,11 @@ private fun AgentRowView(agent: DetailAgent, onOpen: () -> Unit) {
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(
+                modifier = Modifier.weight(1f).padding(start = 14.dp, top = 12.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
             Text(
                 text = agent.name,
                 style = MaterialTheme.typography.titleMedium,
@@ -300,6 +325,13 @@ private fun AgentRowView(agent: DetailAgent, onOpen: () -> Unit) {
                 label = stringResource(agentLabelRes(live = agent.live, waiting = agent.waiting, status = agent.status)),
                 color = statusColor(agent.status, agent.live),
             )
+            }
+            IconButton(onClick = onMenu, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = stringResource(R.string.agents_row_menu),
+                )
+            }
         }
     }
 }

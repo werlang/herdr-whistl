@@ -289,13 +289,11 @@
     <string name="settings_update_failed_install">The system installer refused the file.</string>
     <string name="agents_row_menu">Agent actions</string>
     <string name="agents_action_interrupt">Interrupt</string>
-    <string name="agents_action_stop">Stop</string>
-    <string name="agents_action_close">Close and remove</string>
+    <string name="agents_action_close">Close &amp; Remove</string>
     <string name="agents_action_rename">Rename</string>
     <string name="agents_rename_label">Name</string>
     <string name="agents_rename_save">Save name</string>
     <string name="agents_notice_interrupted">Interrupted.</string>
-    <string name="agents_notice_stopped">Stopped.</string>
     <string name="agents_notice_closed">Closed and removed.</string>
     <string name="agents_notice_renamed">Renamed.</string>
     <string name="agents_notice_offline">The machine is not connected. Nothing was sent.</string>
@@ -305,4 +303,9 @@
     <string name="spaces_filter_banner">Showing only %1$s</string>
     <string name="spaces_filter_clear">Show every machine</string>
     <string name="machines_open_spaces">Spaces of %1$s</string>
+    <string name="agents_action_pin">Pin agent</string>
+    <string name="agents_action_unpin">Unpin agent</string>
+    <string name="agents_close_confirm_body">It will be stopped and removed from the list. This cannot be undone.</string>
+    <string name="agents_notice_pinned">Pinned.</string>
+    <string name="agents_notice_unpinned">Unpinned.</string>
 </resources>

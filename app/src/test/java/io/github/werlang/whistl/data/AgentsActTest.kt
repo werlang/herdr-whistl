@@ -74,17 +74,6 @@ class AgentsActTest {
         assertEquals(INTERRUPTED, sent["params"]?.jsonObject?.get("terminal")?.jsonPrimitive?.content)
     }
 
-    /** Stop kills the process and keeps the terminal, so the row stays with its finished state. */
-    @Test
-    fun stopKillsAndNothingElse() = runTest {
-        val pipe = scriptedPipe(Exchange("kill", kill.request, kill.response))
-        val agents = repo(this, pipe)
-
-        assertEquals(ActionResult.Done, agents.act(MACHINE, ADDRESS, AgentAction.Stop))
-        assertEquals(1, pipe.written.size)
-        assertEquals("terminal.kill", Json.parseToJsonElement(pipe.written.single()).jsonObject["method"]?.jsonPrimitive?.content)
-    }
-
     /** Close kills and then removes: the row leaves the list because the terminal is gone. */
     @Test
     fun closeKillsAndRemoves() = runTest {

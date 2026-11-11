@@ -510,9 +510,6 @@ private class FakeState {
         if (list.none { it.address == address }) return ActionResult.Gone
         terminals[machineId] = when (action) {
             AgentAction.Interrupt -> list
-            AgentAction.Stop -> list.map {
-                if (it.address == address) it.copy(state = TerminalState.Finished, status = null) else it
-            }
             AgentAction.Close -> list.filterNot { it.address == address }
             is AgentAction.Rename -> list.map {
                 if (it.address == address) it.copy(labels = it.labels + (Agent.NAME_LABEL to action.name.trim())) else it

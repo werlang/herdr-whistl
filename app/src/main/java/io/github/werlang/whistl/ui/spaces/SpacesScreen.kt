@@ -9,10 +9,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -46,6 +48,7 @@ import io.github.werlang.whistl.ui.agentLabelRes
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.machines.text
 import io.github.werlang.whistl.ui.statusColor
+import io.github.werlang.whistl.ui.theme.AppMark
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
 
@@ -80,24 +83,30 @@ fun SpacesScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 10.dp)) {
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = stringResource(R.string.destination_spaces),
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.semantics { heading() },
-            )
+        Row(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 10.dp)) {
+            AppMark()
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = stringResource(R.string.destination_spaces),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.semantics { heading() },
+                )
+            }
         }
         // Reached by tapping a machine: the list shows only that machine until the filter is cleared (SPEC §2.2).
         state.filterName?.let { name ->
             FilterBanner(name = name, onClear = onClearFilter)
         }
-        if (state.isEmpty) {
+        // Unfiltered, "no spaces yet" is about the whole app; filtered to a machine, it belongs under that machine's
+        // name, where the group is (SPEC §2.2).
+        if (state.isEmpty && state.filterName == null) {
             EmptySpaces(Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         }
         LazyColumn(
@@ -107,6 +116,14 @@ fun SpacesScreen(
         ) {
             items(state.groups, key = { it.machineId }) { group ->
                 GroupHeader(group)
+                if (group.rows.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.spaces_empty_title),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = LocalWhistlTokens.current.muted,
+                        modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 6.dp),
+                    )
+                }
                 group.rows.forEach { row ->
                     SpaceRowView(row = row, onOpen = { onOpen(row.machineId, row.spaceId) }, onMenu = { onMenu(row.machineId, row.spaceId) })
                 }

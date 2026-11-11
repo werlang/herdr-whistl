@@ -31,10 +31,13 @@ import io.github.werlang.whistl.platform.SharedPreferencesResolvedFolderCache
 import io.github.werlang.whistl.platform.SharedPreferencesSettingsStore
 import io.github.werlang.whistl.platform.SharedPreferencesSpacesCache
 import io.github.werlang.whistl.core.log.Log
+import io.github.werlang.whistl.data.DefaultPinnedAgents
 import io.github.werlang.whistl.data.HttpUpdateRepository
+import io.github.werlang.whistl.data.PinnedAgents
 import io.github.werlang.whistl.data.UpdateRepository
 import io.github.werlang.whistl.domain.AppVersion
 import io.github.werlang.whistl.platform.AndroidAppInstaller
+import io.github.werlang.whistl.platform.SharedPreferencesPinnedAgentsStore
 import io.github.werlang.whistl.platform.AppInstaller
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,6 +86,9 @@ class AppContainer(
 
     /** This device's public key line, for the Add machine sheet. */
     val clientKey: ClientPublicKey = demo?.clientKey ?: live.clientKey
+
+    /** The agents the user pinned, kept on this device (SPEC §2.4). */
+    val pins: PinnedAgents = DefaultPinnedAgents(SharedPreferencesPinnedAgentsStore(context.applicationContext))
 
     /**
      * The machine the Spaces screen is filtered to, or `null` for every machine. Tapping a machine card sets it before

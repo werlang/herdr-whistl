@@ -141,7 +141,8 @@ fun WhistlApp(startRoute: String = Routes.MACHINES) {
     val navController = rememberNavController()
     val entry by navController.currentBackStackEntryAsState()
     val route = entry?.destination?.route
-    val showBar = Destination.entries.any { it.route == route }
+    // A space's detail is part of Spaces: the bar stays so the footer never disappears under the user (0.5.0).
+    val showBar = Destination.entries.any { it.route == route } || route == Routes.SPACE_PATTERN
     val container = LocalAppContainer.current
     val machinesModel: MachinesViewModel = viewModel(
         factory = viewModelFactory {
@@ -306,7 +307,7 @@ private fun NavIcon(item: Destination) {
 private fun AgentsRoute(onOpen: (AgentRow) -> Unit) {
     val container = LocalAppContainer.current
     val model: AgentsViewModel = viewModel(
-        factory = viewModelFactory { initializer { AgentsViewModel(container.agents, container.machines) } },
+        factory = viewModelFactory {            initializer { AgentsViewModel(container.agents, container.machines, container.pins) } },
     )
     val state by model.state.collectAsState()
     AgentsScreen(
@@ -321,11 +322,13 @@ private fun AgentsRoute(onOpen: (AgentRow) -> Unit) {
         AgentMenuSheet(
             menu = menu,
             onInterrupt = model::interrupt,
-            onStop = model::stop,
+            onAskClose = model::askClose,
+            onCancelClose = model::cancelClose,
             onClose = model::close,
             onStartRename = model::startRename,
             onDraft = model::renameDraft,
             onConfirmRename = model::confirmRename,
+            onTogglePin = model::togglePin,
             onDismiss = model::closeMenu,
         )
     }
@@ -367,6 +370,7 @@ private fun spaceDetailModel(machineId: String, spaceId: String): SpaceDetailVie
                     agents = container.agents,
                     machines = container.machines,
                     installed = container.installed,
+                    pins = container.pins,
                 )
             }
         },

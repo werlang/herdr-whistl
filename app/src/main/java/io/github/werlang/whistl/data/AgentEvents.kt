@@ -171,6 +171,20 @@ fun sortForAgentsScreen(agents: List<MachineAgent>): List<MachineAgent> {
 }
 
 /**
+ * The screen's order, with the agents the user pinned first.
+ *
+ * A pin is stronger than a status: an agent pinned on purpose stays where the user put it, and the rest keeps the order
+ * of [sortForAgentsScreen] (phase 9, SPEC §2.4).
+ *
+ * @param pinned the pinned keys, as [PinnedAgents.key] builds them.
+ */
+fun sortWithPinned(agents: List<MachineAgent>, pinned: Set<String>): List<MachineAgent> {
+    if (pinned.isEmpty()) return sortForAgentsScreen(agents)
+    val (yes, no) = agents.partition { PinnedAgents.key(it.machineId, it.agent.terminal.address) in pinned }
+    return sortForAgentsScreen(yes) + sortForAgentsScreen(no)
+}
+
+/**
  * The screen rank of a status: lower shows first. Blocked 0, working 1, done 2, idle 3, error 4, no status 5.
  *
  * @param status the agent's status, or `null` for a plain program.

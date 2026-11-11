@@ -2,13 +2,14 @@ package io.github.werlang.whistl.ui.agents
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import io.github.werlang.whistl.data.AgentAction
 import io.github.werlang.whistl.data.ActionResult
+import io.github.werlang.whistl.data.AgentAction
 import io.github.werlang.whistl.data.AgentsRepository
 import io.github.werlang.whistl.data.MachineAgent
 import io.github.werlang.whistl.data.MachinesRepository
+import io.github.werlang.whistl.data.PinnedAgents
 import io.github.werlang.whistl.data.isWaitingForUser
-import io.github.werlang.whistl.data.sortForAgentsScreen
+import io.github.werlang.whistl.data.sortWithPinned
 import io.github.werlang.whistl.domain.Agent
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.TerminalState
@@ -57,6 +58,7 @@ data class AgentRow(
     val live: Boolean,
     val machineName: String,
     val spaceName: String?,
+    val pinned: Boolean = false,
 )
 
 /**
@@ -98,6 +100,7 @@ data class AgentMenu(
     val row: AgentRow,
     val renaming: Boolean = false,
     val draft: String = "",
+    val confirmingClose: Boolean = false,
 )
 
 /** What the list tells the user after an action (phase 9, SPEC §2.4). */
@@ -105,11 +108,14 @@ enum class AgentNotice {
     /** The agent was interrupted. */
     Interrupted,
 
-    /** The agent was stopped. */
-    Stopped,
-
-    /** The agent was stopped and removed. */
+    /** The agent was closed and removed. */
     Closed,
+
+    /** The agent was pinned. */
+    Pinned,
+
+    /** The agent was unpinned. */
+    Unpinned,
 
     /** The agent's new name was saved. */
     Renamed,
@@ -133,14 +139,16 @@ enum class AgentNotice {
  */
 class AgentsViewModel(
     private val agents: AgentsRepository,
-    machines: MachinesRepository,
+    private val machines: MachinesRepository,
+    private val pins: PinnedAgents,
 ) : ViewModel() {
     private val filter = MutableStateFlow(AgentsFilter.All)
     private val open = MutableStateFlow<AgentMenu?>(null)
     private val notice = MutableStateFlow<AgentNotice?>(null)
 
-    /** The sheet and the last notice, as one flow so the list's state stays a five-way combine. */
-    private val sheet: Flow<Pair<AgentMenu?, AgentNotice?>> = combine(open, notice, ::Pair)
+    /** The sheet, the last notice and the pinned keys, as one flow so the list's state stays a five-way combine. */
+    private val sheet: Flow<Triple<AgentMenu?, AgentNotice?, Set<String>>> =
+        combine(open, notice, pins.pinned, ::Triple)
 
     /** The list's state. */
     val state: StateFlow<AgentsUiState> = combine(
@@ -149,12 +157,12 @@ class AgentsViewModel(
         agents.blockedCount,
         filter,
         sheet,
-    ) { list, machineList, blocked, selected, (menu, lastNotice) ->
+    ) { list, machineList, blocked, selected, (menu, lastNotice, pinnedKeys) ->
         AgentsUiState(
             chips = AgentsFilter.entries.map { chip ->
                 FilterChip(filter = chip, count = list.count { chip.matches(it) }, selected = chip == selected)
             },
-            rows = sortForAgentsScreen(list.filter { selected.matches(it) }).map { it.toRow(machineList) },
+            rows = sortWithPinned(list.filter { selected.matches(it) }, pinnedKeys).map { it.toRow(machineList, pinnedKeys) },
             blockedCount = blocked,
             menu = menu,
             notice = lastNotice,
@@ -208,11 +216,27 @@ class AgentsViewModel(
     /** Asks the agent to stop what it is doing. */
     fun interrupt() = act(AgentAction.Interrupt, AgentNotice.Interrupted)
 
-    /** Ends the agent's process. */
-    fun stop() = act(AgentAction.Stop, AgentNotice.Stopped)
+    /** Turns the sheet into the question closing asks: removing an agent cannot be undone. */
+    fun askClose() {
+        open.value = open.value?.copy(confirmingClose = true)
+    }
+
+    /** Goes back from the close question to the actions. */
+    fun cancelClose() {
+        open.value = open.value?.copy(confirmingClose = false)
+    }
 
     /** Stops the agent and removes it from the list. */
     fun close() = act(AgentAction.Close, AgentNotice.Closed)
+
+    /** Pins the sheet's agent, or unpins it. A pin is local: nothing is sent to the core. */
+    fun togglePin() {
+        val row = open.value?.row ?: return
+        val key = PinnedAgents.key(row.machineId, row.address)
+        pins.toggle(key)
+        open.value = null
+        notice.value = if (key in pins.pinned.value) AgentNotice.Pinned else AgentNotice.Unpinned
+    }
 
     /** Hides the message the last action left. */
     fun dismissNotice() {
@@ -243,7 +267,10 @@ class AgentsViewModel(
         AgentsFilter.Idle -> agent.agent.terminal.status == AgentStatus.Idle
     }
 
-    private fun MachineAgent.toRow(machineList: List<io.github.werlang.whistl.domain.Machine>): AgentRow {
+    private fun MachineAgent.toRow(
+        machineList: List<io.github.werlang.whistl.domain.Machine>,
+        pinnedKeys: Set<String>,
+    ): AgentRow {
         val terminal = agent.terminal
         return AgentRow(
             machineId = machineId,
@@ -254,6 +281,7 @@ class AgentsViewModel(
             live = terminal.state == TerminalState.Live,
             machineName = machineList.firstOrNull { it.id == machineId }?.name ?: machineId,
             spaceName = space?.name,
+            pinned = PinnedAgents.key(machineId, terminal.address) in pinnedKeys,
         )
     }
 }

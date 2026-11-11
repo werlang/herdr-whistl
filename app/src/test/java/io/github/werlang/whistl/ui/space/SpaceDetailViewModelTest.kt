@@ -16,6 +16,7 @@ import io.github.werlang.whistl.domain.KnownAgents
 import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.domain.Terminal
 import io.github.werlang.whistl.domain.TerminalState
+import io.github.werlang.whistl.support.FakePins
 import io.github.werlang.whistl.support.MainDispatcherRule
 import io.github.werlang.whistl.support.ScriptedMachines
 import io.github.werlang.whistl.support.StaticInstalled
@@ -143,6 +144,7 @@ class SpaceDetailViewModelTest {
         agents = agents,
         machines = machines(),
         installed = StaticInstalled(installed),
+        pins = FakePins(),
     )
 
     /** The header is the space's name, its machine's name, and its folder. */

@@ -1,18 +1,17 @@
 package io.github.werlang.whistl.ui.agents
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -37,11 +36,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.werlang.whistl.R
+import io.github.werlang.whistl.ui.agentLabelRes
 import io.github.werlang.whistl.ui.components.CountChip
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.StatusLabel
 import io.github.werlang.whistl.ui.statusColor
-import io.github.werlang.whistl.ui.agentLabelRes
+import io.github.werlang.whistl.ui.theme.AppMark
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
 
@@ -70,18 +70,22 @@ fun AgentsScreen(
         AgentsFilter.Idle to stringResource(R.string.agents_filter_idle),
     )
     Column(modifier = modifier.fillMaxSize()) {
-        Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 10.dp)) {
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = stringResource(R.string.agents_title),
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.semantics { heading() },
-            )
+        Row(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 10.dp)) {
+            AppMark()
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = stringResource(R.string.agents_title),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.semantics { heading() },
+                )
+            }
         }
         state.notice?.let { notice ->
             NoticeBar(notice = notice, onDismiss = onDismissNotice)
@@ -131,7 +135,6 @@ fun AgentsScreen(
  * @param row the agent.
  * @param onClick called when the card is tapped.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AgentCard(row: AgentRow, onClick: () -> Unit, onMenu: () -> Unit) {
     val tokens = LocalWhistlTokens.current
@@ -144,32 +147,31 @@ private fun AgentCard(row: AgentRow, onClick: () -> Unit, onMenu: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 72.dp)
-            // Long press opens the same sheet as the overflow button: one way to reach stop/rename/close with a thumb.
-            .combinedClickable(onClick = onClick, onLongClick = onMenu),
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = row.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = row.address,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = WhistlMono,
-                    color = tokens.dim,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = row.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = row.address,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = WhistlMono,
+                        color = tokens.dim,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 IconButton(onClick = onMenu, modifier = Modifier.size(48.dp)) {
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
@@ -201,13 +203,14 @@ private fun AgentCard(row: AgentRow, onClick: () -> Unit, onMenu: () -> Unit) {
  * @param onDismiss called when the bar is dismissed.
  */
 @Composable
-private fun NoticeBar(notice: AgentNotice, onDismiss: () -> Unit) {
+internal fun NoticeBar(notice: AgentNotice, onDismiss: () -> Unit) {
     val tokens = LocalWhistlTokens.current
     val text = stringResource(
         when (notice) {
             AgentNotice.Interrupted -> R.string.agents_notice_interrupted
-            AgentNotice.Stopped -> R.string.agents_notice_stopped
             AgentNotice.Closed -> R.string.agents_notice_closed
+            AgentNotice.Pinned -> R.string.agents_notice_pinned
+            AgentNotice.Unpinned -> R.string.agents_notice_unpinned
             AgentNotice.Renamed -> R.string.agents_notice_renamed
             AgentNotice.Offline -> R.string.agents_notice_offline
             AgentNotice.Gone -> R.string.agents_notice_gone

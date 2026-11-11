@@ -8,6 +8,7 @@ import io.github.werlang.whistl.domain.Agent
 import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.domain.Terminal
 import io.github.werlang.whistl.domain.TerminalState
+import io.github.werlang.whistl.support.FakePins
 import io.github.werlang.whistl.support.MainDispatcherRule
 import io.github.werlang.whistl.support.StaticAgents
 import io.github.werlang.whistl.data.ConnectionState
@@ -54,7 +55,7 @@ class AgentsMenuTest {
     private suspend fun frame(agents: StaticAgents, terminals: List<Terminal> = listOf(terminal())): Pair<AgentsViewModel, MachineAgent> {
         val machines = ScriptedMachines().apply { put(machine, ConnectionState.Offline) }
         agents.agents.value = listOf(MachineAgent(MACHINE, Agent(terminals.first()), null))
-        val vm = AgentsViewModel(agents, machines)
+        val vm = AgentsViewModel(agents, machines, FakePins())
         return vm to agents.agents.value.first()
     }
 
@@ -79,9 +80,6 @@ class AgentsMenuTest {
         val cases = listOf(
             Triple<(AgentsViewModel) -> Unit, AgentAction, AgentNotice>(
                 { it.interrupt() }, AgentAction.Interrupt, AgentNotice.Interrupted,
-            ),
-            Triple<(AgentsViewModel) -> Unit, AgentAction, AgentNotice>(
-                { it.stop() }, AgentAction.Stop, AgentNotice.Stopped,
             ),
             Triple<(AgentsViewModel) -> Unit, AgentAction, AgentNotice>(
                 { it.close() }, AgentAction.Close, AgentNotice.Closed,
@@ -139,14 +137,14 @@ class AgentsMenuTest {
         val cases = listOf(
             ActionResult.Offline to AgentNotice.Offline,
             ActionResult.Gone to AgentNotice.Gone,
-            ActionResult.Failed(AgentAction.Stop) to AgentNotice.Failed,
+            ActionResult.Failed(AgentAction.Interrupt) to AgentNotice.Failed,
         )
         cases.forEach { (result, notice) ->
             val agents = StaticAgents().apply { this.result = result }
             val (vm, _) = frame(agents)
             vm.openMenu(vm.state.value.rows.first())
 
-            vm.stop()
+            vm.interrupt()
 
             assertEquals(notice, vm.state.value.notice)
         }
@@ -158,7 +156,7 @@ class AgentsMenuTest {
         val agents = StaticAgents()
         val named = terminal(labels = mapOf(Agent.NAME_LABEL to "deploy"))
         agents.agents.value = listOf(MachineAgent(MACHINE, Agent(named), null))
-        val vm = AgentsViewModel(agents, ScriptedMachines().apply { put(machine, ConnectionState.Offline) })
+        val vm = AgentsViewModel(agents, ScriptedMachines().apply { put(machine, ConnectionState.Offline) }, FakePins())
 
         assertEquals("deploy", vm.state.value.rows.single().name)
     }

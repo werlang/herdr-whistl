@@ -2,22 +2,29 @@ package io.github.werlang.whistl.ui.space
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.werlang.whistl.data.ActionResult
+import io.github.werlang.whistl.data.AgentAction
 import io.github.werlang.whistl.data.AgentsRepository
 import io.github.werlang.whistl.data.InstalledAgentsRepository
 import io.github.werlang.whistl.data.MachineAgent
 import io.github.werlang.whistl.data.MachineSpaces
 import io.github.werlang.whistl.data.MachinesRepository
+import io.github.werlang.whistl.data.PinnedAgents
 import io.github.werlang.whistl.data.SpacesRepository
 import io.github.werlang.whistl.data.StartChoice
 import io.github.werlang.whistl.data.StartResult
 import io.github.werlang.whistl.data.UnresolvableReason
+import io.github.werlang.whistl.data.isWaitingForUser
+import io.github.werlang.whistl.data.sortWithPinned
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.domain.TerminalState
+import io.github.werlang.whistl.ui.agents.AgentMenu
+import io.github.werlang.whistl.ui.agents.AgentNotice
+import io.github.werlang.whistl.ui.agents.AgentRow
 import io.github.werlang.whistl.ui.agents.displayName
 import io.github.werlang.whistl.ui.spaces.FolderState
 import io.github.werlang.whistl.ui.spaces.folderStateOf
-import io.github.werlang.whistl.data.isWaitingForUser
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,6 +48,7 @@ data class DetailAgent(
     val status: AgentStatus?,
     val live: Boolean,
     val waiting: Boolean,
+    val pinned: Boolean = false,
 )
 
 /** Why New agent is off (SPEC §2.3): the machine is offline, or the folder is not resolved on this connection. */
@@ -117,13 +125,20 @@ data class SpaceDetailUiState(
     val newAgent: NewAgentUi,
     val picker: PickerUi?,
     val opened: String?,
+    val menu: AgentMenu? = null,
+    val notice: AgentNotice? = null,
 )
 
 /** The picker's state while it is open: whether a start is running, and the last start's problem. */
 private data class PickerSheet(val starting: Boolean = false, val problem: StartProblem? = null)
 
 /** The sheets and results the Space detail holds. */
-private data class DetailSheets(val picker: PickerSheet? = null, val opened: String? = null)
+private data class DetailSheets(
+    val picker: PickerSheet? = null,
+    val opened: String? = null,
+    val menu: AgentMenu? = null,
+    val notice: AgentNotice? = null,
+)
 
 /**
  * The Space detail (SPEC §2.3, phase 4b r2): the header, the agents of the space, the New agent button, and the picker that
@@ -143,7 +158,10 @@ class SpaceDetailViewModel(
     private val agents: AgentsRepository,
     private val machines: MachinesRepository,
     private val installed: InstalledAgentsRepository,
+    private val pins: PinnedAgents,
 ) : ViewModel() {
+    /** The pinned keys, folded into the sheet state so the state stays a five-way combine. */
+    private val pinnedFlow = pins.pinned
     private val sheets = MutableStateFlow(DetailSheets())
 
     /** The screen's state. */
@@ -152,9 +170,9 @@ class SpaceDetailViewModel(
         agents.agents,
         machines.machines(),
         installed.installed,
-        sheets,
-    ) { groups, agentList, machineList, installedMap, open ->
-        build(groups, agentList, machineList, installedMap, open)
+        combine(sheets, pinnedFlow, ::Pair),
+    ) { groups, agentList, machineList, installedMap, (open, pinnedKeys) ->
+        build(groups, agentList, machineList, installedMap, open, pinnedKeys)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyState())
 
     /**
@@ -217,6 +235,7 @@ class SpaceDetailViewModel(
         machineList: List<Machine>,
         installedMap: Map<String, List<io.github.werlang.whistl.domain.KnownAgent>>,
         open: DetailSheets,
+        pinnedKeys: Set<String>,
     ): SpaceDetailUiState {
         val group = groups.firstOrNull { it.machineId == machineId }
         val space = group?.spaces?.firstOrNull { it.id == spaceId }
@@ -238,18 +257,20 @@ class SpaceDetailViewModel(
             folder = space.folder,
             folderState = folderState,
             machineOffline = group.offline,
-            agents = agentList
-                .filter { it.machineId == machineId && it.spaceId == spaceId }
-                .map { agent ->
-                    val terminal = agent.agent.terminal
-                    DetailAgent(
-                        address = terminal.address,
-                        name = displayName(terminal.name, terminal.argv, terminal.address),
-                        status = terminal.status,
-                        live = terminal.state == TerminalState.Live,
-                        waiting = terminal.isWaitingForUser(),
-                    )
-                },
+            agents = sortWithPinned(
+                agentList.filter { it.machineId == machineId && it.spaceId == spaceId },
+                pinnedKeys,
+            ).map { agent ->
+                val terminal = agent.agent.terminal
+                DetailAgent(
+                    address = terminal.address,
+                    name = displayName(terminal.name, terminal.argv, terminal.address, terminal.labels),
+                    status = terminal.status,
+                    live = terminal.state == TerminalState.Live,
+                    waiting = terminal.isWaitingForUser(),
+                    pinned = PinnedAgents.key(machineId, terminal.address) in pinnedKeys,
+                )
+            },
             newAgent = NewAgentUi(enabled = block == null, block = block),
             picker = open.picker?.let { sheet ->
                 PickerUi(
@@ -259,6 +280,103 @@ class SpaceDetailViewModel(
                 )
             },
             opened = open.opened,
+            menu = open.menu,
+            notice = open.notice,
         )
+    }
+
+    /**
+     * Opens the action sheet of one of this space's agents, with the row built as the Agents list builds it, so the same
+     * sheet serves both screens (SPEC §2.4).
+     *
+     * @param agent the row tapped.
+     */
+    fun openMenu(agent: DetailAgent) {
+        val current = state.value
+        val row = AgentRow(
+            machineId = machineId,
+            address = agent.address,
+            name = agent.name,
+            status = agent.status,
+            waiting = agent.waiting,
+            live = agent.live,
+            machineName = current.machineName,
+            spaceName = current.name,
+            pinned = agent.pinned,
+        )
+        sheets.value = sheets.value.copy(menu = AgentMenu(row), notice = null)
+    }
+
+    /** Closes the action sheet. */
+    fun closeMenu() {
+        sheets.value = sheets.value.copy(menu = null)
+    }
+
+    /** @param text what the user typed as the new name. */
+    fun renameDraft(text: String) {
+        sheets.value = sheets.value.copy(menu = sheets.value.menu?.copy(draft = text))
+    }
+
+    /** Turns the sheet into the rename field, with the current name in it. */
+    fun startRename() {
+        val menu = sheets.value.menu ?: return
+        sheets.value = sheets.value.copy(menu = menu.copy(renaming = true, draft = menu.row.name))
+    }
+
+    /** Saves the typed name. An empty name is refused rather than sent. */
+    fun confirmRename() {
+        val menu = sheets.value.menu ?: return
+        val name = menu.draft.trim()
+        if (name.isEmpty()) return
+        sheets.value = sheets.value.copy(menu = null)
+        act(menu.row, AgentAction.Rename(name), AgentNotice.Renamed)
+    }
+
+    /** Asks the agent to stop what it is doing. */
+    fun interrupt() = actFromSheet(AgentAction.Interrupt, AgentNotice.Interrupted)
+
+    /** Turns the sheet into the question closing asks. */
+    fun askClose() {
+        sheets.value = sheets.value.copy(menu = sheets.value.menu?.copy(confirmingClose = true))
+    }
+
+    /** Goes back from the close question. */
+    fun cancelClose() {
+        sheets.value = sheets.value.copy(menu = sheets.value.menu?.copy(confirmingClose = false))
+    }
+
+    /** Stops the agent and removes it. */
+    fun close() = actFromSheet(AgentAction.Close, AgentNotice.Closed)
+
+    /** Pins the sheet's agent, or unpins it. Nothing is sent to the core. */
+    fun togglePin() {
+        val row = sheets.value.menu?.row ?: return
+        val key = PinnedAgents.key(row.machineId, row.address)
+        pins.toggle(key)
+        val notice = if (key in pins.pinned.value) AgentNotice.Pinned else AgentNotice.Unpinned
+        sheets.value = sheets.value.copy(menu = null, notice = notice)
+    }
+
+    /** Hides the message the last action left. */
+    fun dismissNotice() {
+        sheets.value = sheets.value.copy(notice = null)
+    }
+
+    private fun actFromSheet(action: AgentAction, done: AgentNotice) {
+        val row = sheets.value.menu?.row ?: return
+        sheets.value = sheets.value.copy(menu = null)
+        act(row, action, done)
+    }
+
+    private fun act(row: AgentRow, action: AgentAction, done: AgentNotice) {
+        viewModelScope.launch {
+            val notice = when (agents.act(row.machineId, row.address, action)) {
+                ActionResult.Done -> done
+                ActionResult.Offline -> AgentNotice.Offline
+                ActionResult.Gone -> AgentNotice.Gone
+                is ActionResult.Failed -> AgentNotice.Failed
+            }
+            sheets.value = sheets.value.copy(notice = notice)
+        }
     }
 }

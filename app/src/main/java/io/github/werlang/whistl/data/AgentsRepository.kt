@@ -70,9 +70,6 @@ sealed interface AgentAction {
     /** Sends the interrupt the core defines: the agent stops what it is doing and waits. */
     data object Interrupt : AgentAction
 
-    /** Ends the agent's process. hc keeps the terminal until it is removed. */
-    data object Stop : AgentAction
-
     /** Stops the agent and removes the terminal, so it leaves the list. */
     data object Close : AgentAction
 
@@ -257,7 +254,6 @@ class DefaultAgentsRepository(
             val client = lease.client() ?: return ActionResult.Offline
             when (action) {
                 AgentAction.Interrupt -> client.terminalInterrupt(address)
-                AgentAction.Stop -> client.terminalKill(address)
                 // Closing is stop then remove: killing a terminal that already finished is not an error, so the kill's
                 // NotFound is swallowed and the remove is what decides.
                 AgentAction.Close -> {
