@@ -7,6 +7,20 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.6.0] - 2026-11-11
+
+### Changed
+
+- **The screen has a text field again.** A compact line right under the status bar, with a Send button beside it: what
+  you type stays there until you send it, and Send delivers the line and the Return the terminal understands. The
+  invisible field and the per-keystroke forwarding of 0.5.x are gone from this screen — the interface is being taken
+  back to a field plus a button, on purpose.
+- **An empty field says whose line it is**: the machine's user (`root`), so the row is never a blank box.
+- **The keyboard and paste buttons are out for this iteration.** The shortcut keys keep their own row below the field.
+
+Proved on the emulator against a real agent: typing `xy` left the terminal untouched, the field held it, and Send
+delivered it as a line (the agent answered).
+
 ## [0.5.9] - 2026-11-11
 
 ### Fixed
@@ -313,7 +327,8 @@ Nothing yet.
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.5.9...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/werlang/herdr-whistl/compare/v0.5.9...v0.6.0
 [0.5.9]: https://github.com/werlang/herdr-whistl/compare/v0.5.8...v0.5.9
 [0.5.8]: https://github.com/werlang/herdr-whistl/compare/v0.5.7...v0.5.8
 [0.5.7]: https://github.com/werlang/herdr-whistl/compare/v0.5.6...v0.5.7

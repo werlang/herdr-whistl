@@ -119,7 +119,6 @@ object ShortcutBar {
 
     /** The default bar (SPEC §2): Esc, Tab, Ctrl, ↑, ↓, ←, →, Enter. */
     val DEFAULT: List<ShortcutKey> = listOf(
-        ShortcutKey.PASTE,
         ShortcutKey.ESC,
         ShortcutKey.TAB,
         ShortcutKey.CTRL,

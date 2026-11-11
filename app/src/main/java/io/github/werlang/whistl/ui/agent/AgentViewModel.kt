@@ -115,6 +115,8 @@ data class AgentUiState(
     val name: String,
     val address: String,
     val machineName: String,
+    /** The user the machine logs in as: what the empty input field says (0.6.0). */
+    val user: String,
     val spaceName: String?,
     val statusLabel: AgentStatusLabel,
     val status: AgentStatus?,
@@ -216,7 +218,16 @@ class AgentViewModel(
         settings.settings,
         interaction,
     ) { output, sighting, machineList, prefs, own ->
-        build(output, sighting, machineList.firstOrNull { it.id == machineId }?.name ?: machineId, prefs.fontSize, prefs.shortcutBar, own)
+        val machine = machineList.firstOrNull { it.id == machineId }
+        build(
+            output,
+            sighting,
+            machine?.name ?: machineId,
+            machine?.user.orEmpty(),
+            prefs.fontSize,
+            prefs.shortcutBar,
+            own,
+        )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, placeholder())
 
     init {
@@ -456,6 +467,7 @@ class AgentViewModel(
         output: TerminalScreen,
         sighting: Sighting,
         machineName: String,
+        machineUser: String,
         fontSize: FontSize,
         keyBar: List<ShortcutKey>,
         own: Interaction,
@@ -482,6 +494,7 @@ class AgentViewModel(
             name = terminal?.let { displayName(it.name, it.argv, it.address) } ?: address,
             address = address,
             machineName = machineName,
+            user = machineUser,
             spaceName = current?.space?.name,
             statusLabel = if (offline && !reportedFinished) {
                 AgentStatusLabel.Offline
@@ -520,6 +533,7 @@ class AgentViewModel(
         name = address,
         address = address,
         machineName = "",
+        user = "",
         spaceName = null,
         statusLabel = AgentStatusLabel.Offline,
         status = null,

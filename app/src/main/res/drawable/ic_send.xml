@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Send: an arrow leaving a tray, the shape a chat or a terminal prompt uses for "submit this line". -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M3,20.5L21,12L3,3.5L3,10.2L15,12L3,13.8L3,20.5Z" />
+</vector>
