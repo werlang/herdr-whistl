@@ -22,3 +22,6 @@ keystore.properties
 
 # Supervisor worktrees and status files
 .worktrees/
+
+# macOS AppleDouble files, copied along by tar from a Mac
+._*
