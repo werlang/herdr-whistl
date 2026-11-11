@@ -15,6 +15,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # What this push actually touched. The screenshots job renders every golden on a macOS runner (~4 min), which is only
+  # worth paying for when something the eye can see changed; docs, the protocol core and gradle plumbing are covered by
+  # the Linux build (0.5.0).
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ui: ${{ steps.diff.outputs.ui }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Did anything visible change?
+        id: diff
+        run: |
+          set -euo pipefail
+          base="${{ github.event.before }}"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$base^{commit}"; then
+            base="$(git rev-list --max-parents=0 HEAD | tail -1)"
+          fi
+          changed="$(git diff --name-only "$base" "${{ github.sha }}")"
+          echo "changed files:"
+          echo "$changed" | sed 's/^/  /'
+          if echo "$changed" | grep -Eq '^(app/src/(main|testDebug|test/screenshots)/|app/build.gradle.kts|gradle/|build.gradle.kts|settings.gradle.kts)'; then
+            echo "ui=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ui=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -84,6 +114,8 @@ jobs:
   # Verifies the committed goldens (app/src/test/screenshots) on macOS, where they were recorded. It runs only the
   # Roborazzi verify task: a difference fails the job and nothing is rewritten.
   screenshots:
+    needs: changes
+    if: needs.changes.outputs.ui == 'true'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
