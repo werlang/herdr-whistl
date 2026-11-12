@@ -68,7 +68,6 @@ fun AgentsScreen(
     onMenu: (AgentRow) -> Unit = {},
     onDismissNotice: () -> Unit = {},
     onClearFilter: () -> Unit = {},
-    onNewAgent: () -> Unit = {},
     onChooseAgent: (StartChoice) -> Unit = {},
     onDismissPicker: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -80,8 +79,7 @@ fun AgentsScreen(
         AgentsFilter.Idle to stringResource(R.string.agents_filter_idle),
         AgentsFilter.NoSpace to stringResource(R.string.agents_filter_no_space),
     )
-    Box(modifier = modifier.fillMaxSize()) {
-    Column(modifier = Modifier.fillMaxSize().testTag(AGENTS_SCREEN_TAG)) {
+    Column(modifier = modifier.fillMaxSize().testTag(AGENTS_SCREEN_TAG)) {
         Row(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 10.dp)) {
             AppMark()
             Spacer(Modifier.width(10.dp))
@@ -136,21 +134,6 @@ fun AgentsScreen(
                 items(state.rows, key = { it.machineId + "/" + it.address }) { row -> // i18n-ok: lazy-list key, never shown
                     AgentCard(row = row, onClick = { onOpen(row) }, onMenu = { onMenu(row) })
                 }
-            }
-        }
-    }
-        // New agent belongs to a space, so it appears only while the list shows one (0.6.5).
-        state.newAgent?.let { newAgent ->
-            ExtendedFloatingActionButton(
-                onClick = onNewAgent,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-                    .testTag(AGENTS_NEW_AGENT_TAG),
-                containerColor = if (newAgent.enabled) MaterialTheme.colorScheme.primary else LocalWhistlTokens.current.field,
-                contentColor = if (newAgent.enabled) MaterialTheme.colorScheme.onPrimary else LocalWhistlTokens.current.muted,
-            ) {
-                Text(text = stringResource(R.string.new_agent))
             }
         }
     }

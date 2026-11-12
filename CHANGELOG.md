@@ -7,6 +7,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.6.6] - 2026-11-11
+
+### Fixed
+
+- **The New agent button follows the app's own pattern.** It was a wide button with a label, drawn inside the list; it is
+  now the same floating `+` the Machines and Spaces screens use, drawn by the same place in the app, so the three lists
+  add things the same way.
+
 ## [0.6.5] - 2026-11-11
 
 ### Added
@@ -402,7 +410,8 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.6.5...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.6.6...HEAD
+[0.6.6]: https://github.com/werlang/herdr-whistl/compare/v0.6.5...v0.6.6
 [0.6.5]: https://github.com/werlang/herdr-whistl/compare/v0.6.4...v0.6.5
 [0.6.4]: https://github.com/werlang/herdr-whistl/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/werlang/herdr-whistl/compare/v0.6.2...v0.6.3

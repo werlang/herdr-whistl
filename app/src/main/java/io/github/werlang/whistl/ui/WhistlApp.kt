@@ -176,6 +176,21 @@ fun WhistlApp(startRoute: String = Routes.MACHINES, showSplash: Boolean = true) 
             }
         },
     )
+    val agentsModel: AgentsViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer {
+                AgentsViewModel(
+                    agents = container.agents,
+                    machines = container.machines,
+                    pins = container.pins,
+                    spaces = container.spaces,
+                    installed = container.installed,
+                    spaceFilter = container.agentsSpaceFilter,
+                )
+            }
+        },
+    )
+    val agentsState by agentsModel.state.collectAsState()
 
     // The app opens on its mark while the machines load, and gets out of the way as soon as they are there: it is a
     // cover for the wait, not a curtain (0.6.4).
@@ -229,6 +244,15 @@ fun WhistlApp(startRoute: String = Routes.MACHINES, showSplash: Boolean = true) 
                         contentDescription = stringResource(R.string.spaces_new_content_description),
                     )
                 }
+            } else if (route == Routes.AGENTS && agentsState.newAgent?.enabled == true) {
+                // The same button as the other lists: one icon, in the corner, only when there is something to add — here
+                // a space to add an agent to (0.6.6).
+                FloatingActionButton(onClick = agentsModel::openPicker) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = stringResource(R.string.new_agent),
+                    )
+                }
             }
         },
     ) { innerPadding ->
@@ -276,6 +300,7 @@ fun WhistlApp(startRoute: String = Routes.MACHINES, showSplash: Boolean = true) 
             }
             composable(Routes.AGENTS) {
                 AgentsRoute(
+                    model = agentsModel,
                     spaceFilter = container.agentsSpaceFilter,
                     onOpen = { row -> navController.navigate(Routes.agent(row.machineId, row.address)) },
                     onOpenStarted = { machineId, address -> navController.navigate(Routes.agent(machineId, address)) },
@@ -398,23 +423,11 @@ private fun NavIcon(item: Destination) {
 /** The Agents list, with its view model built from the app's container. */
 @Composable
 private fun AgentsRoute(
+    model: AgentsViewModel,
     spaceFilter: MutableStateFlow<SpaceFilter?>,
     onOpen: (AgentRow) -> Unit,
     onOpenStarted: (machineId: String, address: String) -> Unit = { _, _ -> },
 ) {
-    val container = LocalAppContainer.current
-    val model: AgentsViewModel = viewModel(
-        factory = viewModelFactory {
-            initializer { AgentsViewModel(
-                    agents = container.agents,
-                    machines = container.machines,
-                    pins = container.pins,
-                    spaces = container.spaces,
-                    installed = container.installed,
-                    spaceFilter = spaceFilter,
-                ) }
-        },
-    )
     val state by model.state.collectAsState()
     AgentsScreen(
         state = state,
@@ -423,7 +436,6 @@ private fun AgentsRoute(
         onMenu = model::openMenu,
         onDismissNotice = model::dismissNotice,
         onClearFilter = model::clearSpaceFilter,
-        onNewAgent = model::openPicker,
         onChooseAgent = model::start,
         onDismissPicker = model::closePicker,
         modifier = Modifier.fillMaxSize(),
