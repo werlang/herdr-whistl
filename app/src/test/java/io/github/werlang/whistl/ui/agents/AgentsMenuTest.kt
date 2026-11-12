@@ -12,6 +12,8 @@ import io.github.werlang.whistl.domain.TerminalState
 import io.github.werlang.whistl.support.FakePins
 import io.github.werlang.whistl.support.MainDispatcherRule
 import io.github.werlang.whistl.support.StaticAgents
+import io.github.werlang.whistl.support.StaticInstalled
+import io.github.werlang.whistl.support.StaticSpaces
 import io.github.werlang.whistl.data.ConnectionState
 import io.github.werlang.whistl.support.ScriptedMachines
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -59,7 +61,7 @@ class AgentsMenuTest {
     private suspend fun frame(agents: StaticAgents, terminals: List<Terminal> = listOf(terminal())): Pair<AgentsViewModel, MachineAgent> {
         val machines = ScriptedMachines().apply { put(machine, ConnectionState.Offline) }
         agents.agents.value = listOf(MachineAgent(MACHINE, Agent(terminals.first()), TEST_SPACE))
-        val vm = AgentsViewModel(agents, machines, FakePins())
+        val vm = AgentsViewModel(agents, machines, FakePins(), StaticSpaces(emptyList()), StaticInstalled())
         return vm to agents.agents.value.first()
     }
 
@@ -160,7 +162,13 @@ class AgentsMenuTest {
         val agents = StaticAgents()
         val named = terminal(labels = mapOf(Agent.NAME_LABEL to "deploy"))
         agents.agents.value = listOf(MachineAgent(MACHINE, Agent(named), TEST_SPACE))
-        val vm = AgentsViewModel(agents, ScriptedMachines().apply { put(machine, ConnectionState.Offline) }, FakePins())
+        val vm = AgentsViewModel(
+            agents,
+            ScriptedMachines().apply { put(machine, ConnectionState.Offline) },
+            FakePins(),
+            StaticSpaces(emptyList()),
+            StaticInstalled(),
+        )
 
         assertEquals("deploy", vm.state.value.rows.single().name)
     }

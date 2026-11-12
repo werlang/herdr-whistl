@@ -2,6 +2,7 @@ package io.github.werlang.whistl.ui.agents
 
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.support.FakePins
+import io.github.werlang.whistl.support.StaticInstalled
 import io.github.werlang.whistl.support.MainDispatcherRule
 import io.github.werlang.whistl.support.RepoStack
 import io.github.werlang.whistl.support.eventsSnapshot
@@ -13,6 +14,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -30,7 +32,7 @@ class AgentsViewModelTest {
         h.connector.eventsPipeFactory = { snapshotPipe(eventsSnapshot(1, terminals.toList())) }
         h.addMachine()
         runCurrent()
-        val vm = AgentsViewModel(h.agents, h.machines, FakePins())
+        val vm = AgentsViewModel(h.agents, h.machines, FakePins(), h.spaces, StaticInstalled())
         runCurrent()
         return h to vm
     }
@@ -44,6 +46,15 @@ class AgentsViewModelTest {
         assertEquals(listOf(0, 0, 0, 0, 0), state.chips.map { it.count })
         assertTrue(state.rows.isEmpty())
         assertEquals(0, state.blockedCount)
+    }
+
+    /** New agent is a space's: with the whole list showing, there is nothing to offer (0.6.5). */
+    @Test
+    fun newAgentIsOfferedOnlyWhenTheListShowsOneSpace() = runTest {
+        val (_, vm) = listing(terminalJson("t-bound"))
+
+        assertNull("no space filter, no New agent", vm.state.value.newAgent)
+        assertNull(vm.state.value.picker)
     }
 
     /** A terminal no space claims shows up only under its own chip: the list of agents is the spaces' (0.6.3). */

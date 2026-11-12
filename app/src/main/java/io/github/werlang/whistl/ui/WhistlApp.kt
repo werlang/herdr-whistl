@@ -278,6 +278,7 @@ fun WhistlApp(startRoute: String = Routes.MACHINES, showSplash: Boolean = true) 
                 AgentsRoute(
                     spaceFilter = container.agentsSpaceFilter,
                     onOpen = { row -> navController.navigate(Routes.agent(row.machineId, row.address)) },
+                    onOpenStarted = { machineId, address -> navController.navigate(Routes.agent(machineId, address)) },
                 )
             }
             composable(
@@ -329,8 +330,8 @@ fun WhistlApp(startRoute: String = Routes.MACHINES, showSplash: Boolean = true) 
 /** How long the app's mark stays at the very least, so the opening is a breath and not a flash (0.6.4). */
 private const val SPLASH_MIN_MS: Long = 450L
 
-/** How long the splash waits for the machines before going anyway. */
-private const val SPLASH_MAX_MS: Long = 1_500L
+/** How long the splash waits for the machines before going anyway (0.6.5: three seconds). */
+private const val SPLASH_MAX_MS: Long = 3_000L
 
 /** How often the splash looks at the machines while it waits. */
 private const val SPLASH_POLL_MS: Long = 40L
@@ -396,11 +397,22 @@ private fun NavIcon(item: Destination) {
 
 /** The Agents list, with its view model built from the app's container. */
 @Composable
-private fun AgentsRoute(spaceFilter: MutableStateFlow<SpaceFilter?>, onOpen: (AgentRow) -> Unit) {
+private fun AgentsRoute(
+    spaceFilter: MutableStateFlow<SpaceFilter?>,
+    onOpen: (AgentRow) -> Unit,
+    onOpenStarted: (machineId: String, address: String) -> Unit = { _, _ -> },
+) {
     val container = LocalAppContainer.current
     val model: AgentsViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { AgentsViewModel(container.agents, container.machines, container.pins, spaceFilter) }
+            initializer { AgentsViewModel(
+                    agents = container.agents,
+                    machines = container.machines,
+                    pins = container.pins,
+                    spaces = container.spaces,
+                    installed = container.installed,
+                    spaceFilter = spaceFilter,
+                ) }
         },
     )
     val state by model.state.collectAsState()
@@ -411,8 +423,19 @@ private fun AgentsRoute(spaceFilter: MutableStateFlow<SpaceFilter?>, onOpen: (Ag
         onMenu = model::openMenu,
         onDismissNotice = model::dismissNotice,
         onClearFilter = model::clearSpaceFilter,
+        onNewAgent = model::openPicker,
+        onChooseAgent = model::start,
+        onDismissPicker = model::closePicker,
         modifier = Modifier.fillMaxSize(),
     )
+    // The agent that just started is opened once, and the screen forgets it (0.6.5).
+    LaunchedEffect(state.opened) {
+        state.opened?.let { address ->
+            val machineId = spaceFilter.value?.machineId.orEmpty()
+            model.consumeOpened()
+            onOpenStarted(machineId, address)
+        }
+    }
     state.menu?.takeIf { it.confirmingClose }?.let { menu ->
         // Removing an agent is a destructive question and gets the app's standard confirmation, not a second line
         // inside the action sheet (SPEC §3).

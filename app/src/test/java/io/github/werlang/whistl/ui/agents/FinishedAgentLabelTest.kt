@@ -3,6 +3,7 @@ package io.github.werlang.whistl.ui.agents
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.support.FakePins
+import io.github.werlang.whistl.support.StaticInstalled
 import io.github.werlang.whistl.support.MainDispatcherRule
 import io.github.werlang.whistl.support.RepoStack
 import io.github.werlang.whistl.support.eventsSnapshot
@@ -58,7 +59,7 @@ class FinishedAgentLabelTest {
         }
         h.addMachine()
         runCurrent()
-        val vm = AgentsViewModel(h.agents, h.machines, FakePins())
+        val vm = AgentsViewModel(h.agents, h.machines, FakePins(), h.spaces, StaticInstalled())
         runCurrent()
 
         val row = vm.state.value.rows.single()

@@ -333,4 +333,5 @@
     <string name="agents_filter_no_space">Sem ambiente</string>
     <string name="agents_filter_banner">Mostrando os agentes de %1$s</string>
     <string name="space_menu_new_agent">Novo agente</string>
+    <string name="agents_filter_clear">Mostrar todos os ambientes</string>
 </resources>

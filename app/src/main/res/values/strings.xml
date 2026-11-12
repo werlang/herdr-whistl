@@ -327,4 +327,5 @@
     <string name="agents_filter_no_space">No space</string>
     <string name="agents_filter_banner">Showing the agents of %1$s</string>
     <string name="space_menu_new_agent">New agent</string>
+    <string name="agents_filter_clear">Show every space</string>
 </resources>

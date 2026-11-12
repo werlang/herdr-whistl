@@ -7,6 +7,18 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.6.5] - 2026-11-11
+
+### Added
+
+- **New agent, in the Agents tab.** With the list filtered to a space, a New agent button opens the picker for that
+  space — the installed agents of its machine and the machine's shell — and the agent that starts opens straight into
+  its screen. Creating an agent no longer needs a detour through the space's own screen.
+
+### Changed
+
+- **The splash waits up to three seconds** for the machines, instead of 1.5.
+
 ## [0.6.4] - 2026-11-11
 
 ### Added
@@ -390,7 +402,8 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.6.4...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.6.5...HEAD
+[0.6.5]: https://github.com/werlang/herdr-whistl/compare/v0.6.4...v0.6.5
 [0.6.4]: https://github.com/werlang/herdr-whistl/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/werlang/herdr-whistl/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/werlang/herdr-whistl/compare/v0.6.1...v0.6.2

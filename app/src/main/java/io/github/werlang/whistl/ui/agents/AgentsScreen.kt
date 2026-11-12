@@ -1,5 +1,9 @@
 package io.github.werlang.whistl.ui.agents
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.ExtendedFloatingActionButton
+import io.github.werlang.whistl.data.StartChoice
+import io.github.werlang.whistl.ui.space.PickerSheet
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -64,6 +68,9 @@ fun AgentsScreen(
     onMenu: (AgentRow) -> Unit = {},
     onDismissNotice: () -> Unit = {},
     onClearFilter: () -> Unit = {},
+    onNewAgent: () -> Unit = {},
+    onChooseAgent: (StartChoice) -> Unit = {},
+    onDismissPicker: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val labels = mapOf(
@@ -73,7 +80,8 @@ fun AgentsScreen(
         AgentsFilter.Idle to stringResource(R.string.agents_filter_idle),
         AgentsFilter.NoSpace to stringResource(R.string.agents_filter_no_space),
     )
-    Column(modifier = modifier.fillMaxSize().testTag(AGENTS_SCREEN_TAG)) {
+    Box(modifier = modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().testTag(AGENTS_SCREEN_TAG)) {
         Row(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 10.dp)) {
             AppMark()
             Spacer(Modifier.width(10.dp))
@@ -131,7 +139,33 @@ fun AgentsScreen(
             }
         }
     }
+        // New agent belongs to a space, so it appears only while the list shows one (0.6.5).
+        state.newAgent?.let { newAgent ->
+            ExtendedFloatingActionButton(
+                onClick = onNewAgent,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+                    .testTag(AGENTS_NEW_AGENT_TAG),
+                containerColor = if (newAgent.enabled) MaterialTheme.colorScheme.primary else LocalWhistlTokens.current.field,
+                contentColor = if (newAgent.enabled) MaterialTheme.colorScheme.onPrimary else LocalWhistlTokens.current.muted,
+            ) {
+                Text(text = stringResource(R.string.new_agent))
+            }
+        }
+    }
+    state.picker?.let { picker ->
+        PickerSheet(
+            picker = picker,
+            machineName = state.pickerMachineName,
+            onChoose = onChooseAgent,
+            onDismiss = onDismissPicker,
+        )
+    }
 }
+
+/** The test tag of the New agent button on the Agents screen. */
+const val AGENTS_NEW_AGENT_TAG: String = "agents-new-agent"
 
 /**
  * One agent: its name and address on the first line, its status and "machine · space" on the second. The whole card is the
@@ -283,7 +317,7 @@ private fun SpaceFilterBanner(name: String, onClear: () -> Unit) {
             IconButton(onClick = onClear, modifier = Modifier.size(48.dp)) {
                 Icon(
                     imageVector = Icons.Filled.Close,
-                    contentDescription = stringResource(R.string.spaces_filter_clear),
+                    contentDescription = stringResource(R.string.agents_filter_clear),
                     tint = tokens.dim,
                 )
             }
