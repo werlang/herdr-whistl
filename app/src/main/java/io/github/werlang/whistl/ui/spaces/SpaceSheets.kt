@@ -61,6 +61,9 @@ const val SPACE_MENU_SHEET_TAG: String = "space-menu-sheet"
 /** The test tag of the menu's Pin or Unpin row. */
 const val MENU_SPACE_PIN_TAG: String = "menu-space-pin"
 
+/** The test tag of the sheet row that opens the space's own screen, where an agent is started in it. */
+const val MENU_SPACE_NEW_AGENT_TAG: String = "menu-space-new-agent"
+
 /** The test tag of the menu's Move up row. */
 const val MENU_SPACE_MOVE_UP_TAG: String = "menu-space-move-up"
 
@@ -259,6 +262,7 @@ fun NewSpaceSheet(
  * @param onMoveDown called to move it down.
  * @param onRename called to rename it.
  * @param onClose called to close it.
+ * @param onNewAgent called to open the space's own screen, where an agent is started in it (0.6.4).
  * @param onDismiss called when the sheet closes.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -270,6 +274,7 @@ fun SpaceMenuSheet(
     onMoveDown: () -> Unit,
     onRename: () -> Unit,
     onClose: () -> Unit,
+    onNewAgent: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = onDismiss, modifier = Modifier.testTag(SPACE_MENU_SHEET_TAG)) {
@@ -283,6 +288,16 @@ fun SpaceMenuSheet(
                 )
             }
             Spacer(Modifier.size(8.dp))
+            // Tapping the space opens its agents; starting one in it stays one step away, on the space's own screen
+            // (0.6.4).
+            SheetRow(
+                text = stringResource(R.string.space_menu_new_agent),
+                // Opening the space's screen is always allowed: it is the screen that says whether an agent can be
+                // started right now (0.6.4).
+                enabled = true,
+                modifier = Modifier.testTag(MENU_SPACE_NEW_AGENT_TAG),
+                onClick = onNewAgent,
+            )
             SheetRow(
                 text = stringResource(if (ref.pinned) R.string.space_menu_unpin else R.string.space_menu_pin),
                 enabled = !ref.offline,

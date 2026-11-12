@@ -1,5 +1,22 @@
 package io.github.werlang.whistl.ui
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import io.github.werlang.whistl.ui.theme.AppMark
+import kotlinx.coroutines.delay
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.input.pointer.pointerInput
 import android.net.Uri
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,6 +69,8 @@ import io.github.werlang.whistl.ui.agents.AgentRow
 import io.github.werlang.whistl.ui.agents.AgentsScreen
 import io.github.werlang.whistl.ui.agents.AgentCloseSheet
 import io.github.werlang.whistl.ui.agents.AgentMenuSheet
+import io.github.werlang.whistl.ui.agents.SpaceFilter
+import kotlinx.coroutines.flow.MutableStateFlow
 import io.github.werlang.whistl.ui.agents.AgentsViewModel
 import io.github.werlang.whistl.ui.machines.MachinesRoute
 import io.github.werlang.whistl.ui.space.SpaceDetailRoute
@@ -138,7 +157,7 @@ enum class Destination(
  * @param startRoute the route shown first. The screenshot tests start on other screens; the app starts on Machines.
  */
 @Composable
-fun WhistlApp(startRoute: String = Routes.MACHINES) {
+fun WhistlApp(startRoute: String = Routes.MACHINES, showSplash: Boolean = true) {
     val navController = rememberNavController()
     val entry by navController.currentBackStackEntryAsState()
     val route = entry?.destination?.route
@@ -158,6 +177,19 @@ fun WhistlApp(startRoute: String = Routes.MACHINES) {
         },
     )
 
+    // The app opens on its mark while the machines load, and gets out of the way as soon as they are there: it is a
+    // cover for the wait, not a curtain (0.6.4).
+    val machines by container.machines.machines().collectAsState()
+    var splash by remember { mutableStateOf(showSplash) }
+    LaunchedEffect(Unit) {
+        if (!showSplash) return@LaunchedEffect
+        val started = System.currentTimeMillis()
+        while (machines.isEmpty() && System.currentTimeMillis() - started < SPLASH_MAX_MS) delay(SPLASH_POLL_MS)
+        val elapsed = System.currentTimeMillis() - started
+        if (elapsed < SPLASH_MIN_MS) delay(SPLASH_MIN_MS - elapsed)
+        splash = false
+    }
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         // The window takes the keyboard as a resize, not as a pan: with adjustResize in the manifest this keeps the
         // whole screen on-screen and shrinks the terminal, so the pane reports fewer rows and the core reflows the TUI
@@ -229,13 +261,24 @@ fun WhistlApp(startRoute: String = Routes.MACHINES) {
                 SpacesRoute(
                     model = spacesModel,
                     onClearFilter = { container.spacesFilter.value = null },
-                    onOpenSpace = { machineId, spaceId -> navController.navigate(Routes.space(machineId, spaceId)) },
+                    // A space opens the Agents list filtered to it, the way a machine opens Spaces filtered to it (0.6.4).
+                    onOpenSpace = { machineId, spaceId ->
+                        container.agentsSpaceFilter.value = SpaceFilter(machineId, spaceId)
+                        navigateTo(navController, Routes.AGENTS)
+                    },
+                    // Starting an agent in a space is still the space's own screen, one step from its menu (0.6.4).
+                    onOpenSpaceDetail = { machineId, spaceId ->
+                        navController.navigate(Routes.space(machineId, spaceId))
+                    },
                     onAddMachine = { navigateTo(navController, Routes.MACHINES) },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
             composable(Routes.AGENTS) {
-                AgentsRoute(onOpen = { row -> navController.navigate(Routes.agent(row.machineId, row.address)) })
+                AgentsRoute(
+                    spaceFilter = container.agentsSpaceFilter,
+                    onOpen = { row -> navController.navigate(Routes.agent(row.machineId, row.address)) },
+                )
             }
             composable(
                 route = Routes.SPACE_PATTERN,
@@ -272,7 +315,55 @@ fun WhistlApp(startRoute: String = Routes.MACHINES) {
             }
         }
     }
+        // The splash sits over everything, and swallows the taps it covers: nothing may be pressed through it.
+        AnimatedVisibility(
+            visible = splash,
+            enter = EnterTransition.None,
+            exit = fadeOut(tween(SPLASH_FADE_MS)),
+        ) {
+            Splash()
+        }
+    }
 }
+
+/** How long the app's mark stays at the very least, so the opening is a breath and not a flash (0.6.4). */
+private const val SPLASH_MIN_MS: Long = 450L
+
+/** How long the splash waits for the machines before going anyway. */
+private const val SPLASH_MAX_MS: Long = 1_500L
+
+/** How often the splash looks at the machines while it waits. */
+private const val SPLASH_POLL_MS: Long = 40L
+
+/** How long the splash takes to fade out. */
+private const val SPLASH_FADE_MS: Int = 220
+
+/** The app's mark on its own background, while the machines load (0.6.4). */
+@Composable
+private fun Splash() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            // A cover, not a button: taps land here and go nowhere.
+            .pointerInput(Unit) { awaitPointerEventScope { while (true) { awaitPointerEvent().changes.forEach { it.consume() } } } }
+            .testTag(SPLASH_TAG),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            AppMark(size = 72.dp)
+            Spacer(Modifier.height(14.dp))
+            Text(
+                text = stringResource(R.string.app_name),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+/** The test tag of the splash. */
+const val SPLASH_TAG: String = "app-splash"
 
 /** Opens a bottom-bar destination: one copy of it on top, no stacking of the same list. */
 private fun navigateTo(navController: NavHostController, route: String) {
@@ -305,10 +396,12 @@ private fun NavIcon(item: Destination) {
 
 /** The Agents list, with its view model built from the app's container. */
 @Composable
-private fun AgentsRoute(onOpen: (AgentRow) -> Unit) {
+private fun AgentsRoute(spaceFilter: MutableStateFlow<SpaceFilter?>, onOpen: (AgentRow) -> Unit) {
     val container = LocalAppContainer.current
     val model: AgentsViewModel = viewModel(
-        factory = viewModelFactory {            initializer { AgentsViewModel(container.agents, container.machines, container.pins) } },
+        factory = viewModelFactory {
+            initializer { AgentsViewModel(container.agents, container.machines, container.pins, spaceFilter) }
+        },
     )
     val state by model.state.collectAsState()
     AgentsScreen(
@@ -317,6 +410,7 @@ private fun AgentsRoute(onOpen: (AgentRow) -> Unit) {
         onOpen = onOpen,
         onMenu = model::openMenu,
         onDismissNotice = model::dismissNotice,
+        onClearFilter = model::clearSpaceFilter,
         modifier = Modifier.fillMaxSize(),
     )
     state.menu?.takeIf { it.confirmingClose }?.let { menu ->

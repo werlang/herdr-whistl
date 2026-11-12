@@ -244,7 +244,7 @@ fun ShotContent(container: AppContainer, route: String, dark: Boolean, fontScale
             // Screenshots carry no press ripples: a ripple's exit tail is a timing-dependent 1/255 tint, so a frame
             // would differ from run to run. The app itself keeps its ripples; this is for the captured frames only.
             CompositionLocalProvider(LocalRippleConfiguration provides null) {
-                WhistlApp(startRoute = route)
+                WhistlApp(startRoute = route, showSplash = false)
             }
         }
     }

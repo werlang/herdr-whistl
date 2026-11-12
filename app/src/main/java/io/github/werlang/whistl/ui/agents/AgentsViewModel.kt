@@ -22,6 +22,15 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
+ * The space the Agents list is filtered to (0.6.4): tapping a space on the Spaces screen lands here, the same list with
+ * one space's agents, instead of a screen of its own.
+ *
+ * @property machineId the machine the space lives on.
+ * @property spaceId the space.
+ */
+data class SpaceFilter(val machineId: String, val spaceId: String)
+
+/**
  * The filter chips of the Agents list (SPEC §2.4). Each chip counts the agents it would show.
  */
 enum class AgentsFilter {
@@ -94,6 +103,8 @@ data class AgentsUiState(
     val blockedCount: Int,
     val menu: AgentMenu? = null,
     val notice: AgentNotice? = null,
+    /** The space the list is filtered to, by name, or `null` when it shows every space (0.6.4). */
+    val filterName: String? = null,
 )
 
 /**
@@ -148,10 +159,14 @@ class AgentsViewModel(
     private val agents: AgentsRepository,
     private val machines: MachinesRepository,
     private val pins: PinnedAgents,
+    private val spaceFilter: MutableStateFlow<SpaceFilter?> = MutableStateFlow(null),
 ) : ViewModel() {
     private val filter = MutableStateFlow(AgentsFilter.All)
     private val open = MutableStateFlow<AgentMenu?>(null)
     private val notice = MutableStateFlow<AgentNotice?>(null)
+
+    /** The chip and the space the list is limited to, as one flow: `combine` has a typed overload for five flows, not six. */
+    private val selection: Flow<Pair<AgentsFilter, SpaceFilter?>> = combine(filter, spaceFilter, ::Pair)
 
     /** The sheet, the last notice and the pinned keys, as one flow so the list's state stays a five-way combine. */
     private val sheet: Flow<Triple<AgentMenu?, AgentNotice?, Set<String>>> =
@@ -162,12 +177,17 @@ class AgentsViewModel(
         agents.agents,
         machines.machines(),
         agents.blockedCount,
-        filter,
+        selection,
         sheet,
-    ) { list, machineList, blocked, selected, (menu, lastNotice, pinnedKeys) ->
-        // The list is every agent a space holds, and the unbound terminals sit behind their own chip: a bare terminal —
-        // one started outside the app — used to drown the unfiltered list (0.6.2), and hiding it completely left it
-        // unreachable (0.6.3).
+    ) { all, machineList, blocked, (selected, only), (menu, lastNotice, pinnedKeys) ->
+        // One space's agents, when the list was opened from that space (0.6.4), else every agent a space holds. Unbound
+        // terminals sit behind their own chip: they used to drown the unfiltered list (0.6.2), and hiding them completely
+        // left them unreachable (0.6.3).
+        val list = if (only == null) {
+            all
+        } else {
+            all.filter { it.machineId == only.machineId && it.space?.id == only.spaceId }
+        }
         AgentsUiState(
             chips = AgentsFilter.entries.map { chip ->
                 FilterChip(filter = chip, count = list.count { chip.matches(it) }, selected = chip == selected)
@@ -176,8 +196,14 @@ class AgentsViewModel(
             blockedCount = blocked,
             menu = menu,
             notice = lastNotice,
+            filterName = only?.let { filter -> list.firstOrNull()?.space?.name },
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, AgentsUiState(emptyList(), emptyList(), 0))
+
+    /** Drops the space filter: the list goes back to every space (0.6.4). */
+    fun clearSpaceFilter() {
+        spaceFilter.value = null
+    }
 
     /**
      * Selects a filter chip.

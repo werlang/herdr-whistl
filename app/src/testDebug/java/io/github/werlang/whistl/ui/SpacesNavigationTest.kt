@@ -1,6 +1,8 @@
 package io.github.werlang.whistl.ui
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -12,7 +14,9 @@ import io.github.werlang.whistl.ui.agent.AGENT_SCREEN_TAG
 import io.github.werlang.whistl.ui.space.NEW_AGENT_TAG
 import io.github.werlang.whistl.ui.space.PICKER_SHEET_TAG
 import io.github.werlang.whistl.ui.space.PICKER_TERMINAL_TAG
+import io.github.werlang.whistl.ui.agents.AGENTS_SCREEN_TAG
 import io.github.werlang.whistl.ui.space.SPACE_DETAIL_TAG
+import io.github.werlang.whistl.ui.spaces.MENU_SPACE_NEW_AGENT_TAG
 import io.github.werlang.whistl.ui.spaces.SPACES_LIST_TAG
 import io.github.werlang.whistl.ui.spaces.spaceRowTag
 import org.junit.Assert.assertTrue
@@ -33,6 +37,15 @@ import org.robolectric.annotation.GraphicsMode
 @Config(qualifiers = "en-rUS-w411dp-h891dp-xxhdpi")
 class SpacesNavigationTest : ScreenHarness() {
 
+    /** Opens one space's own screen through its row menu: that is where an agent is started in it (0.6.4). */
+    private fun openSpaceDetail(machineId: String, spaceId: String) {
+        val options = RuntimeEnvironment.getApplication().getString(R.string.space_options)
+        composeRule.onNode(hasContentDescription(options) and hasAnyAncestor(hasTestTag(spaceRowTag(machineId, spaceId))), useUnmergedTree = true).performClick()
+        composeRule.waitUntilAtLeastOneExists(hasTestTag(MENU_SPACE_NEW_AGENT_TAG), timeoutMillis = SHEET_TIMEOUT_MS)
+        composeRule.onNodeWithTag(MENU_SPACE_NEW_AGENT_TAG, useUnmergedTree = true).performClick()
+        composeRule.waitUntilAtLeastOneExists(hasTestTag(SPACE_DETAIL_TAG), timeoutMillis = SHEET_TIMEOUT_MS)
+    }
+
     /** Starts the app on Machines, with a fresh demo core, and opens the Spaces destination from its bar. */
     private fun openSpaces(): AppContainer {
         val app = RuntimeEnvironment.getApplication()
@@ -46,14 +59,22 @@ class SpacesNavigationTest : ScreenHarness() {
         return container
     }
 
-    /** A space row opens its detail; New agent opens the picker; Terminal starts a shell and opens its Agent screen. */
+    /** A space row opens the Agents list, filtered to that space, not a screen of its own (0.6.4). */
     @Test
-    fun aSpaceRowThenATerminalPickOpensTheAgentScreen() {
+    fun aSpaceRowOpensTheAgentsList() {
         openSpaces()
 
         composeRule.onNodeWithTag(spaceRowTag("mac", "sp_web"), useUnmergedTree = true).performClick()
-        composeRule.waitUntilAtLeastOneExists(hasTestTag(SPACE_DETAIL_TAG), timeoutMillis = SHEET_TIMEOUT_MS)
 
+        composeRule.waitUntilAtLeastOneExists(hasTestTag(AGENTS_SCREEN_TAG), timeoutMillis = SHEET_TIMEOUT_MS)
+    }
+
+    /** Starting an agent in a space is one step further: the space's menu, then its own screen, then the picker. */
+    @Test
+    fun theSpaceMenuStartsANewAgentInTheSpace() {
+        openSpaces()
+
+        openSpaceDetail("mac", "sp_web")
         composeRule.onNodeWithTag(NEW_AGENT_TAG, useUnmergedTree = true).performClick()
         composeRule.waitUntilAtLeastOneExists(hasTestTag(PICKER_SHEET_TAG), timeoutMillis = SHEET_TIMEOUT_MS)
 
@@ -66,8 +87,7 @@ class SpacesNavigationTest : ScreenHarness() {
     fun aDisabledNewAgentOpensNoPicker() {
         openSpaces()
 
-        composeRule.onNodeWithTag(spaceRowTag("lab", "sp_lab"), useUnmergedTree = true).performClick()
-        composeRule.waitUntilAtLeastOneExists(hasTestTag(SPACE_DETAIL_TAG), timeoutMillis = SHEET_TIMEOUT_MS)
+        openSpaceDetail("lab", "sp_lab")
 
         composeRule.onNodeWithTag(NEW_AGENT_TAG, useUnmergedTree = true).performClick()
         composeRule.waitForIdle()

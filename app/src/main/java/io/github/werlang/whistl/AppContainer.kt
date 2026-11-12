@@ -45,6 +45,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import java.security.SecureRandom
+import io.github.werlang.whistl.ui.agents.SpaceFilter
 
 /**
  * The app's object graph, built by hand (SPEC §4): one place that decides which implementation each repository uses.
@@ -95,6 +96,9 @@ class AppContainer(
      * navigating, because Spaces is also a bottom destination with no arguments of its own (phase 9, SPEC §2.2).
      */
     val spacesFilter: MutableStateFlow<String?> = MutableStateFlow(null)
+
+    /** The space the Agents list is filtered to, when the list was opened from that space (0.6.4). */
+    val agentsSpaceFilter: MutableStateFlow<SpaceFilter?> = MutableStateFlow(null)
 
     /** The system side of an update: signatures, the install permission and the installer (SPEC §2.7). */
     val installer: AppInstaller = AndroidAppInstaller(context.applicationContext)

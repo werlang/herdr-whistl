@@ -329,6 +329,8 @@
     <string name="space_folder_browse_unreadable">Esta pasta não pode ser lida.</string>
     <string name="agent_notice_not_typable">O core não digita este caractere como tecla: use o botão de colar.</string>
     <string name="key_delete">Apagar</string>
-    <string name="agent_notice_hold_to_send_keys">Enviado · segure Enviar para mandar como teclas</string>
+    <string name="agent_notice_hold_to_send_keys">Enviado · segure p/ teclas</string>
     <string name="agents_filter_no_space">Sem ambiente</string>
+    <string name="agents_filter_banner">Mostrando os agentes de %1$s</string>
+    <string name="space_menu_new_agent">Novo agente</string>
 </resources>

@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 fun SpacesRoute(
     model: SpacesViewModel,
     onOpenSpace: (machineId: String, spaceId: String) -> Unit,
+    onOpenSpaceDetail: (machineId: String, spaceId: String) -> Unit = { _, _ -> },
     onAddMachine: () -> Unit,
     onClearFilter: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -62,6 +63,11 @@ fun SpacesRoute(
             onMoveDown = model::moveDown,
             onRename = model::askRename,
             onClose = model::askClose,
+            onNewAgent = {
+                val opened = ref
+                model.closeMenu()
+                onOpenSpaceDetail(opened.machineId, opened.spaceId)
+            },
             onDismiss = model::closeMenu,
         )
     }

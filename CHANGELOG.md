@@ -7,6 +7,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.6.4] - 2026-11-11
+
+### Added
+
+- **The app opens on its mark.** A splash with the mark and the name, shown while the machines load and gone as soon as
+  they are: at least 450 ms, never more than 1.5 s.
+
+### Changed
+
+- **A space opens the Agents list, filtered to that space**, the way a machine opens Spaces filtered to it — one list
+  with a banner saying which space it shows, not a screen of its own. Starting an agent in the space moved to the
+  space's menu ("New agent"), one step from the list.
+- **The tip about holding Send is shorter in Portuguese** ("Enviado · segure p/ teclas"), so the status bar fits it
+  whole.
+
 ## [0.6.3] - 2026-11-11
 
 ### Added
@@ -375,7 +390,8 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.6.4...HEAD
+[0.6.4]: https://github.com/werlang/herdr-whistl/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/werlang/herdr-whistl/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/werlang/herdr-whistl/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/werlang/herdr-whistl/compare/v0.6.0...v0.6.1

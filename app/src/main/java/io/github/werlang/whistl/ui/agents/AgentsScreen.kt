@@ -27,6 +27,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -62,6 +63,7 @@ fun AgentsScreen(
     onOpen: (AgentRow) -> Unit,
     onMenu: (AgentRow) -> Unit = {},
     onDismissNotice: () -> Unit = {},
+    onClearFilter: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val labels = mapOf(
@@ -71,7 +73,7 @@ fun AgentsScreen(
         AgentsFilter.Idle to stringResource(R.string.agents_filter_idle),
         AgentsFilter.NoSpace to stringResource(R.string.agents_filter_no_space),
     )
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize().testTag(AGENTS_SCREEN_TAG)) {
         Row(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 10.dp)) {
             AppMark()
             Spacer(Modifier.width(10.dp))
@@ -89,6 +91,7 @@ fun AgentsScreen(
                 )
             }
         }
+        state.filterName?.let { name -> SpaceFilterBanner(name = name, onClear = onClearFilter) }
         state.notice?.let { notice ->
             NoticeBar(notice = notice, onDismiss = onDismissNotice)
         }
@@ -258,3 +261,35 @@ internal fun NoticeBar(notice: AgentNotice, onDismiss: () -> Unit) {
         }
     }
 }
+
+/** The banner saying the list shows one space's agents, with the way back to every space (0.6.4). */
+@Composable
+private fun SpaceFilterBanner(name: String, onClear: () -> Unit) {
+    val tokens = LocalWhistlTokens.current
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = tokens.field,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp, end = 4.dp)) {
+            Text(
+                text = stringResource(R.string.agents_filter_banner, name),
+                style = MaterialTheme.typography.bodySmall,
+                color = tokens.muted,
+                modifier = Modifier.weight(1f).padding(vertical = 10.dp),
+            )
+            IconButton(onClick = onClear, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = stringResource(R.string.spaces_filter_clear),
+                    tint = tokens.dim,
+                )
+            }
+        }
+    }
+}
+
+/** The test tag of the Agents screen, so navigation can be asserted. */
+const val AGENTS_SCREEN_TAG: String = "agents-screen"
