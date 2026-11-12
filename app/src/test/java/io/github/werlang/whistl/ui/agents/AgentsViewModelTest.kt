@@ -41,9 +41,27 @@ class AgentsViewModelTest {
         val (_, vm) = listing()
 
         val state = vm.state.value
-        assertEquals(listOf(0, 0, 0, 0), state.chips.map { it.count })
+        assertEquals(listOf(0, 0, 0, 0, 0), state.chips.map { it.count })
         assertTrue(state.rows.isEmpty())
         assertEquals(0, state.blockedCount)
+    }
+
+    /** A terminal no space claims shows up only under its own chip: the list of agents is the spaces' (0.6.3). */
+    @Test
+    fun aTerminalNoSpaceClaimsIsOnlyUnderTheNoSpaceChip() = runTest {
+        val (_, vm) = listing(
+            terminalJson("t-bound"),
+            terminalJson("t-bare", labels = emptyMap()),
+        )
+
+        val all = vm.state.value
+        assertEquals("All shows the spaces' agents", listOf("t-bound"), all.rows.map { it.address })
+        assertEquals(1, all.chips.first { it.filter == AgentsFilter.NoSpace }.count)
+
+        vm.select(AgentsFilter.NoSpace)
+        runCurrent()
+
+        assertEquals(listOf("t-bare"), vm.state.value.rows.map { it.address })
     }
 
     /** Each chip counts what it shows; a finished blocked agent is not waiting for the user. */
@@ -58,14 +76,15 @@ class AgentsViewModelTest {
         )
 
         val state = vm.state.value
-        assertEquals(listOf(5, 1, 1, 1), state.chips.map { it.count })
-        assertEquals(listOf(true, false, false, false), state.chips.map { it.selected })
+        // All, Needs you, Working, Idle, and the terminals no space claims.
+        assertEquals(listOf(5, 1, 1, 1, 0), state.chips.map { it.count })
+        assertEquals(listOf(true, false, false, false, false), state.chips.map { it.selected })
         assertEquals(1, state.blockedCount)
 
         vm.select(AgentsFilter.NeedsYou)
 
         assertEquals(listOf("t-blocked"), vm.state.value.rows.map { it.address })
-        assertEquals(listOf(false, true, false, false), vm.state.value.chips.map { it.selected })
+        assertEquals(listOf(false, true, false, false, false), vm.state.value.chips.map { it.selected })
     }
 
     /** The rows keep the screen's order: waiting first, then working, done, idle, then no status, then the finished. */

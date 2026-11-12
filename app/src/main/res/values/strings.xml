@@ -324,4 +324,5 @@
     <string name="agent_notice_not_typable">The core cannot press this character as a key: paste it instead.</string>
     <string name="key_delete">Backspace</string>
     <string name="agent_notice_hold_to_send_keys">Sent · hold Send to press the text as keys</string>
+    <string name="agents_filter_no_space">No space</string>
 </resources>

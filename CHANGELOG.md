@@ -7,6 +7,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.6.3] - 2026-11-11
+
+### Added
+
+- **The bar's keys repeat while held**, the way the arrows already did: holding ⌫ keeps erasing, which is what clearing a
+  printed line needs.
+- **A "No space" chip on the Agents list.** Terminals no space claims are out of the way but no longer out of reach.
+
+### Changed
+
+- **The keyboard's Return breaks the line instead of sending.** The field grows to four lines and the button is the only
+  way out, so a long prompt can be written before it goes.
+- **The tip about holding Send stays for eight seconds** instead of two: it is the only place that gesture is explained.
+- **"Spaces" is "Ambientes" in Portuguese**, in the tab, the buttons, the empty states and the notices.
+
 ## [0.6.2] - 2026-11-11
 
 ### Added
@@ -360,7 +375,8 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/werlang/herdr-whistl/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/werlang/herdr-whistl/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/werlang/herdr-whistl/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/werlang/herdr-whistl/compare/v0.5.9...v0.6.0

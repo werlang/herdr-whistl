@@ -315,6 +315,54 @@ private fun AgentHeader(state: AgentUiState, onBack: () -> Unit, onOptions: () -
 /** The terminal's padding inside its box, in dp. */
 private val TERMINAL_PADDING: Dp = 12.dp
 
+/**
+ * Repeats [onPress] while the control is held, after [ARROW_HOLD_MS] and then every [ARROW_REPEAT_MS] (0.6.3). A tap and a
+ * drag send nothing here: the control's own click handles the tap, and a drag along the scrolling bar is a scroll.
+ *
+ * @param enabled whether the control takes input at all.
+ * @param onPress called for every repeat.
+ */
+private fun Modifier.holdToRepeat(enabled: Boolean, onPress: () -> Unit): Modifier =
+    if (!enabled) {
+        this
+    } else {
+        pointerInput(onPress) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                val held = withTimeoutOrNull(ARROW_HOLD_MS) {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull true
+                        if (!change.pressed) return@withTimeoutOrNull true
+                        if (change.positionChange().getDistance() > viewConfiguration.touchSlop) {
+                            return@withTimeoutOrNull true
+                        }
+                    }
+                    @Suppress("UNREACHABLE_CODE")
+                    true
+                }
+                if (held != null) return@awaitEachGesture
+                var finished = false
+                while (!finished) {
+                    val tick = withTimeoutOrNull(ARROW_REPEAT_MS) {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull true
+                            if (!change.pressed) return@withTimeoutOrNull true
+                            if (change.positionChange().getDistance() > viewConfiguration.touchSlop) {
+                                return@withTimeoutOrNull true
+                            }
+                        }
+                        @Suppress("UNREACHABLE_CODE")
+                        true
+                    }
+                    finished = tick != null
+                    if (!finished) onPress()
+                }
+            }
+        }
+    }
+
 /** How long an arrow is held before it starts repeating, long enough that a tap is never a repeat (0.5.8). */
 private const val ARROW_HOLD_MS: Long = 400L
 
@@ -600,6 +648,9 @@ private fun CellColor.colourOrNull(): Color? = when (this) {
 /** How long a message stays in the status bar before the status comes back (0.5.8). */
 private const val FLASH_MS: Long = 2_000L
 
+/** How long the once-only tip about holding Send stays: long enough to read and use (0.6.3). */
+private const val TIP_MS: Long = 8_000L
+
 /** The words for a notice, shown in the status bar (0.5.8). */
 @Composable
 private fun noticeText(notice: AgentNotice, machineName: String): String = when (notice) {
@@ -627,7 +678,9 @@ private fun StatusBar(state: AgentUiState) {
     LaunchedEffect(message, state.ctrlArmed) {
         flash.value = if (state.ctrlArmed) ctrlHint else message
         if (message != null && !state.ctrlArmed) {
-            delay(FLASH_MS)
+            // The hint about holding Send is the only thing the user cannot see anywhere else: it stays long enough to
+            // read and act on (0.6.3).
+            delay(if (state.notice == AgentNotice.HoldToSendKeys) TIP_MS else FLASH_MS)
             flash.value = null
         }
     }
@@ -694,15 +747,18 @@ private fun KeyBar(
             Button(
                 onClick = { onKey(key) },
                 enabled = state.canType,
+                // Held, a key repeats: erasing a printed line, or walking back through one, is a hold and not twenty taps
+                // (0.6.3). A tap is still a single press, and a drag along the bar sends nothing.
+                modifier = Modifier
+                    .holdToRepeat(enabled = state.canType) { onKey(key) }
+                    .heightIn(min = MinTouchTarget)
+                    .widthIn(min = MinTouchTarget)
+                    .semantics { contentDescription = description },
                 contentPadding = PaddingValues(horizontal = 10.dp),
                 colors = whistlButtonColors(
                     containerColor = if (armed) MaterialTheme.colorScheme.primary else tokens.field,
                     contentColor = if (armed) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                 ),
-                modifier = Modifier
-                    .heightIn(min = MinTouchTarget)
-                    .widthIn(min = MinTouchTarget)
-                    .semantics { contentDescription = description },
             ) {
                 Text(text = key.label, fontFamily = WhistlMono, style = MaterialTheme.typography.labelLarge)
             }
@@ -869,7 +925,10 @@ private fun InputRow(
             value = state.input,
             onValueChange = onInput,
             enabled = state.canType,
-            singleLine = true,
+            // The keyboard's Return breaks the line, as it would in any editor: the line is sent by the button alone, so a
+            // long prompt can be written before it goes (0.6.3).
+            singleLine = false,
+            maxLines = INPUT_MAX_LINES,
             textStyle = MaterialTheme.typography.bodyMedium.copy(
                 fontFamily = WhistlMono,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -879,10 +938,9 @@ private fun InputRow(
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.None,
                 autoCorrectEnabled = false,
-                imeAction = ImeAction.Send,
+                imeAction = ImeAction.Default,
                 keyboardType = KeyboardType.Ascii,
             ),
-            keyboardActions = KeyboardActions(onSend = { onSend() }),
             modifier = Modifier
                 .weight(1f)
                 .heightIn(min = INPUT_HEIGHT)
@@ -952,6 +1010,9 @@ private val INPUT_HEIGHT: Dp = 48.dp
 
 /** The corner radius of the input field. */
 private val INPUT_RADIUS: Dp = 10.dp
+
+/** How many lines the field grows to before it scrolls: a prompt, not a paragraph. */
+private const val INPUT_MAX_LINES: Int = 4
 
 /** The test tag of the keyboard toggle. */
 const val AGENT_KEYBOARD_TOGGLE_TAG: String = "agent-keyboard-toggle"

@@ -69,6 +69,7 @@ fun AgentsScreen(
         AgentsFilter.NeedsYou to stringResource(R.string.agents_filter_needs_you),
         AgentsFilter.Working to stringResource(R.string.agents_filter_working),
         AgentsFilter.Idle to stringResource(R.string.agents_filter_idle),
+        AgentsFilter.NoSpace to stringResource(R.string.agents_filter_no_space),
     )
     Column(modifier = modifier.fillMaxSize()) {
         Row(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 10.dp)) {

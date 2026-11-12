@@ -36,7 +36,14 @@ enum class AgentsFilter {
 
     /** Live agents whose status is `idle`. */
     Idle,
+
+    /** Terminals no space claims: started outside the app, or left behind by a removed space (0.6.3). */
+    NoSpace,
 }
+
+/** Whether a space claims this agent: the label the app writes, or a space record that still resolves (0.6.3). */
+private val MachineAgent.isBound: Boolean
+    get() = space != null || agent.spaceId != null
 
 /**
  * One row of the Agents list.
@@ -158,15 +165,14 @@ class AgentsViewModel(
         filter,
         sheet,
     ) { list, machineList, blocked, selected, (menu, lastNotice, pinnedKeys) ->
-        // Only terminals a space claims: a bare terminal — one started outside the app — is not an agent of this app, and
-        // the unfiltered list used to drown in them (0.6.2). The label is what the app writes when it opens a terminal in a
-        // space, so it also keeps a terminal whose space record was removed.
-        val bound = list.filter { it.space != null || it.agent.spaceId != null }
+        // The list is every agent a space holds, and the unbound terminals sit behind their own chip: a bare terminal —
+        // one started outside the app — used to drown the unfiltered list (0.6.2), and hiding it completely left it
+        // unreachable (0.6.3).
         AgentsUiState(
             chips = AgentsFilter.entries.map { chip ->
-                FilterChip(filter = chip, count = bound.count { chip.matches(it) }, selected = chip == selected)
+                FilterChip(filter = chip, count = list.count { chip.matches(it) }, selected = chip == selected)
             },
-            rows = sortWithPinned(bound.filter { selected.matches(it) }, pinnedKeys).map { it.toRow(machineList, pinnedKeys) },
+            rows = sortWithPinned(list.filter { selected.matches(it) }, pinnedKeys).map { it.toRow(machineList, pinnedKeys) },
             blockedCount = blocked,
             menu = menu,
             notice = lastNotice,
@@ -265,10 +271,12 @@ class AgentsViewModel(
     }
 
     private fun AgentsFilter.matches(agent: MachineAgent): Boolean = when (this) {
-        AgentsFilter.All -> true
-        AgentsFilter.NeedsYou -> agent.agent.terminal.isWaitingForUser()
-        AgentsFilter.Working -> agent.agent.terminal.status == AgentStatus.Working
-        AgentsFilter.Idle -> agent.agent.terminal.status == AgentStatus.Idle
+        // `All` is every agent a space holds; the unbound terminals have their own chip (0.6.3).
+        AgentsFilter.All -> agent.isBound
+        AgentsFilter.NeedsYou -> agent.isBound && agent.agent.terminal.isWaitingForUser()
+        AgentsFilter.Working -> agent.isBound && agent.agent.terminal.status == AgentStatus.Working
+        AgentsFilter.Idle -> agent.isBound && agent.agent.terminal.status == AgentStatus.Idle
+        AgentsFilter.NoSpace -> !agent.isBound
     }
 
     private fun MachineAgent.toRow(
