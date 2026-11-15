@@ -835,6 +835,9 @@ private class FakeTerminalHandle(
 
     override suspend fun keys(names: List<String>): TerminalAction {
         gate()?.let { return it }
+        // The demo shows what it was pressed with, so a screen test can prove that a gesture reached the program.
+        state.append(address, "keys: " + names.joinToString(" "))
+        refresh()
         return TerminalAction.Done
     }
 

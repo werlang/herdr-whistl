@@ -65,6 +65,12 @@ class TerminalFrame(
     val cols: Int,
     val rows: Int,
 ) {
+    /**
+     * Whether the frame holds lines above the screen. A frame without them is a full-screen program drawing over the same
+     * rows, and there is nothing to scroll: a drag has to page the program instead (0.7.2).
+     */
+    val hasHistory: Boolean get() = screenStart > 0
+
     /** The frame's text, lines joined with `\n`, without any style. For tests and for the text of a plain frame. */
     fun plainText(): String = lines.joinToString("\n") { line -> line.joinToString("") { it.text } }
 

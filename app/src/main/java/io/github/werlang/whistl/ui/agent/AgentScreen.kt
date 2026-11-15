@@ -471,13 +471,17 @@ private fun TerminalOutput(
             .background(tokens.terminal)
             .onSizeChanged { pane = it }
             .verticalScroll(scroll)
-            // With nothing above the screen — a full-screen program — a drag pages the program itself, which is the only
-            // view scrolling it has (0.5.7).
-            .pointerInput(scroll.maxValue, frame.lines.size) {
-                if (scroll.maxValue > 0) return@pointerInput
+            // A frame with no history is a full-screen program: nothing is kept above its screen, so a drag pages the
+            // program itself instead of a pane that has nothing to move (0.5.7). The signal is [TerminalFrame.screenStart],
+            // not the scroll range: a pane whose size lags the program's rows can have a range while the program repaints
+            // over it, and Claude Code showed exactly that — the drag scrolled nothing and looked dead (0.7.2).
+            .pointerInput(frame.hasHistory, frame.lines.size) {
+                if (frame.hasHistory) return@pointerInput
                 var carried = 0f
                 val step = SCROLL_PAGE_STEP.toPx()
-                detectVerticalDragGestures { _, delta ->
+                detectVerticalDragGestures { change, delta ->
+                    // The pane consumes the drag, so the scroll that has nothing to move never fights it.
+                    change.consume()
                     carried += delta
                     while (carried <= -step) {
                         carried += step
