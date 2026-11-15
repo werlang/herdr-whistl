@@ -7,6 +7,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.7.2] - 2026-11-11
+
+### Fixed
+
+- **Scrolling a full-screen program, such as a Claude Code session.** The pane used to page the program only when it had
+  nothing of its own to scroll; Claude draws 62 rows into a ~30-row pane, so the drag scrolled a stale render while the program
+  repainted over it and the transcript never moved. The rule is now the frame: no rows above the screen means a full-screen
+  program, and the drag presses **Page Up / Page Down** at it — the same keys that move it from the CLI.
+
 ## [0.7.1] - 2026-11-11
 
 ### Changed
@@ -434,7 +443,8 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/werlang/herdr-whistl/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/werlang/herdr-whistl/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/werlang/herdr-whistl/compare/v0.6.6...v0.7.0
 [0.6.6]: https://github.com/werlang/herdr-whistl/compare/v0.6.5...v0.6.6
