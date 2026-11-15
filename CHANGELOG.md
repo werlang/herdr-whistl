@@ -7,6 +7,20 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.7.1] - 2026-11-11
+
+### Changed
+
+- **The footer bar of the agent takes the status colour**, the same ones the dots use: blue while it works, amber when it
+  waits for you, green when it is done, grey when it is idle or offline.
+
+### Fixed
+
+- **An agent started on the desktop shows up in its space here.** The Herdr desktop app labels its terminals
+  `herdr.space`, with ids from its own document; this app only read `whistl.space`, so a Claude session started on the Mac
+  read as "no space" and never appeared under its folder. Both labels now claim a terminal, and when the id is unknown the
+  **folder** decides — the deepest one wins, so a terminal in `web/app` lands in `web/app` and not in `web`.
+
 ## [0.7.0] - 2026-11-11
 
 ### Added
@@ -420,7 +434,8 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/werlang/herdr-whistl/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/werlang/herdr-whistl/compare/v0.6.6...v0.7.0
 [0.6.6]: https://github.com/werlang/herdr-whistl/compare/v0.6.5...v0.6.6
 [0.6.5]: https://github.com/werlang/herdr-whistl/compare/v0.6.4...v0.6.5
