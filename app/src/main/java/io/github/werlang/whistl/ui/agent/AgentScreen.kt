@@ -123,6 +123,7 @@ import io.github.werlang.whistl.ui.components.whistlButtonColors
 import io.github.werlang.whistl.ui.keyNameRes
 import io.github.werlang.whistl.ui.statusColor
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
+import io.github.werlang.whistl.ui.theme.WhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
 import io.github.werlang.whistl.ui.theme.WhistlTerminalText
 import kotlin.math.max
@@ -645,6 +646,24 @@ private fun CellColor.colourOrNull(): Color? = when (this) {
     is CellColor.Rgb -> Color(0xFF000000L or value.toLong())
 }
 
+/**
+ * The colour of the status bar for a status label (0.7.1): the same colours the dots use, so the bar and the dot agree.
+ *
+ * @param label what the agent is doing.
+ * @param tokens the theme's extra colours.
+ * @return the bar's background colour.
+ */
+private fun statusBarColor(label: AgentStatusLabel, tokens: WhistlTokens): Color = when (label) {
+    AgentStatusLabel.Working -> tokens.working
+    AgentStatusLabel.NeedsYou -> tokens.blocked
+    AgentStatusLabel.Done -> tokens.done
+    AgentStatusLabel.Idle -> tokens.idle
+    AgentStatusLabel.Offline -> tokens.idle
+    AgentStatusLabel.Finished -> tokens.idle
+    AgentStatusLabel.Error -> tokens.blocked
+    AgentStatusLabel.Plain -> tokens.idle
+}
+
 /** How long a message stays in the status bar before the status comes back (0.5.8). */
 private const val FLASH_MS: Long = 2_000L
 
@@ -684,10 +703,14 @@ private fun StatusBar(state: AgentUiState) {
             flash.value = null
         }
     }
+    // The bar is the agent's state at a glance: teal while it works, amber when it waits for you, green when it is done,
+    // grey when it is idle or offline (0.7.1).
+    val container = statusBarColor(state.statusLabel, LocalWhistlTokens.current)
+    val content = MaterialTheme.colorScheme.surface
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.primary)
+            .background(container)
             .heightIn(min = 28.dp)
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -701,7 +724,7 @@ private fun StatusBar(state: AgentUiState) {
             ),
             style = MaterialTheme.typography.labelMedium,
             fontFamily = WhistlMono,
-            color = MaterialTheme.colorScheme.onPrimary,
+            color = content,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
@@ -711,7 +734,7 @@ private fun StatusBar(state: AgentUiState) {
             text = flash.value ?: stringResource(statusLabelRes(state.statusLabel)),
             style = MaterialTheme.typography.labelMedium,
             fontFamily = WhistlMono,
-            color = MaterialTheme.colorScheme.onPrimary,
+            color = content,
             maxLines = 1,
         )
     }
