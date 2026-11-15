@@ -7,6 +7,12 @@
     <!-- Installing an update the user asked for (phase 9, SPEC §2.7). The system still asks the user to allow it. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Announcing that an agent finished (0.7.0): the watch keeps the session alive in the foreground and posts one
+         notification per agent that stops working. Nothing leaves the device. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
     <application
         android:name=".WhistlApplication"
         android:allowBackup="false"
@@ -40,6 +46,11 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/update_paths" />
         </provider>
+
+        <service
+            android:name=".platform.AgentWatchService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <activity
             android:name=".MainActivity"

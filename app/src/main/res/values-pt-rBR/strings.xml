@@ -334,4 +334,14 @@
     <string name="agents_filter_banner">Mostrando os agentes de %1$s</string>
     <string name="space_menu_new_agent">Novo agente</string>
     <string name="agents_filter_clear">Mostrar todos os ambientes</string>
+    <string name="notify_channel_watch">Vigia de agentes</string>
+    <string name="notify_channel_finished">Agentes</string>
+    <string name="notify_watching_title">Vigiando agentes</string>
+    <string name="notify_watching_text">Você é avisado quando um termina.</string>
+    <string name="notify_finished_title">%1$s terminou</string>
+    <string name="notify_finished_text">%1$s · pronto para a próxima tarefa</string>
+    <string name="settings_notify_title">Avisar quando um agente terminar</string>
+    <string name="settings_notify_hint">Uma notificação, mesmo com o app em segundo plano.</string>
+    <string name="common_on">Ligado</string>
+    <string name="common_off">Desligado</string>
 </resources>

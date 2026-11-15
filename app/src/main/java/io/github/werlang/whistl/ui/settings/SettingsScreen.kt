@@ -147,6 +147,28 @@ fun SettingsScreen(viewModel: SettingsViewModel, modifier: Modifier = Modifier) 
     }
 }
 
+/** A label with a switch beside it: one thing that is on or off (0.7.0). */
+@Composable
+private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
+            .padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        // The row is the target, and it carries the name: the switch itself is only the picture of the state.
+        Switch(checked = checked, onCheckedChange = null)
+    }
+}
+
 /** A section heading, in the prototype's small uppercase style. */
 @Composable
 private fun SectionTitle(text: String) {
@@ -195,6 +217,18 @@ private fun GeneralSection(state: SettingsUiState, viewModel: SettingsViewModel)
                     )
                 }
             }
+            // One switch, and a line saying what it does: the notification is the only thing the app says while it is
+            // not on screen (0.7.0).
+            SwitchRow(
+                label = stringResource(R.string.settings_notify_title),
+                checked = state.notifyFinished,
+                onChange = viewModel::setNotifyFinished,
+            )
+            Text(
+                text = stringResource(R.string.settings_notify_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = LocalWhistlTokens.current.muted,
+            )
             ChoiceRow(label = stringResource(R.string.settings_font)) {
                 FontSize.entries.forEach { size ->
                     SegmentOption(

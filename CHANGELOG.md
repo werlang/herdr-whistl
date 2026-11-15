@@ -7,6 +7,16 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.7.0] - 2026-11-11
+
+### Added
+
+- **A notification when an agent finishes.** The app keeps a foreground service that watches the agents it already
+  follows, and announces the one that stops working — by name, with its space, and a tap opens the app. An agent that
+  stops to **ask** for the user is not announced: it has not finished, it is waiting.
+- **Settings › Notify when an agent finishes**, on by default, with the reason written under it.
+- The permission is asked on Android 13+ and a refusal is not an error: the app works, the user is simply not told.
+
 ## [0.6.6] - 2026-11-11
 
 ### Fixed
@@ -410,7 +420,8 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.6.6...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/werlang/herdr-whistl/compare/v0.6.6...v0.7.0
 [0.6.6]: https://github.com/werlang/herdr-whistl/compare/v0.6.5...v0.6.6
 [0.6.5]: https://github.com/werlang/herdr-whistl/compare/v0.6.4...v0.6.5
 [0.6.4]: https://github.com/werlang/herdr-whistl/compare/v0.6.3...v0.6.4

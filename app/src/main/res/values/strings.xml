@@ -328,4 +328,14 @@
     <string name="agents_filter_banner">Showing the agents of %1$s</string>
     <string name="space_menu_new_agent">New agent</string>
     <string name="agents_filter_clear">Show every space</string>
+    <string name="notify_channel_watch">Agent watch</string>
+    <string name="notify_channel_finished">Agents</string>
+    <string name="notify_watching_title">Watching agents</string>
+    <string name="notify_watching_text">You are told when one finishes.</string>
+    <string name="notify_finished_title">%1$s finished</string>
+    <string name="notify_finished_text">%1$s · ready for the next task</string>
+    <string name="settings_notify_title">Notify when an agent finishes</string>
+    <string name="settings_notify_hint">A notification, even with the app in the background.</string>
+    <string name="common_on">On</string>
+    <string name="common_off">Off</string>
 </resources>

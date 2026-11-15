@@ -71,6 +71,8 @@ interface DemoControl {
 data class SettingsUiState(
     val language: AppLanguage,
     val fontSize: FontSize,
+    /** Whether a finished agent is announced with a notification (0.7.0). */
+    val notifyFinished: Boolean = true,
     val theme: ThemeChoice,
     val bar: List<ShortcutKey>,
     val addable: List<ShortcutKey>,
@@ -114,6 +116,7 @@ class SettingsViewModel(
         SettingsUiState(
             language = prefs.language,
             fontSize = prefs.fontSize,
+            notifyFinished = prefs.notifyFinished,
             theme = prefs.theme,
             bar = prefs.shortcutBar,
             // The arrow bundle is offered once, under its own name: adding any arrow adds all four, so four rows
@@ -137,6 +140,9 @@ class SettingsViewModel(
 
     /** @param size the terminal font size. */
     fun setFontSize(size: FontSize) = settings.setFontSize(size)
+
+    /** @param on whether a finished agent is announced with a notification. */
+    fun setNotifyFinished(on: Boolean) = settings.setNotifyFinished(on)
 
     /** @param choice the theme. */
     fun setTheme(choice: ThemeChoice) = settings.setTheme(choice)

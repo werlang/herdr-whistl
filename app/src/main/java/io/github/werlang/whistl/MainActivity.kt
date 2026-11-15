@@ -1,5 +1,13 @@
 package io.github.werlang.whistl
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import io.github.werlang.whistl.platform.AgentWatchService
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -29,6 +37,18 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         val container = (application as WhistlApplication).container
         AppCompatLanguageApplier.apply(container.settings.settings.value.language)
+        // The watch runs while the app is alive: it is what makes a notification possible after the screen is gone
+        // (0.7.0). It is started here, where the user has just asked for the app, and asked for notifications.
+        if (container.settings.settings.value.notifyFinished) requestNotifications()
+        lifecycleScope.launch {
+            container.settings.settings.collect { prefs ->
+                if (prefs.notifyFinished) {
+                    AgentWatchService.start(this@MainActivity)
+                } else {
+                    AgentWatchService.stop(this@MainActivity)
+                }
+            }
+        }
         setContent {
             val prefs by container.settings.settings.collectAsState()
             val dark = when (prefs.theme) {
@@ -43,6 +63,16 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Asks for the notification permission on the versions that require asking. A refusal is not an error: the app works,
+     * the user is simply not told (0.7.0).
+     */
+    private fun requestNotifications() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 }
 

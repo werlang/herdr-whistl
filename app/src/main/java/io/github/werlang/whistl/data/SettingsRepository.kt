@@ -56,6 +56,8 @@ data class AppSettings(
     val fontSize: FontSize,
     val theme: ThemeChoice,
     val shortcutBar: List<ShortcutKey>,
+    /** Whether an agent that finishes is announced with a notification (0.7.0). */
+    val notifyFinished: Boolean = true,
 ) {
     companion object {
         /** The defaults: system language, medium font, dark theme, and the SPEC default shortcut bar. */
@@ -64,6 +66,7 @@ data class AppSettings(
             fontSize = FontSize.Medium,
             theme = ThemeChoice.Dark,
             shortcutBar = ShortcutBar.DEFAULT,
+            notifyFinished = true,
         )
     }
 }
@@ -105,6 +108,9 @@ interface SettingsRepository {
 
     /** @param theme the new theme. */
     fun setTheme(theme: ThemeChoice)
+
+    /** @param on whether a finished agent is announced with a notification. */
+    fun setNotifyFinished(on: Boolean)
 
     /**
      * Moves a key one place earlier in the bar.
@@ -171,6 +177,8 @@ class DefaultSettingsRepository(private val store: SettingsStore) : SettingsRepo
 
     override fun setTheme(theme: ThemeChoice) = update { it.copy(theme = theme) }
 
+    override fun setNotifyFinished(on: Boolean) = update { it.copy(notifyFinished = on) }
+
     override fun moveShortcutUp(key: ShortcutKey): ShortcutResult = applyBar(ShortcutBar.moveUp(bar(), key))
 
     override fun moveShortcutDown(key: ShortcutKey): ShortcutResult = applyBar(ShortcutBar.moveDown(bar(), key))
@@ -202,11 +210,13 @@ class DefaultSettingsRepository(private val store: SettingsStore) : SettingsRepo
         val font = store.get(KEY_FONT_SIZE)?.let { code -> FontSize.entries.firstOrNull { it.code == code } }
         val theme = store.get(KEY_THEME)?.let { name -> ThemeChoice.entries.firstOrNull { it.name == name } }
         val bar = store.get(KEY_SHORTCUT_BAR)?.let { encoded -> ShortcutBar.parse(decodeBar(encoded)) }
+        val notify = store.get(KEY_NOTIFY_FINISHED)?.toBooleanStrictOrNull()
         return AppSettings(
             language = language ?: defaults.language,
             fontSize = font ?: defaults.fontSize,
             theme = theme ?: defaults.theme,
             shortcutBar = bar ?: defaults.shortcutBar,
+            notifyFinished = notify ?: defaults.notifyFinished,
         )
     }
 
@@ -215,6 +225,7 @@ class DefaultSettingsRepository(private val store: SettingsStore) : SettingsRepo
         store.put(KEY_FONT_SIZE, settings.fontSize.code)
         store.put(KEY_THEME, settings.theme.name)
         store.put(KEY_SHORTCUT_BAR, settings.shortcutBar.joinToString(",") { it.name })
+        store.put(KEY_NOTIFY_FINISHED, settings.notifyFinished.toString())
     }
 
     private fun decodeBar(encoded: String): List<String> = encoded.split(',').filter { it.isNotEmpty() }
@@ -224,5 +235,6 @@ class DefaultSettingsRepository(private val store: SettingsStore) : SettingsRepo
         const val KEY_FONT_SIZE = "font_size"
         const val KEY_THEME = "theme"
         const val KEY_SHORTCUT_BAR = "shortcut_bar"
+        const val KEY_NOTIFY_FINISHED = "notify_finished"
     }
 }
