@@ -46,6 +46,32 @@ class SpaceMatchingTest {
     }
 
     /** A label that names no space on the machine falls through to the cwd rule. */
+    /** A terminal the desktop Herdr started carries `herdr.space`; its id is unknown here, so the folder decides (0.7.1). */
+    @Test
+    fun theDesktopsSpaceLabelFallsToTheFolder() {
+        val terminal = agent("/home/u/web", mapOf(Agent.HERDR_SPACE_LABEL to "sp74d8f2e948b4779635327e0f4d87bc17"))
+
+        assertEquals("sp_a", matchSpace(terminal, spaces)?.id)
+    }
+
+    /** A terminal started inside another space's folder belongs to the deeper one. */
+    @Test
+    fun theDeepestFolderWins() {
+        val nested = listOf(space("sp_web", "/home/u/web"), space("sp_app", "/home/u/web/app"))
+        val terminal = agent("/home/u/web/app/src")
+
+        assertEquals("sp_app", matchSpace(terminal, nested)?.id)
+    }
+
+    /** A label the document does know still wins over the folder. */
+    @Test
+    fun aKnownLabelBeatsTheDeeperFolder() {
+        val nested = listOf(space("sp_app", "/home/u/web/app"), space("sp_other", "/home/u/other"))
+        val terminal = agent("/home/u/web/app", mapOf(Agent.SPACE_LABEL to "sp_other"))
+
+        assertEquals("sp_other", matchSpace(terminal, nested)?.id)
+    }
+
     @Test
     fun labelNamingAnUnknownSpaceFallsToCwd() {
         val terminal = agent(cwd = "/home/u/web", labels = mapOf(Agent.SPACE_LABEL to "sp_missing"))

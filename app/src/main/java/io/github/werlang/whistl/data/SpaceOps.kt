@@ -28,13 +28,17 @@ fun sortSpaces(spaces: List<SpaceRecord>): List<SpaceRecord> =
     spaces.sortedWith(compareBy<SpaceRecord>({ !it.pinned }, { it.order }))
 
 /**
- * The space an agent belongs to (SPEC §1, precedence in this order):
- * 1. a `whistl.space` label that names a space on this machine. The label does not depend on any folder resolution;
- * 2. otherwise the first space whose resolved path equals the terminal's `cwd`, after [normalizeFolder] on both;
+ * The space an agent belongs to (SPEC §1, precedence in this order, 0.7.1):
+ * 1. a space label — `whistl.space` from this app, `herdr.space` from the Herdr desktop app — that names a space on this
+ *    machine. The label does not depend on any folder resolution;
+ * 2. otherwise the space whose resolved path is the terminal's `cwd`, after [normalizeFolder] on both; the deepest folder
+ *    wins when one space is inside another, so a terminal started in `web/app` lands in `web/app` and not in `web`;
  * 3. otherwise `null`, shown as "No space".
  *
- * A label naming a space that does not exist falls through to the cwd rule. A space whose [resolvedPath] is `null`
- * (not resolved yet, or unresolvable) never matches by cwd.
+ * **The folder is what the two apps agree on.** A terminal started on the desktop carries the desktop's own space id,
+ * which this app's document does not know, so the id falls through and the folder decides — that is what lets an agent
+ * started on the Mac show up in the same space here. A space whose [resolvedPath] is `null` (not resolved yet, or
+ * unresolvable) never matches by cwd.
  *
  * @param terminal the agent's terminal.
  * @param spaces the machine's spaces, in display order.
@@ -47,12 +51,18 @@ fun matchSpace(
     spaces: List<SpaceRecord>,
     resolvedPath: (SpaceRecord) -> String? = { it.folder },
 ): SpaceRecord? {
-    val label = terminal.labels[Agent.SPACE_LABEL]
+    val label = terminal.labels[Agent.SPACE_LABEL] ?: terminal.labels[Agent.HERDR_SPACE_LABEL]
     if (label != null) {
         spaces.firstOrNull { it.id == label }?.let { return it }
     }
     val cwd = terminal.cwd?.let(::normalizeFolder) ?: return null
+    // Deepest match wins: a folder inside another space is the more specific answer.
     return spaces.firstOrNull { space -> resolvedPath(space)?.let(::normalizeFolder) == cwd }
+        ?: spaces
+            .mapNotNull { space -> resolvedPath(space)?.let(::normalizeFolder)?.let { it to space } }
+            .filter { (folder, _) -> cwd.startsWith(folder.trimEnd('/') + "/") }
+            .maxByOrNull { (folder, _) -> folder.length }
+            ?.second
 }
 
 /**

@@ -9,9 +9,15 @@ package io.github.werlang.whistl.domain
  * @property terminal the terminal this agent runs in.
  */
 data class Agent(val terminal: Terminal) {
-    /** The space this agent belongs to, from its `whistl.space` label; `null` when unlabelled. */
+    /**
+     * The space this agent belongs to, from its space label; `null` when it carries none.
+     *
+     * Two labels mean the same thing: this app writes [SPACE_LABEL], and the Herdr desktop app writes [HERDR_SPACE_LABEL]
+     * for the terminals it starts itself. A terminal of either kind belongs to a space, and one started on the desktop has
+     * to be visible here too (0.7.1).
+     */
     val spaceId: String?
-        get() = terminal.labels[SPACE_LABEL]
+        get() = terminal.labels[SPACE_LABEL] ?: terminal.labels[HERDR_SPACE_LABEL]
 
     /**
      * The name to show: the one the user gave it, else the one the core has, else the program's name, else the address.
@@ -28,6 +34,9 @@ data class Agent(val terminal: Terminal) {
     companion object {
         /** The hc label that ties a terminal to a space. */
         const val SPACE_LABEL: String = "whistl.space"
+
+        /** The space label the Herdr desktop app writes on the terminals it starts; a terminal of either kind is claimed. */
+        const val HERDR_SPACE_LABEL: String = "herdr.space"
 
         /** The hc label that carries a name the user chose. */
         const val NAME_LABEL: String = "whistl.name"
