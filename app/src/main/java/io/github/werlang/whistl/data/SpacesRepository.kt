@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.data
 
+import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.HcException
 import io.github.werlang.whistl.core.rpc.NotFound
 import io.github.werlang.whistl.core.rpc.TransportLost
@@ -373,8 +374,39 @@ class DefaultSpacesRepository(
         } catch (e: DocumentException) {
             return
         }
-        remember(id, doc)
+        remember(id, adoptDesktopSpaces(client, doc))
         resolveFolders(id)
+    }
+
+    /**
+     * The document with the Herdr desktop's spaces added (0.7.3).
+     *
+     * The desktop keeps its spaces in [HERDR_DOCUMENT] on the same core, and labels the terminals it starts with
+     * `herdr.space` and those ids. Adopting the missing ones, id included, is what makes a space made on the desktop usable
+     * here without retyping the folder — and makes its agents resolve to it by label instead of by cwd.
+     *
+     * A desktop document that cannot be read, or holds nothing new, leaves the document as it is. A write that fails still
+     * shows the adopted spaces: they come back on the next refresh.
+     *
+     * @param client the machine's live client.
+     * @param doc the document this app holds.
+     * @return the document to keep.
+     */
+    private suspend fun adoptDesktopSpaces(client: HcClient, doc: SpacesDocument): SpacesDocument {
+        val desktop = try {
+            parseDesktopSpaces(client.docGet(HERDR_DOCUMENT).value)
+        } catch (e: HcException) {
+            return doc
+        }
+        if (adoptedSpaces(doc.spaces, desktop).isEmpty()) return doc
+        return try {
+            docReadModifyWrite(client, WHISTL_DOCUMENT, MAX_ATTEMPTS) { current ->
+                val missing = adoptedSpaces(current.spaces, desktop)
+                if (missing.isEmpty()) current else SpacesDocument(current.spaces + missing, current.unknownFields)
+            }
+        } catch (e: HcException) {
+            SpacesDocument(doc.spaces + adoptedSpaces(doc.spaces, desktop), doc.unknownFields)
+        }
     }
 
     /**

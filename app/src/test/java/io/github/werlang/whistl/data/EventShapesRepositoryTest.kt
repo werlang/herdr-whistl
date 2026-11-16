@@ -62,7 +62,8 @@ class EventShapesRepositoryTest {
         h.pushEvent(line("event_doc.json"))
         runCurrent()
 
-        assertEquals(before + 1, h.core.docReads())
+        // Two reads: this app's document and the Herdr desktop's, which a refresh also looks at (0.7.3).
+        assertEquals(before + 2, h.core.docReads())
     }
 
     /** The recorded heartbeat is a line and changes no agent: the agents on the machine stay as they were. */

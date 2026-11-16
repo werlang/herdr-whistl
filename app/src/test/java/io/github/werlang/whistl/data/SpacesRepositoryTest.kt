@@ -275,7 +275,17 @@ class SpacesRepositoryTest {
         val ourSecond = spaceJson(ourId, "web-app", "~/code/web-app", order = 1)
         val concurrent = spaceJson("sp_c", "other", "/other", order = 0, extra = mapOf("x_owner" to JsonPrimitive("other-app")))
         val topExtra = mapOf("future_top" to JsonPrimitive("keep-me"))
-        fun whistl(request: JsonObject) = request.withParam("name", JsonPrimitive("whistl"))
+        fun doc(name: String, request: JsonObject) = request.withParam("name", JsonPrimitive(name))
+        fun whistl(request: JsonObject) = doc("whistl", request)
+
+        // Every refresh also reads the Herdr desktop's document, to adopt the spaces made there (0.7.3). Empty here.
+        fun desktop(read: JsonObject, response: JsonObject) = Exchange(
+            "derived in memory from doc_get.json: the desktop keeps no spaces",
+            doc("herdr-app", read),
+            response.withResult(
+                JsonObject(mapOf("value" to JsonNull, "version" to JsonPrimitive(1))),
+            ),
+        )
 
         val h = RepoStack(this)
         h.connector.commandReply = scriptedCommands(
@@ -284,11 +294,13 @@ class SpacesRepositoryTest {
                 whistl(read.request),
                 read.response,
             ),
+            desktop(read.request, read.response),
             Exchange(
                 "derived in memory from doc_get.json (read before the write)",
                 whistl(read.request),
                 read.response,
             ),
+            // The create path does not refresh, so no desktop read here.
             Exchange(
                 "derived in memory from doc_set_conflict.json: first write at version 1",
                 whistl(conflict.request)

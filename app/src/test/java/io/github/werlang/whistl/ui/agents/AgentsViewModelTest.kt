@@ -87,8 +87,9 @@ class AgentsViewModelTest {
         )
 
         val state = vm.state.value
-        // All, Needs you, Working, Idle, and the terminals no space claims.
-        assertEquals(listOf(5, 1, 1, 1, 0), state.chips.map { it.count })
+        // All, Needs you, Working, Idle, and the terminals no space claims. The finished one is counted nowhere: it has no
+        // screen to open and nothing to send (0.7.3).
+        assertEquals(listOf(4, 1, 1, 1, 0), state.chips.map { it.count })
         assertEquals(listOf(true, false, false, false, false), state.chips.map { it.selected })
         assertEquals(1, state.blockedCount)
 
@@ -98,7 +99,7 @@ class AgentsViewModelTest {
         assertEquals(listOf(false, true, false, false, false), vm.state.value.chips.map { it.selected })
     }
 
-    /** The rows keep the screen's order: waiting first, then working, done, idle, then no status, then the finished. */
+    /** The rows keep the screen's order: waiting first, then working, done, idle, then no status. A finished one is not a row. */
     @Test
     fun theRowsFollowTheAgentsScreenOrder() = runTest {
         val (_, vm) = listing(
@@ -111,8 +112,9 @@ class AgentsViewModelTest {
         )
 
         assertEquals(
-            // What needs you first, then the live ones in the order the snapshot gave them, finished last (0.5.1).
-            listOf("t-blocked", "t-idle", "t-plain", "t-working", "t-done", "t-finished"),
+            // What needs you first, then the live ones in the order the snapshot gave them (0.5.1). The finished terminal
+            // is not in the list at all (0.7.3).
+            listOf("t-blocked", "t-idle", "t-plain", "t-working", "t-done"),
             vm.state.value.rows.map { it.address },
         )
     }

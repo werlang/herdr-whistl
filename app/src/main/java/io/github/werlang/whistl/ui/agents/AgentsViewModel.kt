@@ -218,10 +218,13 @@ class AgentsViewModel(
         // One space's agents, when the list was opened from that space (0.6.4), else every agent a space holds. Unbound
         // terminals sit behind their own chip: they used to drown the unfiltered list (0.6.2), and hiding them completely
         // left them unreachable (0.6.3).
+        // A finished terminal keeps no screen: opening it shows a black pane and there is nothing to send it. The core
+        // keeps them until the desktop app removes them, so they are dropped here rather than deleted (0.7.3).
+        val live = all.filter { it.agent.terminal.state == TerminalState.Live }
         val list = if (only == null) {
-            all
+            live
         } else {
-            all.filter { it.machineId == only.machineId && it.space?.id == only.spaceId }
+            live.filter { it.machineId == only.machineId && it.space?.id == only.spaceId }
         }
         // New agent belongs to a space: it is offered only while the list shows one, and only when its folder resolves
         // here on a connected machine (0.6.5).

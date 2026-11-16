@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -52,7 +53,7 @@ class FinishedAgentLabelTest {
 
     /** The Agents list row of a finished blocked agent is not live and not waiting, so its label is finished. */
     @Test
-    fun theAgentsRowOfAFinishedBlockedAgentIsNotLive() = runTest {
+    fun aFinishedBlockedAgentIsNotARowAtAll() = runTest {
         val h = RepoStack(this)
         h.connector.eventsPipeFactory = {
             snapshotPipe(eventsSnapshot(1, listOf(terminalJson("t-finished", state = "finished", status = "blocked"))))
@@ -62,10 +63,8 @@ class FinishedAgentLabelTest {
         val vm = AgentsViewModel(h.agents, h.machines, FakePins(), h.spaces, StaticInstalled())
         runCurrent()
 
-        val row = vm.state.value.rows.single()
-
-        assertFalse(row.live)
-        assertFalse(row.waiting)
-        assertEquals(R.string.status_finished, agentLabelRes(row.live, row.waiting, row.status))
+        // No row: a finished terminal keeps no screen, so the list has nothing to offer for it (0.7.3). The core still
+        // holds it for the desktop app.
+        assertTrue(vm.state.value.rows.isEmpty())
     }
 }
