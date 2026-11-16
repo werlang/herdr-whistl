@@ -12,8 +12,8 @@ bouncycastle = "1.86"
 navigationCompose = "2.10.2"
 lifecycle = "2.8.7"
 appcompat = "1.8.0"
-robolectric = "4.17"
-roborazzi = "1.77.0"
+robolectric = "4.18"
+roborazzi = "1.79.0"
 # VT emulator for the terminal screen (phase 8 P1 decision: kmp-terminal-emulator, pure Kotlin, no native code).
 # Only io.github.johnan:terminal-core is used (its android variant): the screen draws its cells on a Compose Canvas, so terminal-ui and its Material 3 stack stay out.
 johnanTerminal = "1.0.8"
