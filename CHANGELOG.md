@@ -7,6 +7,22 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.7.4] - 2026-11-11
+
+### Added
+
+- **What the agents have left of their subscription, on the machine card.** The provider closest to running out, with its
+  window and the time until it resets — `Codex 7d · 22 of 100 left · resets 4h 59m` — in the card's colour for that range.
+
+  No server is involved. The app ships the command in its own assets and runs it **on the machine**, through the core's
+  `machine.exec`, as one `python3 -c` argument: nothing is installed there, no file is written, and the OAuth token never
+  leaves the machine. `python` is tried when `python3` is missing, and a machine with neither says so instead of showing an
+  empty card.
+
+  Providers: Claude (5-hour and 7-day), Codex (5-hour and 7-day, token never refreshed — the CLI owns that rotation) and
+  OpenCode Go (rolling, weekly, monthly). A provider that cannot be asked is reported as such: "could not ask" and "nothing
+  left" are different answers.
+
 ## [0.7.3] - 2026-11-11
 
 ### Added
@@ -458,7 +474,8 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.4...HEAD
+[0.7.4]: https://github.com/werlang/herdr-whistl/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/werlang/herdr-whistl/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/werlang/herdr-whistl/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/werlang/herdr-whistl/compare/v0.7.0...v0.7.1
