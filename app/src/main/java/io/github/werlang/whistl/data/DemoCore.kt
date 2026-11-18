@@ -24,4 +24,7 @@ interface DemoCore {
 
     /** A fixed demo public key line. */
     val clientKey: ClientPublicKey
+
+    /** The subscription limits the demo machines report, so the card's limits line has something to show (0.7.4). */
+    val limits: LimitsRepository
 }

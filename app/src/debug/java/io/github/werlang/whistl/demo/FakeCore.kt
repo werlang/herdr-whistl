@@ -59,6 +59,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import io.github.werlang.whistl.data.LimitsRepository
+import io.github.werlang.whistl.data.LimitsResult
+import io.github.werlang.whistl.domain.LimitWindow
+import io.github.werlang.whistl.domain.LimitsReport
+import io.github.werlang.whistl.domain.ProviderLimits
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -169,6 +174,8 @@ class FakeCore : DemoCore {
     }
 
     override val machines: MachinesRepository = FakeMachines(state)
+
+    override val limits: LimitsRepository = FakeLimits()
     override val agents: AgentsRepository = FakeAgents(state)
     override val spaces: SpacesRepository = FakeSpaces(state)
     override val terminals: TerminalRepository = FakeTerminals(state)
@@ -879,4 +886,46 @@ private class FakeTerminalHandle(
     private fun refresh() {
         output.value = read()
     }
+}
+
+/**
+ * The limits the demo machines report: one provider close to its limit and one comfortable, so a screenshot shows both the
+ * warning colour and the normal one. Nothing is fetched: the demo has no machine to ask.
+ */
+private class FakeLimits : LimitsRepository {
+    private val answers = MutableStateFlow(
+        mapOf(
+            "mac" to LimitsResult.Done(
+                LimitsReport(
+                    listOf(
+                        ProviderLimits(
+                            id = "codex",
+                            ok = true,
+                            error = null,
+                            cached = false,
+                            windows = listOf(
+                                LimitWindow(label = "7d", usedPercent = 78.0, resetsAtMs = System.currentTimeMillis() + 5 * 3_600_000L),
+                                LimitWindow(label = "5h", usedPercent = 12.0, resetsAtMs = System.currentTimeMillis() + 2 * 3_600_000L),
+                            ),
+                        ),
+                        ProviderLimits(
+                            id = "claude",
+                            ok = true,
+                            error = null,
+                            cached = false,
+                            windows = listOf(
+                                LimitWindow(label = "5h", usedPercent = 34.0, resetsAtMs = System.currentTimeMillis() + 90 * 60_000L),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            // A machine that cannot be asked says why, which is the other half of the design.
+            "lab" to LimitsResult.Failed("not signed in: no Claude credentials on this machine"),
+        ),
+    )
+
+    override fun reports(): StateFlow<Map<String, LimitsResult>> = answers
+
+    override suspend fun refresh(machineId: String) = Unit
 }

@@ -109,7 +109,7 @@ class AppContainer(
      * The subscription limits of the coding agents, asked on each machine over the core (0.7.4). It is not a service: the
      * app ships the command in its assets and runs it where the credentials are, through `machine.exec`.
      */
-    val limits: LimitsRepository = DefaultLimitsRepository(
+    val limits: LimitsRepository = demo?.limits ?: DefaultLimitsRepository(
         machines = machines,
         script = context.applicationContext.assets.open("limits.py").bufferedReader().use { it.readText() },
     )
