@@ -6,14 +6,18 @@ import io.github.werlang.whistl.data.AgentsRepository
 import io.github.werlang.whistl.data.ConnectionState
 import io.github.werlang.whistl.data.ErrorKind
 import io.github.werlang.whistl.data.InstalledAgentsRepository
+import io.github.werlang.whistl.data.LimitsRepository
+import io.github.werlang.whistl.data.LimitsResult
 import io.github.werlang.whistl.data.MachinesRepository
 import io.github.werlang.whistl.data.withLiveTerminal
+import io.github.werlang.whistl.domain.ProviderLimits
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -82,6 +86,8 @@ data class MachineCard(
     val version: String?,
     val installed: List<String>?,
     val reconnectEnabled: Boolean,
+    /** What the machine's agents have left of their subscriptions, when the limits command answered (0.7.4). */
+    val limits: ProviderLimits? = null,
 )
 
 /**
@@ -209,9 +215,18 @@ class MachinesViewModel(
     private val machines: MachinesRepository,
     agents: AgentsRepository,
     installed: InstalledAgentsRepository,
+    private val limits: LimitsRepository? = null,
 ) : ViewModel() {
     private val sheets = MutableStateFlow(Sheets())
     private var nextSession = 1
+
+    init {
+        // Asked once per screen, on the machines the user kept: the command talks to three providers over the network, so it
+        // is not polled in a loop (0.7.4).
+        viewModelScope.launch {
+            machines.machines().first().forEach { machine -> limits?.refresh(machine.id) }
+        }
+    }
 
     /** Every machine's connection state, by id. Re-evaluated when the list of machines changes. */
     private val connections: Flow<Map<String, ConnectionState>> = machines.machines().flatMapLatest { list ->
@@ -222,14 +237,17 @@ class MachinesViewModel(
         }
     }
 
+    /** The limits answers, by machine: empty when the app was built without the limits command. */
+    private val limitReports: Flow<Map<String, LimitsResult>> = limits?.reports() ?: flowOf(emptyMap())
+
     /** The screen's state. */
     val state: StateFlow<MachinesUiState> = combine(
         machines.machines(),
         connections,
         agents.agents,
         installed.installed,
-        sheets,
-    ) { list, connection, agentList, installedMap, open ->
+        combine(sheets, limitReports, ::Pair),
+    ) { list, connection, agentList, installedMap, (open, limitAnswers) ->
         val cards = list.map { machine ->
             val state = connection[machine.id] ?: ConnectionState.Offline
             val (status, issue) = classify(state)
@@ -243,6 +261,8 @@ class MachinesViewModel(
                 version = (state as? ConnectionState.Connected)?.hello?.version,
                 installed = installedMap[machine.id]?.map { it.displayName },
                 reconnectEnabled = state !is ConnectionState.Connecting,
+                // The provider closest to running out, across the ones that answered on this machine.
+                limits = (limitAnswers[machine.id] as? LimitsResult.Done)?.report?.highest,
             )
         }
         val hostKeyPrompt = if (open.menuFor != null || open.removeFor != null || open.addSession != null || open.editFor != null) {

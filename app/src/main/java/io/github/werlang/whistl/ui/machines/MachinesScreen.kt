@@ -196,6 +196,32 @@ private fun MachineCardView(card: MachineCard, onMenu: () -> Unit, onOpen: () ->
                         color = tokens.muted,
                     )
                 }
+                // What the agents on this machine have left of their subscription, when the limits command answered: the
+                // provider closest to running out, with when it comes back (0.7.4).
+                card.limits?.let { provider ->
+                    val window = provider.fullest
+                    val used = window?.usedPercent
+                    if (used != null) {
+                        val color = when {
+                            used >= 90 -> tokens.blocked
+                            used >= 70 -> tokens.working
+                            else -> tokens.muted
+                        }
+                        Text(
+                            text = stringResource(
+                                R.string.machine_limits,
+                                provider.title,
+                                window.label,
+                                (100 - used).toInt(),
+                                resetIn(window.resetsAtMs),
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = color,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
                 card.installed?.let { names ->
                     Text(
                         text = if (names.isEmpty()) {
@@ -258,5 +284,27 @@ private fun cardStatusColor(status: MachineStatus): Color {
         MachineStatus.Connecting -> tokens.working
         MachineStatus.Offline -> tokens.idle
         MachineStatus.Error -> MaterialTheme.colorScheme.error
+    }
+}
+
+/**
+ * How long until a window resets, short enough for a card: "2h 10m", "3d 4h", "now".
+ *
+ * @param resetsAtMs the reset time in Unix milliseconds, or `null` when the provider did not say.
+ * @return the label, in the user's language.
+ */
+@Composable
+private fun resetIn(resetsAtMs: Long?): String {
+    if (resetsAtMs == null) return stringResource(R.string.machine_limits_reset_unknown)
+    val left = resetsAtMs - System.currentTimeMillis()
+    if (left <= 0) return stringResource(R.string.machine_limits_reset_now)
+    val minutes = left / 60_000
+    val days = minutes / 1_440
+    val hours = (minutes % 1_440) / 60
+    val rest = minutes % 60
+    return when {
+        days > 0 -> stringResource(R.string.machine_limits_reset_days, days, hours)
+        hours > 0 -> stringResource(R.string.machine_limits_reset_hours, hours, rest)
+        else -> stringResource(R.string.machine_limits_reset_minutes, rest)
     }
 }

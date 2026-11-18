@@ -32,7 +32,9 @@ import io.github.werlang.whistl.platform.SharedPreferencesSettingsStore
 import io.github.werlang.whistl.platform.SharedPreferencesSpacesCache
 import io.github.werlang.whistl.core.log.Log
 import io.github.werlang.whistl.data.DefaultPinnedAgents
+import io.github.werlang.whistl.data.DefaultLimitsRepository
 import io.github.werlang.whistl.data.HttpUpdateRepository
+import io.github.werlang.whistl.data.LimitsRepository
 import io.github.werlang.whistl.data.PinnedAgents
 import io.github.werlang.whistl.data.UpdateRepository
 import io.github.werlang.whistl.domain.AppVersion
@@ -102,6 +104,15 @@ class AppContainer(
 
     /** The system side of an update: signatures, the install permission and the installer (SPEC §2.7). */
     val installer: AppInstaller = AndroidAppInstaller(context.applicationContext)
+
+    /**
+     * The subscription limits of the coding agents, asked on each machine over the core (0.7.4). It is not a service: the
+     * app ships the command in its assets and runs it where the credentials are, through `machine.exec`.
+     */
+    val limits: LimitsRepository = DefaultLimitsRepository(
+        machines = machines,
+        script = context.applicationContext.assets.open("limits.py").bufferedReader().use { it.readText() },
+    )
 
     /**
      * The release feed. It is the same in demo mode: an update is about this build, not about the demo data, and a

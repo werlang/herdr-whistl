@@ -149,6 +149,12 @@
     </plurals>
     <string name="machine_meta">%1$s · hc %2$s</string>
     <string name="machine_installed">Instalados: %1$s</string>
+    <string name="machine_limits">%1$s %2$s · %3$d de 100 restante · renova %4$s</string>
+    <string name="machine_limits_reset_unknown">desconhecido</string>
+    <string name="machine_limits_reset_now">agora</string>
+    <string name="machine_limits_reset_minutes">%1$dm</string>
+    <string name="machine_limits_reset_hours">%1$dh %2$dm</string>
+    <string name="machine_limits_reset_days">%1$dd %2$dh</string>
     <string name="machine_none_installed">Nenhum agente instalado</string>
     <string name="machine_reconnect">Reconectar</string>
     <string name="machine_edit">Editar máquina</string>

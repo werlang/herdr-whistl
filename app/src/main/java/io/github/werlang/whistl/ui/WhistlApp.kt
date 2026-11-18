@@ -166,7 +166,7 @@ fun WhistlApp(startRoute: String = Routes.MACHINES, showSplash: Boolean = true) 
     val container = LocalAppContainer.current
     val machinesModel: MachinesViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { MachinesViewModel(container.machines, container.agents, container.installed) }
+            initializer { MachinesViewModel(container.machines, container.agents, container.installed, container.limits) }
         },
     )
     val spacesModel: SpacesViewModel = viewModel(
