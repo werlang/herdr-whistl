@@ -7,6 +7,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.7.3] - 2026-11-11
+
+### Added
+
+- **The spaces of the Herdr desktop app appear here on their own.** Both apps keep their spaces in the same core, in
+  different documents; a refresh now reads the desktop's `herdr-app` and adopts the spaces this app does not have yet — id
+  kept, so the terminals the desktop started resolve to them by label instead of by folder guesswork. A space whose folder is
+  already here is not duplicated.
+
+### Fixed
+
+- **Finished terminals are no longer listed anywhere.** They keep no screen, so the Agents list filled with black panes that
+  had nothing to open and nothing to send, and the machine and space cards counted them. They are hidden from the list, the
+  filters, and every count. They stay on the core until the desktop app removes them.
+
 ## [0.7.2] - 2026-11-11
 
 ### Fixed
@@ -443,7 +458,8 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/werlang/herdr-whistl/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/werlang/herdr-whistl/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/werlang/herdr-whistl/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/werlang/herdr-whistl/compare/v0.6.6...v0.7.0

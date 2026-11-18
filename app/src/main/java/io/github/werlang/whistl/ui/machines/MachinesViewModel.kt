@@ -7,6 +7,7 @@ import io.github.werlang.whistl.data.ConnectionState
 import io.github.werlang.whistl.data.ErrorKind
 import io.github.werlang.whistl.data.InstalledAgentsRepository
 import io.github.werlang.whistl.data.MachinesRepository
+import io.github.werlang.whistl.data.withLiveTerminal
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -238,7 +239,7 @@ class MachinesViewModel(
                 address = machine.address(),
                 status = status,
                 issue = issue,
-                agentCount = (state as? ConnectionState.Connected)?.let { _ -> agentList.count { it.machineId == machine.id } },
+                agentCount = (state as? ConnectionState.Connected)?.let { _ -> agentList.withLiveTerminal().count { it.machineId == machine.id } },
                 version = (state as? ConnectionState.Connected)?.hello?.version,
                 installed = installedMap[machine.id]?.map { it.displayName },
                 reconnectEnabled = state !is ConnectionState.Connecting,

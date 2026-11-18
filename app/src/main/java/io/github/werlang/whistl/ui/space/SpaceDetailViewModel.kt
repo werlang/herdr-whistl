@@ -16,6 +16,7 @@ import io.github.werlang.whistl.data.StartResult
 import io.github.werlang.whistl.data.UnresolvableReason
 import io.github.werlang.whistl.data.isWaitingForUser
 import io.github.werlang.whistl.data.sortWithPinned
+import io.github.werlang.whistl.data.withLiveTerminal
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.domain.TerminalState
@@ -172,7 +173,7 @@ class SpaceDetailViewModel(
         installed.installed,
         combine(sheets, pinnedFlow, ::Pair),
     ) { groups, agentList, machineList, installedMap, (open, pinnedKeys) ->
-        build(groups, agentList, machineList, installedMap, open, pinnedKeys)
+        build(groups, agentList.withLiveTerminal(), machineList, installedMap, open, pinnedKeys)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyState())
 
     /**

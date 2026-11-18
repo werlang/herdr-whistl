@@ -158,6 +158,17 @@ object AgentEventReducer {
 fun Terminal.isWaitingForUser(): Boolean = state == TerminalState.Live && status == AgentStatus.Blocked
 
 /**
+ * The agents the screens count and list (0.7.3).
+ *
+ * A finished terminal keeps no screen: opening it shows a black pane with nothing to send. The core keeps them until the
+ * desktop app removes them, so every screen drops them here instead of counting agents nobody can use.
+ *
+ * @return the agents whose terminal is live.
+ */
+fun List<MachineAgent>.withLiveTerminal(): List<MachineAgent> =
+    filter { it.agent.terminal.state == TerminalState.Live }
+
+/**
  * The order the agents screen shows (SPEC §2). Live agents come first: blocked, working, done, idle, then error, then
  * plain programs with no status. Equal ranks keep their order from the input.
  *

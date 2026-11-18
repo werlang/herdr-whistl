@@ -20,6 +20,7 @@ import io.github.werlang.whistl.ui.space.StartProblem
 import io.github.werlang.whistl.data.PinnedAgents
 import io.github.werlang.whistl.data.isWaitingForUser
 import io.github.werlang.whistl.data.sortWithPinned
+import io.github.werlang.whistl.data.withLiveTerminal
 import io.github.werlang.whistl.domain.Agent
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.TerminalState
@@ -218,9 +219,8 @@ class AgentsViewModel(
         // One space's agents, when the list was opened from that space (0.6.4), else every agent a space holds. Unbound
         // terminals sit behind their own chip: they used to drown the unfiltered list (0.6.2), and hiding them completely
         // left them unreachable (0.6.3).
-        // A finished terminal keeps no screen: opening it shows a black pane and there is nothing to send it. The core
-        // keeps them until the desktop app removes them, so they are dropped here rather than deleted (0.7.3).
-        val live = all.filter { it.agent.terminal.state == TerminalState.Live }
+        // A finished terminal keeps no screen: opening it shows a black pane and there is nothing to send it (0.7.3).
+        val live = all.withLiveTerminal()
         val list = if (only == null) {
             live
         } else {

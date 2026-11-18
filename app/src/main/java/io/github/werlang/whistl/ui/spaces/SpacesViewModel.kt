@@ -19,6 +19,7 @@ import io.github.werlang.whistl.data.SpacesRepository
 import io.github.werlang.whistl.data.UnresolvableReason
 import io.github.werlang.whistl.data.defaultSpaceName
 import io.github.werlang.whistl.data.isWaitingForUser
+import io.github.werlang.whistl.data.withLiveTerminal
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.domain.Rejection
@@ -327,7 +328,7 @@ class SpacesViewModel(
         sheets,
         machineFilter,
     ) { groups, agentList, machineList, open, filter ->
-        build(groups, agentList, machineList, open, filter)
+        build(groups, agentList.withLiveTerminal(), machineList, open, filter)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SpacesUiState(emptyList(), false, true, null, null, null, null))
 
     /**
