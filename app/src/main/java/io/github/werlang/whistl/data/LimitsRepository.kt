@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.data
 
+import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.HcException
 import io.github.werlang.whistl.domain.LimitsReport
 import io.github.werlang.whistl.domain.parseLimits
@@ -65,18 +66,10 @@ class DefaultLimitsRepository(
                 answers.value = answers.value + (machineId to LimitsResult.Offline)
                 return
             }
-            val exec = try {
-                client.machineExec(ARGV_PREFIX + script)
+            val result = try {
+                run(machineId, client)
             } catch (e: HcException) {
-                answers.value = answers.value + (machineId to LimitsResult.Failed(e.message ?: "the machine refused the request"))
-                return
-            }
-            val result = when {
-                exec.code != 0 -> LimitsResult.Failed(
-                    exec.stderr.trim().ifEmpty { "the limits command exited ${exec.code}" }.take(200),
-                )
-                exec.timedOut -> LimitsResult.Failed("the limits command timed out")
-                else -> LimitsResult.Done(parseLimits(exec.stdout))
+                LimitsResult.Failed(e.message ?: "the machine refused the request")
             }
             answers.value = answers.value + (machineId to result)
         } finally {
@@ -84,8 +77,34 @@ class DefaultLimitsRepository(
         }
     }
 
+    /**
+     * Runs the command with the first interpreter the machine has.
+     *
+     * The script travels as the argument of `-c`, so nothing is written on the machine, but an interpreter still has to
+     * exist there. `python3` is on macOS, on the distributions and on WSL; `python` is the fallback for the machines that only
+     * have the unsuffixed name. A machine with neither is a reason, not a silent empty card.
+     */
+    private suspend fun run(machineId: String, client: HcClient): LimitsResult {
+        var last: LimitsResult = LimitsResult.Failed("no python3 on $machineId")
+        for (interpreter in INTERPRETERS) {
+            val exec = try {
+                client.machineExec(listOf(interpreter, "-c", script))
+            } catch (e: HcException) {
+                return LimitsResult.Failed(e.message ?: "the machine refused the request")
+            }
+            if (exec.timedOut) return LimitsResult.Failed("the limits command timed out")
+            if (exec.code == 0) return LimitsResult.Done(parseLimits(exec.stdout))
+            val stderr = exec.stderr.trim()
+            // 127 is "command not found"; the message differs between shells and cores, so both are checked.
+            val missing = exec.code == 127 || stderr.contains("not found") || stderr.contains("No such file")
+            last = LimitsResult.Failed(stderr.ifEmpty { "the limits command exited ${exec.code}" }.take(200))
+            if (!missing) return last
+        }
+        return last
+    }
+
     companion object {
-        /** The interpreter and the flag that make the script travel as an argument, with no file on the machine. */
-        val ARGV_PREFIX: List<String> = listOf("python3", "-c")
+        /** The interpreters to try, in order: the modern name first, the legacy one as a fallback. */
+        val INTERPRETERS: List<String> = listOf("python3", "python")
     }
 }
