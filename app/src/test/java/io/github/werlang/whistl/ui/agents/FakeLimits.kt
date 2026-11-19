@@ -39,8 +39,12 @@ class FakeLimits(
 
     override fun reports(): StateFlow<Map<String, LimitsResult>> = reports
 
+    /** When set, a refresh waits for it before answering: a test can hold the command in flight. */
+    var gate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+
     override suspend fun refresh(machineId: String) {
         asked += machineId
+        gate?.await()
         answer[machineId]?.let { reports.value = reports.value + (machineId to it) }
     }
 }

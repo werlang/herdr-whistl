@@ -351,4 +351,7 @@
     <string name="agents_limits_offline">The machine is offline, so the limits could not be asked.</string>
     <string name="agents_limits_left">%1$d left</string>
     <string name="agents_limits_cached">cached</string>
+    <string name="agents_limits_unknown">—</string>
+    <string name="agents_limits_join">%1$s · %2$s</string>
+    <string name="agents_limits_join3">%1$s · %2$s · %3$s</string>
 </resources>

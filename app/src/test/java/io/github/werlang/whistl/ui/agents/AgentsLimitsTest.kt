@@ -78,15 +78,19 @@ class AgentsLimitsTest {
     /** A second tap while the command runs does not start a second one. */
     @Test
     fun aSecondTapWhileAskingDoesNothing() = runTest {
-        val limits = FakeLimits()
+        val limits = FakeLimits().apply { gate = kotlinx.coroutines.CompletableDeferred() }
         val vm = model(limits)
 
         vm.openMenu(vm.state.value.rows.first())
         vm.showLimits()
+        // The first command is held in flight, so the second tap lands while it is still running.
         vm.showLimits()
-        testScheduler.advanceUntilIdle()
-
         assertEquals(1, limits.asked.size)
+
+        limits.gate?.complete(Unit)
+        testScheduler.advanceUntilIdle()
+        assertEquals(1, limits.asked.size)
+        assertEquals(false, vm.state.value.menu?.limitsLoading)
     }
 
     /** A machine with one live, working agent in a space, and the view model wired to [limits]. */

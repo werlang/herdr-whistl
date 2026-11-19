@@ -246,11 +246,17 @@ private fun LimitRow(window: LimitWindow, cached: Boolean) {
  */
 @Composable
 private fun limitText(used: Double?, resetsAtMs: Long?, cached: Boolean): String {
-    if (used == null) return "—"
+    if (used == null) return stringResource(R.string.agents_limits_unknown)
     val left = stringResource(R.string.agents_limits_left, (100 - used).toInt())
     val reset = resetIn(resetsAtMs)
-    val base = if (reset == null) left else "$left · $reset"
-    return if (cached) "$base · " + stringResource(R.string.agents_limits_cached) else base
+    val cachedWord = stringResource(R.string.agents_limits_cached)
+    // Every composition is a string resource, so a separator or a dash can be translated with the rest of the sentence.
+    return when {
+        reset != null && cached -> stringResource(R.string.agents_limits_join3, left, reset, cachedWord)
+        reset != null -> stringResource(R.string.agents_limits_join, left, reset)
+        cached -> stringResource(R.string.agents_limits_join, left, cachedWord)
+        else -> left
+    }
 }
 
 /**
