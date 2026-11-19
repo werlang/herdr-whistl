@@ -480,7 +480,7 @@ class AgentViewModel(
         viewModelScope.launch {
             val outcome = agentsRepo.act(machineId, address, AgentAction.Rename(name))
             if (outcome != ActionResult.Done) {
-                interaction.value = interaction.value.copy(refusal = AgentNotice.Failed)
+                interaction.value = interaction.value.copy(refusal = AgentNotice.Refused)
             }
         }
     }
