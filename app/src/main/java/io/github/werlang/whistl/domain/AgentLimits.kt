@@ -43,6 +43,7 @@ data class ProviderLimits(
     val title: String = when (id) {
         "claude" -> "Claude"
         "codex" -> "Codex"
+        "antigravity" -> "Antigravity"
         "opencode" -> "OpenCode"
         else -> id.replaceFirstChar { it.uppercase() }
     }
@@ -109,6 +110,12 @@ private fun label(name: String): String = when (name) {
     "seven_day" -> "7d"
     "seven_day_opus" -> "7d opus"
     "seven_day_sonnet" -> "7d sonnet"
+    // Antigravity reports four quota lines plus its own model bundle; each one gets a name a card can hold.
+    "gemini_weekly" -> "gemini 7d"
+    "gemini_5h" -> "gemini 5h"
+    "claude_gpt_weekly" -> "claude/gpt 7d"
+    "claude_gpt_5h" -> "claude/gpt 5h"
+    "argon_weekly" -> "argon 7d"
     else -> name
 }
 

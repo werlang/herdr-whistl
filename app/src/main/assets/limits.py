@@ -72,43 +72,94 @@ def http_json(url, headers, timeout=20):
         return json.loads(response.read().decode("utf-8"))
 
 
-def claude_token():
-    """Claude Code's OAuth token: the environment, the credentials file, or the macOS Keychain."""
+def token_in_file(path):
+    """The access token of a Claude Code credentials file, when it holds a real one."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return (json.load(handle).get("claudeAiOauth") or {}).get("accessToken") or None
+    except Exception:  # noqa: BLE001 - an unreadable file is just not a source
+        return None
+
+
+def claude_tokens():
+    """Every Claude Code token this process can find, in the order they should be tried.
+
+    The important case is the second one: `machine.exec` runs as the SSH user, and the login often belongs to another
+    account on the same box (root here, ubuntu there). Reading the other homes is why a machine with Claude logged in
+    stopped reporting "not signed in".
+
+    @return the tokens, possibly empty; more than one when the machine has more than one login.
+    """
+    found = []
     raw = os.environ.get("CLAUDE_CREDENTIALS_JSON")
     if raw:
-        return json.loads(raw).get("claudeAiOauth", {}).get("accessToken")
-    path = os.path.join(os.path.expanduser("~"), ".claude", ".credentials.json")
-    if os.path.exists(path):
-        with open(path, encoding="utf-8") as handle:
-            token = json.load(handle).get("claudeAiOauth", {}).get("accessToken")
+        token = (json.loads(raw).get("claudeAiOauth") or {}).get("accessToken")
         if token:
-            return token
+            found.append(token)
+    # This user first, then the other accounts on the machine: the login is a per-user thing, the machine is not.
+    homes = [os.path.expanduser("~")]
+    for root in ("/home", "/Users"):
+        try:
+            homes += [os.path.join(root, name) for name in sorted(os.listdir(root))]
+        except OSError:
+            pass
+    for home in homes:
+        token = token_in_file(os.path.join(home, ".claude", ".credentials.json"))
+        if token and token not in found:
+            found.append(token)
     if sys.platform == "darwin":
-        found = subprocess.run(
-            ["security", "find-generic-password", "-s", CLAUDE_KEYCHAIN_SERVICE, "-w"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if found.returncode == 0 and found.stdout.strip():
-            return json.loads(found.stdout).get("claudeAiOauth", {}).get("accessToken")
-    return None
+        # The Keychain item is readable only when the reading process may touch it; over ssh it usually is not.
+        for service in (CLAUDE_KEYCHAIN_SERVICE, "Claude Code"):
+            item = subprocess.run(
+                ["security", "find-generic-password", "-s", service, "-w"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if item.returncode != 0 or not item.stdout.strip():
+                continue
+            try:
+                token = (json.loads(item.stdout).get("claudeAiOauth") or {}).get("accessToken")
+            except ValueError:
+                token = item.stdout.strip()
+            if token and token not in found:
+                found.append(token)
+    return found
 
 
 def claude():
-    """The 5-hour and 7-day windows Claude Code spends."""
-    token = claude_token()
-    if not token:
-        raise RuntimeError("not signed in: no Claude credentials on this machine")
-    body = http_json(
-        CLAUDE_URL,
-        {
-            "Authorization": f"Bearer {token}",
-            "anthropic-beta": "oauth-2025-04-20",
-            "User-Agent": "claude-code/2.1.317",
-            "Accept": "application/json",
-        },
-    )
+    """The 5-hour and 7-day windows Claude Code spends.
+
+    Every token found is tried: a machine can have more than one login, and the first one may be the expired account of
+    another user. The first token the endpoint accepts answers; only when none does is the reason reported.
+    """
+    tokens = claude_tokens()
+    if not tokens:
+        raise RuntimeError(
+            "no Claude token found: checked $CLAUDE_CREDENTIALS_JSON, every ~/.claude/.credentials.json on this machine"
+            + (", and the login Keychain" if sys.platform == "darwin" else ""),
+        )
+    body = None
+    failures = []
+    for token in tokens:
+        try:
+            body = http_json(
+                CLAUDE_URL,
+                {
+                    "Authorization": f"Bearer {token}",
+                    "anthropic-beta": "oauth-2025-04-20",
+                    "User-Agent": "claude-code/2.1.317",
+                    "Accept": "application/json",
+                },
+            )
+            break
+        except urllib.error.HTTPError as error:
+            failures.append(str(error.code))
+    if body is None:
+        raise RuntimeError(
+            "the endpoint refused every token on this machine (" + ", ".join(failures) + " on "
+            + str(len(tokens)) + "): run `claude` once to refresh the login",
+        )
     windows = {}
     for name in ("five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet"):
         window = body.get(name)
@@ -188,6 +239,63 @@ def codex_window(value):
     return {"utilization": round(float(used), 1), "resets_at": reset}
 
 
+def antigravity_key(group, label):
+    """A short, stable window name from the group and the label `agy` prints.
+
+    @param group the quota group, such as "Gemini Models".
+    @param label the line, such as "Weekly Limit Remaining".
+    @return the key the app reads, or `None` when the line is not understood.
+    """
+    window = "weekly" if "weekly" in label.lower() else "5h" if "five hour" in label.lower() else None
+    if not window:
+        return None
+    name = group.lower()
+    if "argon" in name:
+        return "argon_" + window
+    if name.startswith("gemini 4"):
+        return "argon_" + window
+    if "claude" in name or "gpt" in name:
+        return "claude_gpt_" + window
+    if "gemini" in name:
+        return "gemini_" + window
+    return None
+
+
+def antigravity():
+    """The Antigravity quotas, read from the read-only print mode of its own CLI.
+
+    `agy -p "/usage"` prints one tab-separated record per quota line: group, label, percent REMAINING, reset. No model is
+    asked anything; it is the same call the CLI's own `/usage` screen makes.
+    """
+    found = subprocess.run(
+        ["agy", "-p", "/usage"],
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    if found.returncode != 0:
+        raise RuntimeError(found.stderr.strip()[:200] or "agy refused the usage request")
+    windows = {}
+    for line in found.stdout.splitlines():
+        fields = line.split("\t")
+        if len(fields) < 4:
+            continue
+        group, label, percent, reset = (field.strip() for field in fields[:4])
+        if not percent.endswith("%"):
+            continue
+        try:
+            remaining = float(percent.rstrip("%"))
+        except ValueError:
+            continue
+        key = antigravity_key(group, label)
+        if key:
+            # `agy` reports what is left; the document says what is spent, like every other provider.
+            windows[key] = {"utilization": round(100 - remaining, 1), "resets_at": reset}
+    if not windows:
+        raise RuntimeError("agy printed no quota lines")
+    return windows
+
+
 def opencode():
     """The Go allowances the local OpenCode daemon reports: rolling, weekly, monthly."""
     found = subprocess.run(
@@ -211,7 +319,7 @@ def opencode():
     }
 
 
-PROVIDERS = {"claude": claude, "codex": codex, "opencode": opencode}
+PROVIDERS = {"claude": claude, "codex": codex, "antigravity": antigravity, "opencode": opencode}
 
 
 def collect(name):

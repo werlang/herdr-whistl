@@ -122,6 +122,7 @@ import io.github.werlang.whistl.ui.components.StatusLabel
 import io.github.werlang.whistl.ui.components.whistlButtonColors
 import io.github.werlang.whistl.ui.keyNameRes
 import io.github.werlang.whistl.ui.statusColor
+import io.github.werlang.whistl.ui.agents.AgentLimitsBlock
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
@@ -170,6 +171,10 @@ fun AgentScreen(
         onAskStop = viewModel::onAskStop,
         onCancelStop = viewModel::onCancelStop,
         onConfirmStop = viewModel::onConfirmStop,
+        onStartRename = viewModel::onStartRename,
+        onRenameDraft = viewModel::onRenameDraft,
+        onConfirmRename = viewModel::onConfirmRename,
+        onShowLimits = viewModel::onShowLimits,
         onPaneSize = viewModel::onPaneSize,
         modifier = modifier,
     )
@@ -191,6 +196,10 @@ fun AgentContent(
     onAskStop: () -> Unit,
     onCancelStop: () -> Unit,
     onConfirmStop: () -> Unit,
+    onStartRename: () -> Unit = {},
+    onRenameDraft: (String) -> Unit = {},
+    onConfirmRename: () -> Unit = {},
+    onShowLimits: () -> Unit = {},
     onPaneSize: (Int, Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
@@ -229,6 +238,28 @@ fun AgentContent(
         ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = onCloseMenu, modifier = Modifier.testTag(AGENT_MENU_SHEET_TAG)) {
             SheetAction(text = stringResource(R.string.agent_interrupt), onClick = onInterrupt)
             SheetAction(text = stringResource(R.string.agent_stop), danger = true, onClick = onAskStop)
+            if (state.renaming) {
+                OutlinedTextField(
+                    value = state.renameDraft,
+                    onValueChange = onRenameDraft,
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.agents_rename_label)) },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).heightIn(min = 56.dp),
+                )
+                TextButton(
+                    onClick = onConfirmRename,
+                    enabled = state.renameDraft.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) {
+                    Text(stringResource(R.string.agents_rename_save))
+                }
+            } else {
+                SheetAction(text = stringResource(R.string.agents_action_rename), onClick = onStartRename)
+            }
+            SheetAction(text = stringResource(R.string.agents_action_limits), onClick = onShowLimits)
+            // The same block the Agents list shows, so the two sheets say the same things in the same order (0.7.6).
+            AgentLimitsBlock(state.limitsLoading, state.limits)
             Spacer(Modifier.height(24.dp))
         }
     }

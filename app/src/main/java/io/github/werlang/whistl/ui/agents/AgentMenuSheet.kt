@@ -124,7 +124,7 @@ fun AgentMenuSheet(
                     // The limits belong to the machine the agent runs on, not to the agent: the sheet says so in its header
                     // and shows every provider that answered there (0.7.5).
                     SheetAction(stringResource(R.string.agents_action_limits), onShowLimits)
-                    LimitsBlock(menu.limitsLoading, menu.limits)
+                    AgentLimitsBlock(menu.limitsLoading, menu.limits)
                 }
             }
         }
@@ -149,7 +149,7 @@ private fun SheetAction(label: String, onClick: () -> Unit) {
  * @param result the answer, or `null` before the user asked.
  */
 @Composable
-private fun LimitsBlock(loading: Boolean, result: LimitsResult?) {
+fun AgentLimitsBlock(loading: Boolean, result: LimitsResult?) {
     val tokens = LocalWhistlTokens.current
     if (!loading && result == null) return
     Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -7,6 +7,23 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.7.6] - 2026-11-11
+
+### Added
+
+- **Antigravity limits.** The four quotas its CLI reports — Gemini weekly and five-hour, the Claude/GPT bundle, and the Argon
+  weekly — read from the read-only `agy -p "/usage"` print mode, which asks no model anything. It reports what is left, so the
+  values are turned into what is spent, like every other provider.
+- **Check limits and Rename in the agent screen's own menu**, the sheet behind the ⋯ inside an agent. Same actions, same
+  components as the list's: a rename field with the current name in it, and the limits block under the actions.
+
+### Fixed
+
+- **Claude reported "no credentials" on machines where it is signed in.** The token was looked for in the login of the process
+  running the command, and the login often belongs to another account on the same box. Every `~/.claude/.credentials.json` on
+  the machine is read now, every token found is tried against the endpoint, and when none is accepted the reason says which
+  codes came back — "run `claude` once to refresh the login" instead of "not signed in".
+
 ## [0.7.5] - 2026-11-11
 
 ### Added
@@ -489,7 +506,8 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.5...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.6...HEAD
+[0.7.6]: https://github.com/werlang/herdr-whistl/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/werlang/herdr-whistl/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/werlang/herdr-whistl/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/werlang/herdr-whistl/compare/v0.7.2...v0.7.3

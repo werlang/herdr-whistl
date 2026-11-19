@@ -70,6 +70,25 @@ class AgentLimitsTest {
         assertEquals(1795962240000L, windows.first().resetsAtMs)
     }
 
+    /** Antigravity reports four quota lines under its own names; each one gets a label a card can hold. */
+    @Test
+    fun antigravityQuotasTakeShortNames() {
+        val report = parseLimits(
+            """
+            {"providers": {"antigravity": {"ok": true, "windows": {
+              "gemini_weekly": {"utilization": 5.0, "resets_at": "2026-11-25T23:27:19Z"},
+              "gemini_5h": {"utilization": 0.0, "resets_at": "2026-11-19T14:27:19Z"},
+              "claude_gpt_weekly": {"utilization": 2.0, "resets_at": "2026-11-25T23:27:38Z"},
+              "argon_weekly": {"utilization": 0.0, "resets_at": "2026-11-25T23:27:54Z"}
+            }}}}
+            """,
+        )
+
+        val antigravity = report.providers.single()
+        assertEquals("Antigravity", antigravity.title)
+        assertEquals(listOf("gemini 7d", "claude/gpt 7d", "gemini 5h", "argon 7d"), antigravity.windows.map { it.label })
+    }
+
     /** A provider that could not be asked is kept, with the reason: "nothing left" and "could not ask" must not look alike. */
     @Test
     fun aFailedProviderKeepsItsReason() {

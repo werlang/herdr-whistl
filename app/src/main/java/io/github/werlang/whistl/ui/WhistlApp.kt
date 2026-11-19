@@ -479,7 +479,15 @@ private fun AgentRoute(machineId: String, address: String, onBack: () -> Unit) {
         key = Routes.agent(machineId, address),
         factory = viewModelFactory {
             initializer {
-                AgentViewModel(container.terminals, container.agents, container.machines, container.settings, machineId, address)
+                AgentViewModel(
+                    container.terminals,
+                    container.agents,
+                    container.machines,
+                    container.settings,
+                    machineId,
+                    address,
+                    limits = container.limits,
+                )
             }
         },
     )

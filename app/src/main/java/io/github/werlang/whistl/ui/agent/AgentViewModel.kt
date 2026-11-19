@@ -4,8 +4,12 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.werlang.whistl.data.ActionResult
+import io.github.werlang.whistl.data.AgentAction
 import io.github.werlang.whistl.data.AgentsRepository
 import io.github.werlang.whistl.data.FontSize
+import io.github.werlang.whistl.data.LimitsRepository
+import io.github.werlang.whistl.data.LimitsResult
 import io.github.werlang.whistl.data.MachineAgent
 import io.github.werlang.whistl.data.MachinesRepository
 import io.github.werlang.whistl.data.SettingsRepository
@@ -137,6 +141,12 @@ data class AgentUiState(
     val confirmStop: Boolean,
     val closed: Boolean,
     val fontSize: FontSize,
+    /** Whether the menu is asking for a new name, and what has been typed (0.7.6). */
+    val renaming: Boolean = false,
+    val renameDraft: String = "",
+    /** The limits answer, once Check limits was tapped in the menu (0.7.6). */
+    val limits: LimitsResult? = null,
+    val limitsLoading: Boolean = false,
 )
 
 /**
@@ -161,6 +171,12 @@ private data class Interaction(
     val closed: Boolean = false,
     /** Whether the hold-to-send hint has already been shown for this screen (0.6.2). */
     val taughtHold: Boolean = false,
+    /** The name being typed in the menu (0.7.6). */
+    val renaming: Boolean = false,
+    val renameDraft: String = "",
+    /** The limits, asked from the menu on the tap (0.7.6). */
+    val limits: LimitsResult? = null,
+    val limitsLoading: Boolean = false,
 )
 
 /**
@@ -194,6 +210,8 @@ class AgentViewModel(
     settings: SettingsRepository,
     private val machineId: String,
     private val address: String,
+    private val agentsRepo: AgentsRepository = agents,
+    private val limits: LimitsRepository? = null,
 ) : ViewModel() {
     private val handle = MutableStateFlow<TerminalHandle?>(null)
     private val interaction = MutableStateFlow(Interaction())
@@ -437,6 +455,55 @@ class AgentViewModel(
         interaction.value = interaction.value.copy(menuOpen = false)
     }
 
+    /** Turns the menu into the rename field, with the current name in it (0.7.6). */
+    fun onStartRename() {
+        val current = interaction.value
+        val draft = current.renameDraft.ifBlank { state.value.name }
+        interaction.value = current.copy(renaming = true, renameDraft = draft, menuOpen = true)
+    }
+
+    /** @param text what the user typed as the new name. */
+    fun onRenameDraft(text: String) {
+        interaction.value = interaction.value.copy(renameDraft = text)
+    }
+
+    /**
+     * Saves the typed name as the terminal's `whistl.name` label, the same action the Agents list uses (0.7.6).
+     *
+     * An empty name is refused here rather than sent to the core, and the header takes the new name at once because the list
+     * and this screen read the same terminal.
+     */
+    fun onConfirmRename() {
+        val name = interaction.value.renameDraft.trim()
+        if (name.isEmpty()) return
+        interaction.value = interaction.value.copy(renaming = false, menuOpen = false)
+        viewModelScope.launch {
+            val outcome = agentsRepo.act(machineId, address, AgentAction.Rename(name))
+            if (outcome != ActionResult.Done) {
+                interaction.value = interaction.value.copy(refusal = AgentNotice.Failed)
+            }
+        }
+    }
+
+    /**
+     * Asks this agent's machine for the subscription limits, on the tap (0.7.6). Same call as the Agents list's menu, so the two
+     * sheets cannot disagree.
+     */
+    fun onShowLimits() {
+        val current = interaction.value
+        if (current.limitsLoading) return
+        interaction.value = current.copy(limitsLoading = true, limits = null)
+        viewModelScope.launch {
+            if (limits == null) {
+                interaction.value = interaction.value.copy(limitsLoading = false, limits = LimitsResult.Failed("no limits on this build"))
+                return@launch
+            }
+            limits.refresh(machineId)
+            val answer = limits.reports().value[machineId]
+            interaction.value = interaction.value.copy(limitsLoading = false, limits = answer)
+        }
+    }
+
     /** Asks for confirmation before stopping and removing the agent. */
     fun onAskStop() {
         interaction.value = interaction.value.copy(menuOpen = false, confirmStop = true)
@@ -549,6 +616,10 @@ class AgentViewModel(
             confirmStop = own.confirmStop,
             closed = own.closed,
             fontSize = fontSize,
+            renaming = own.renaming,
+            renameDraft = own.renameDraft,
+            limits = own.limits,
+            limitsLoading = own.limitsLoading,
         )
     }
 
