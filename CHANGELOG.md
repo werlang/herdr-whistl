@@ -7,6 +7,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.7.8] - 2026-11-11
+
+### Fixed
+
+- **Claude: the reason is now the truth, and there is a way through.** The token is looked for in this order: the token
+  `claude setup-token` produces (`CLAUDE_CODE_OAUTH_TOKEN`, or `~/.config/agent-limits/claude-token` — the same token written
+  down once, which survives a reboot and reaches the core's ssh session), every `~/.claude/.credentials.json` on the machine,
+  and the macOS Keychain. Every token found is tried; the first one the endpoint accepts answers.
+
+  When none does, the app asks the CLI itself (`claude auth status`) and reports what it says: **not signed in** → run
+  `claude auth login`, or `claude setup-token`; **signed in but the token is expired and cannot be renewed** → the same
+  remedy, because a five-hour login cannot renew itself; **signed in but the token cannot be read from here** (a Keychain only
+  the desktop session may open) → `claude setup-token` and set the variable. Before, all three said "not signed in", which was
+  false for two of them.
+
 ## [0.7.7] - 2026-11-11
 
 ### Fixed
@@ -517,7 +532,8 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.7...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.8...HEAD
+[0.7.8]: https://github.com/werlang/herdr-whistl/compare/v0.7.7...v0.7.8
 [0.7.7]: https://github.com/werlang/herdr-whistl/compare/v0.7.6...v0.7.7
 [0.7.6]: https://github.com/werlang/herdr-whistl/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/werlang/herdr-whistl/compare/v0.7.4...v0.7.5

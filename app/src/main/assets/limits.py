@@ -72,6 +72,15 @@ def http_json(url, headers, timeout=20):
         return json.loads(response.read().decode("utf-8"))
 
 
+def read_secret_file(path):
+    """The first line of a file the user wrote down a token in, or `None`."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return handle.readline().strip() or None
+    except OSError:
+        return None
+
+
 def token_in_file(path):
     """The access token of a Claude Code credentials file, when it holds a real one."""
     try:
@@ -107,6 +116,14 @@ def claude_tokens():
         token = token_in_file(os.path.join(home, ".claude", ".credentials.json"))
         if token and token not in found:
             found.append(token)
+    # `claude setup-token` exists for unattended jobs: this token never needs the Keychain or a home directory. The file is
+    # the same token written down once, for the machines where an environment variable never reaches the core's ssh session.
+    for source in (
+        os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"),
+        read_secret_file(os.path.join(os.path.expanduser("~"), ".config", "agent-limits", "claude-token")),
+    ):
+        if source and source.strip() and source.strip() not in found:
+            found.insert(0, source.strip())
     if sys.platform == "darwin":
         # The Keychain item is readable only when the reading process may touch it; over ssh it usually is not.
         for service in (CLAUDE_KEYCHAIN_SERVICE, "Claude Code"):
@@ -127,6 +144,27 @@ def claude_tokens():
     return found
 
 
+def claude_signed_in():
+    """Whether the CLI itself says it is signed in, and for which account.
+
+    `claude auth status` answers for the account a home belongs to, using whatever store that platform uses. It is how a
+    machine can tell "nobody is signed in" apart from "the login is here but this process cannot read it".
+
+    @return `(logged_in, how)` for this process's home, or `(None, None)` when the CLI is not installed.
+    """
+    try:
+        found = subprocess.run(
+            ["claude", "auth", "status", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        body = json.loads(found.stdout)
+        return bool(body.get("loggedIn")), body.get("authMethod")
+    except Exception:  # noqa: BLE001 - no CLI, no answer
+        return None, None
+
+
 def claude():
     """The 5-hour and 7-day windows Claude Code spends.
 
@@ -135,9 +173,15 @@ def claude():
     """
     tokens = claude_tokens()
     if not tokens:
+        signed_in, how = claude_signed_in()
+        if signed_in:
+            raise RuntimeError(
+                "Claude is signed in on this machine (" + str(how) + ") but its token is not readable from here: run "
+                "`claude setup-token` and set CLAUDE_CODE_OAUTH_TOKEN for unattended use",
+            )
         raise RuntimeError(
-            "no Claude token found: checked $CLAUDE_CREDENTIALS_JSON, every ~/.claude/.credentials.json on this machine"
-            + (", and the login Keychain" if sys.platform == "darwin" else ""),
+            "Claude is not signed in for this account: run `claude auth login`, or `claude setup-token` and set "
+            "CLAUDE_CODE_OAUTH_TOKEN",
         )
     body = None
     failures = []
@@ -156,8 +200,15 @@ def claude():
         except urllib.error.HTTPError as error:
             failures.append(str(error.code))
     if body is None:
+        signed_in, _ = claude_signed_in()
+        if signed_in:
+            raise RuntimeError(
+                "the token on this machine is expired and cannot be renewed (" + ", ".join(failures)
+                + "): run `claude auth login` again, or use a long-lived token from `claude setup-token`",
+            )
         raise RuntimeError(
-            "the endpoint refused the token (" + ", ".join(failures) + "): run `claude` once to refresh the login",
+            "not signed in on this machine (" + ", ".join(failures) + " on " + str(len(tokens)) + " token(s)): run "
+            "`claude auth login`, or `claude setup-token` and set CLAUDE_CODE_OAUTH_TOKEN",
         )
     windows = {}
     for name in ("five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet"):
