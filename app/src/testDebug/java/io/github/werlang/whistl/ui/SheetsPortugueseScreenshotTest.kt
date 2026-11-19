@@ -29,6 +29,18 @@ class SheetsPortugueseScreenshotTest : ScreenHarness() {
 
     @Test
     @Config(qualifiers = "pt-rBR-w411dp-h891dp-xxhdpi")
+    fun agentActions() {
+        render(ShotScreen.AgentActions)
+    }
+
+    @Test
+    @Config(qualifiers = "pt-rBR-w411dp-h891dp-xxhdpi")
+    fun agentLimits() {
+        render(ShotScreen.AgentLimits)
+    }
+
+    @Test
+    @Config(qualifiers = "pt-rBR-w411dp-h891dp-xxhdpi")
     fun agentMenu() {
         render(ShotScreen.AgentMenu)
     }
