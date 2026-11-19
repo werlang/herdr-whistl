@@ -49,6 +49,7 @@ import io.github.werlang.whistl.ui.machines.MENU_REMOVE_TAG
 import io.github.werlang.whistl.ui.machines.REMOVE_MACHINE_SHEET_TAG
 import io.github.werlang.whistl.ui.settings.ADD_KEY_SHEET_TAG
 import io.github.werlang.whistl.ui.agent.AGENT_MENU_SHEET_TAG
+import io.github.werlang.whistl.ui.agents.AGENT_ACTIONS_SHEET_TAG
 import io.github.werlang.whistl.ui.machines.HOST_KEY_SHEET_TAG
 import io.github.werlang.whistl.ui.settings.LICENSES_SHEET_TAG
 import io.github.werlang.whistl.ui.space.NEW_AGENT_TAG
@@ -162,6 +163,12 @@ enum class ShotScreen(val slug: String) {
     /** The Agent screen's options sheet (Interrupt, Stop and remove), open over a working agent. */
     AgentMenu("agent-menu"),
 
+    /** The Agents list's action sheet, with Check limits among the actions (0.7.5). */
+    AgentActions("agent-actions"),
+
+    /** The same sheet after Check limits: the demo machine's providers, with their bars and resets (0.7.5). */
+    AgentLimits("agent-limits"),
+
     /** The open-source licences sheet, open over Settings. */
     LicencesSheet("licences-sheet"),
 
@@ -271,7 +278,8 @@ fun ShotScreen.route(): String = when (this) {
     ShotScreen.AgentMenu -> Routes.agent("mac", "t-working")
     ShotScreen.LicencesSheet -> Routes.SETTINGS
     ShotScreen.MachineHostKeySheet -> Routes.MACHINES
-    ShotScreen.AgentsWorking, ShotScreen.AgentsIdle, ShotScreen.AgentsEmpty -> Routes.AGENTS
+    ShotScreen.AgentsWorking, ShotScreen.AgentsIdle, ShotScreen.AgentsEmpty, ShotScreen.AgentActions,
+    ShotScreen.AgentLimits -> Routes.AGENTS
     ShotScreen.AgentFinished -> Routes.agent("mac", "t-finished")
     ShotScreen.AgentOffline -> Routes.agent("lab", "t-lab")
     ShotScreen.AddMachineConnecting, ShotScreen.AddMachineRefused, ShotScreen.AddMachineCoreMissing,
@@ -306,6 +314,7 @@ fun ShotScreen.sheetTag(): String? = when (this) {
     ShotScreen.CloseSpaceConfirm -> CLOSE_SPACE_SHEET_TAG
     ShotScreen.NewAgentPicker -> PICKER_SHEET_TAG
     ShotScreen.AgentMenu -> AGENT_MENU_SHEET_TAG
+    ShotScreen.AgentActions, ShotScreen.AgentLimits -> AGENT_ACTIONS_SHEET_TAG
     ShotScreen.LicencesSheet -> LICENSES_SHEET_TAG
     ShotScreen.MachineHostKeySheet -> HOST_KEY_SHEET_TAG
     else -> null
@@ -333,6 +342,7 @@ fun ShotScreen.expectedText(): String {
             app.getString(R.string.add_machine_title)
 
         ShotScreen.MachineMenu -> "mac"
+        ShotScreen.AgentActions, ShotScreen.AgentLimits -> "claude"
         ShotScreen.RemoveMachineConfirm -> app.getString(R.string.machine_confirm_remove_title, "mac")
         ShotScreen.Spaces, ShotScreen.SpacesEmpty, ShotScreen.SpacesLong -> app.getString(R.string.destination_spaces)
         ShotScreen.NewSpace, ShotScreen.NewSpaceNoMachine -> app.getString(R.string.space_new_title)
@@ -584,6 +594,19 @@ abstract class ScreenHarness {
             }
 
             ShotScreen.AddKeySheet -> clickByText(app.getString(R.string.settings_add_key), scroll = true)
+            ShotScreen.AgentActions -> openAgentActions()
+
+            ShotScreen.AgentLimits -> {
+                openAgentActions()
+                clickByText(app.getString(R.string.agents_action_limits), scroll = true)
+                // The fake machine answers at once; the sheet must render the answer, not the loading line.
+                composeRule.waitForIdle()
+                composeRule.waitUntilAtLeastOneExists(
+                    hasText("7d", substring = true),
+                    timeoutMillis = SHEET_TIMEOUT_MS,
+                )
+            }
+
             ShotScreen.MachineMenu -> openMachineMenu()
             ShotScreen.RemoveMachineConfirm -> {
                 openMachineMenu()
@@ -673,6 +696,13 @@ abstract class ScreenHarness {
     }
 
     /** Opens the first machine's card menu, as a user taps its menu button. */
+    /** Opens the Agents list's action sheet on its first row. */
+    private fun openAgentActions() {
+        val description = RuntimeEnvironment.getApplication().getString(R.string.agents_row_menu)
+        composeRule.onAllNodes(hasContentDescription(description) and hasClickAction()).onFirst().performClick()
+        composeRule.waitForIdle()
+    }
+
     private fun openMachineMenu() {
         val description = RuntimeEnvironment.getApplication().getString(R.string.machine_options)
         composeRule.onAllNodes(hasContentDescription(description) and hasClickAction()).onFirst().performClick()
