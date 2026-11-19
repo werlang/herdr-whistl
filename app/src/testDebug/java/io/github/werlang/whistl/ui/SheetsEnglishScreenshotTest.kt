@@ -35,12 +35,6 @@ class SheetsEnglishScreenshotTest : ScreenHarness() {
 
     @Test
     @Config(qualifiers = "en-rUS-w411dp-h891dp-xxhdpi")
-    fun agentLimits() {
-        render(ShotScreen.AgentLimits)
-    }
-
-    @Test
-    @Config(qualifiers = "en-rUS-w411dp-h891dp-xxhdpi")
     fun agentMenu() {
         render(ShotScreen.AgentMenu)
     }
