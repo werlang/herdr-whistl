@@ -165,15 +165,23 @@ private fun MachineCardView(card: MachineCard, onMenu: () -> Unit, onOpen: () ->
                     .padding(start = 14.dp, top = 14.dp, bottom = 14.dp, end = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(
-                    text = card.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                StatusLabel(label = stringResource(cardStatusLabelRes(card)), color = cardStatusColor(card.status))
+                // The name and the state share the first line, so the limits of each machine line up down the list (0.7.5).
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = card.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    StatusLabel(label = stringResource(cardStatusLabelRes(card)), color = cardStatusColor(card.status))
+                }
                 // Two lines, not one: the port is the part that tells two machines apart, so it must not be cut off.
                 Text(
                     text = card.address.text(),

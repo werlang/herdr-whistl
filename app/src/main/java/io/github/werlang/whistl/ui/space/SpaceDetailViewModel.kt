@@ -6,6 +6,8 @@ import io.github.werlang.whistl.data.ActionResult
 import io.github.werlang.whistl.data.AgentAction
 import io.github.werlang.whistl.data.AgentsRepository
 import io.github.werlang.whistl.data.InstalledAgentsRepository
+import io.github.werlang.whistl.data.LimitsRepository
+import io.github.werlang.whistl.data.LimitsResult
 import io.github.werlang.whistl.data.MachineAgent
 import io.github.werlang.whistl.data.MachineSpaces
 import io.github.werlang.whistl.data.MachinesRepository
@@ -160,6 +162,7 @@ class SpaceDetailViewModel(
     private val machines: MachinesRepository,
     private val installed: InstalledAgentsRepository,
     private val pins: PinnedAgents,
+    private val limits: LimitsRepository? = null,
 ) : ViewModel() {
     /** The pinned keys, folded into the sheet state so the state stays a five-way combine. */
     private val pinnedFlow = pins.pinned
@@ -311,6 +314,27 @@ class SpaceDetailViewModel(
     /** Closes the action sheet. */
     fun closeMenu() {
         sheets.value = sheets.value.copy(menu = null)
+    }
+
+    /**
+     * Asks this agent's machine for the subscription limits and shows them in the sheet (0.7.5). Same call as the Agents list's:
+     * the sheet is one component, so the action is one.
+     */
+    fun showLimits() {
+        val menu = sheets.value.menu ?: return
+        if (menu.limitsLoading) return
+        sheets.value = sheets.value.copy(menu = menu.copy(limitsLoading = true, limits = null))
+        viewModelScope.launch {
+            if (limits == null) {
+                sheets.value = sheets.value.copy(
+                    menu = sheets.value.menu?.copy(limitsLoading = false, limits = LimitsResult.Failed("no limits on this build")),
+                )
+                return@launch
+            }
+            limits.refresh(machineId)
+            val answer = limits.reports().value[machineId]
+            sheets.value = sheets.value.copy(menu = sheets.value.menu?.copy(limitsLoading = false, limits = answer))
+        }
     }
 
     /** @param text what the user typed as the new name. */

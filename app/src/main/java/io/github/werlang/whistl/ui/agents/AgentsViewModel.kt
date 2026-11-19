@@ -8,6 +8,8 @@ import io.github.werlang.whistl.data.AgentsRepository
 import io.github.werlang.whistl.data.MachineAgent
 import io.github.werlang.whistl.data.MachinesRepository
 import io.github.werlang.whistl.data.InstalledAgentsRepository
+import io.github.werlang.whistl.data.LimitsRepository
+import io.github.werlang.whistl.data.LimitsResult
 import io.github.werlang.whistl.data.SpacesRepository
 import io.github.werlang.whistl.data.StartChoice
 import io.github.werlang.whistl.data.StartResult
@@ -138,6 +140,10 @@ data class AgentMenu(
     val renaming: Boolean = false,
     val draft: String = "",
     val confirmingClose: Boolean = false,
+    /** The limits answer the sheet is showing, once the user asked for it and the machine answered (0.7.5). */
+    val limits: LimitsResult? = null,
+    /** Whether the limits were asked for and are still on their way. */
+    val limitsLoading: Boolean = false,
 )
 
 /** What the list tells the user after an action (phase 9, SPEC §2.4). */
@@ -181,6 +187,7 @@ class AgentsViewModel(
     private val spaces: SpacesRepository,
     private val installed: InstalledAgentsRepository,
     private val spaceFilter: MutableStateFlow<SpaceFilter?> = MutableStateFlow(null),
+    private val limits: LimitsRepository? = null,
 ) : ViewModel() {
     private val filter = MutableStateFlow(AgentsFilter.All)
     private val open = MutableStateFlow<AgentMenu?>(null)
@@ -329,6 +336,27 @@ class AgentsViewModel(
     fun openMenu(row: AgentRow) {
         notice.value = null
         open.value = AgentMenu(row)
+    }
+
+    /**
+     * Asks the agent's machine for the subscription limits, and shows them in the sheet (0.7.5).
+     *
+     * It is asked here rather than when the sheet opens: the user taps to see them, so the network call is theirs to make,
+     * and a sheet opened to rename an agent never spends a second on three providers.
+     */
+    fun showLimits() {
+        val menu = open.value ?: return
+        if (menu.limitsLoading) return
+        open.value = menu.copy(limitsLoading = true, limits = null)
+        viewModelScope.launch {
+            if (limits == null) {
+                open.value = open.value?.copy(limitsLoading = false, limits = LimitsResult.Failed("no limits on this build"))
+                return@launch
+            }
+            limits.refresh(menu.row.machineId)
+            val answer = limits.reports().value[menu.row.machineId]
+            open.value = open.value?.copy(limitsLoading = false, limits = answer)
+        }
     }
 
     /** Closes the action sheet. */

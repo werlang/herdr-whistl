@@ -143,6 +143,7 @@ fun SpaceDetailRoute(
             onDraft = model::renameDraft,
             onConfirmRename = model::confirmRename,
             onTogglePin = model::togglePin,
+            onShowLimits = model::showLimits,
             onDismiss = model::closeMenu,
         )
     }

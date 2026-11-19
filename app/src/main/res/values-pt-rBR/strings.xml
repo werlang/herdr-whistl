@@ -350,4 +350,11 @@
     <string name="settings_notify_hint">Uma notificação, mesmo com o app em segundo plano.</string>
     <string name="common_on">Ligado</string>
     <string name="common_off">Desligado</string>
+    <string name="agents_action_limits">Consultar limites</string>
+    <string name="agents_limits_loading">Consultando a máquina…</string>
+    <string name="agents_limits_none">Nenhum limite reportado nesta máquina.</string>
+    <string name="agents_limits_failed">Não foi possível consultar.</string>
+    <string name="agents_limits_offline">A máquina está offline, então os limites não puderam ser consultados.</string>
+    <string name="agents_limits_left">%1$d restante</string>
+    <string name="agents_limits_cached">em cache</string>
 </resources>

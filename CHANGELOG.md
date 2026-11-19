@@ -7,6 +7,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.7.5] - 2026-11-11
+
+### Added
+
+- **Check limits, from an agent's menu.** The action sheet of any agent gains **Check limits**: it asks that agent's machine and
+  shows, provider by provider, a bar per window with what is left and when it resets — `7d · 22 left · 4h 59m` — coloured by
+  how full it is. Numbers that came from the cache say `cached`; a provider that could not be asked says why, in the sheet.
+
+  It is asked on the tap, not when the sheet opens: renaming an agent should not spend a second on three providers, and a
+  second tap while the command runs starts nothing.
+
+### Changed
+
+- **The machine card's name and state share the first line**, so the limits line of every machine lines up down the list.
+
 ## [0.7.4] - 2026-11-11
 
 ### Added
@@ -474,7 +489,8 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.4...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.5...HEAD
+[0.7.5]: https://github.com/werlang/herdr-whistl/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/werlang/herdr-whistl/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/werlang/herdr-whistl/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/werlang/herdr-whistl/compare/v0.7.1...v0.7.2

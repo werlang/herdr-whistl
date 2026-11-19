@@ -344,4 +344,11 @@
     <string name="settings_notify_hint">A notification, even with the app in the background.</string>
     <string name="common_on">On</string>
     <string name="common_off">Off</string>
+    <string name="agents_action_limits">Check limits</string>
+    <string name="agents_limits_loading">Asking the machine…</string>
+    <string name="agents_limits_none">No limits reported on this machine.</string>
+    <string name="agents_limits_failed">Could not ask.</string>
+    <string name="agents_limits_offline">The machine is offline, so the limits could not be asked.</string>
+    <string name="agents_limits_left">%1$d left</string>
+    <string name="agents_limits_cached">cached</string>
 </resources>

@@ -186,6 +186,7 @@ fun WhistlApp(startRoute: String = Routes.MACHINES, showSplash: Boolean = true) 
                     spaces = container.spaces,
                     installed = container.installed,
                     spaceFilter = container.agentsSpaceFilter,
+                    limits = container.limits,
                 )
             }
         },
@@ -464,6 +465,7 @@ private fun AgentsRoute(
             onDraft = model::renameDraft,
             onConfirmRename = model::confirmRename,
             onTogglePin = model::togglePin,
+            onShowLimits = model::showLimits,
             onDismiss = model::closeMenu,
         )
     }
@@ -506,6 +508,7 @@ private fun spaceDetailModel(machineId: String, spaceId: String): SpaceDetailVie
                     machines = container.machines,
                     installed = container.installed,
                     pins = container.pins,
+                    limits = container.limits,
                 )
             }
         },

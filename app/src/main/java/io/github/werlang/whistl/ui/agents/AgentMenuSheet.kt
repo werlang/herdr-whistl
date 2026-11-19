@@ -23,6 +23,15 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.werlang.whistl.R
+import io.github.werlang.whistl.ui.theme.WhistlMono
+import io.github.werlang.whistl.domain.LimitWindow
+import io.github.werlang.whistl.data.LimitsResult
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.Row
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 
 /** The test tag of the action sheet, so tests and screenshots can find it. */
@@ -57,6 +66,7 @@ fun AgentMenuSheet(
     onDraft: (String) -> Unit,
     onConfirmRename: () -> Unit,
     onTogglePin: () -> Unit,
+    onShowLimits: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val tokens = LocalWhistlTokens.current
@@ -110,6 +120,10 @@ fun AgentMenuSheet(
                         stringResource(if (menu.row.pinned) R.string.agents_action_unpin else R.string.agents_action_pin),
                         onTogglePin,
                     )
+                    // The limits belong to the machine the agent runs on, not to the agent: the sheet says so in its header
+                    // and shows every provider that answered there (0.7.5).
+                    SheetAction(stringResource(R.string.agents_action_limits), onShowLimits)
+                    LimitsBlock(menu.limitsLoading, menu.limits)
                 }
             }
         }
@@ -120,5 +134,142 @@ fun AgentMenuSheet(
 private fun SheetAction(label: String, onClick: () -> Unit) {
     TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
         Text(text = label, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+/**
+ * The limits inside the action sheet: what the agent's machine reported, provider by provider.
+ *
+ * While the command runs, a line says so; when it answers, each provider gets its windows with the share left and the reset;
+ * when it cannot answer, the reason is shown as written. A failed provider is not hidden: "could not ask" and "nothing
+ * left" must not look alike.
+ *
+ * @param loading whether the command is still running.
+ * @param result the answer, or `null` before the user asked.
+ */
+@Composable
+private fun LimitsBlock(loading: Boolean, result: LimitsResult?) {
+    val tokens = LocalWhistlTokens.current
+    if (!loading && result == null) return
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        when {
+            loading -> Text(
+                text = stringResource(R.string.agents_limits_loading),
+                style = MaterialTheme.typography.bodySmall,
+                color = tokens.dim,
+            )
+            result is LimitsResult.Done && result.report.providers.isEmpty() -> Text(
+                text = stringResource(R.string.agents_limits_none),
+                style = MaterialTheme.typography.bodySmall,
+                color = tokens.dim,
+            )
+            result is LimitsResult.Done -> result.report.providers.forEach { provider ->
+                Text(
+                    text = provider.title,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (!provider.ok) {
+                    Text(
+                        text = provider.error.orEmpty().ifEmpty { stringResource(R.string.agents_limits_failed) },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = tokens.blocked,
+                    )
+                } else {
+                    provider.windows.forEach { window -> LimitRow(window, provider.cached) }
+                }
+            }
+            result is LimitsResult.Failed -> Text(
+                text = result.why,
+                style = MaterialTheme.typography.bodySmall,
+                color = tokens.blocked,
+            )
+            result is LimitsResult.Offline -> Text(
+                text = stringResource(R.string.agents_limits_offline),
+                style = MaterialTheme.typography.bodySmall,
+                color = tokens.blocked,
+            )
+        }
+    }
+}
+
+/** One window: its name, the bar, and what is left with the reset time. */
+@Composable
+private fun LimitRow(window: LimitWindow, cached: Boolean) {
+    val tokens = LocalWhistlTokens.current
+    val used = window.usedPercent
+    val color = when {
+        used == null -> tokens.muted
+        used >= 90 -> tokens.blocked
+        used >= 70 -> tokens.working
+        else -> tokens.done
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = window.label,
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = WhistlMono,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.widthIn(min = 52.dp),
+            maxLines = 1,
+        )
+        // The bar is what makes 91% and 96% different at a glance.
+        LinearProgressIndicator(
+            progress = { ((used ?: 0.0) / 100.0).toFloat().coerceIn(0f, 1f) },
+            color = color,
+            trackColor = tokens.field,
+            modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)),
+        )
+        Text(
+            text = limitText(used, window.resetsAtMs, cached),
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = WhistlMono,
+            color = color,
+            maxLines = 1,
+        )
+    }
+}
+
+/**
+ * "22 left · 4h 59m", or "—" when the provider gave no percentage.
+ *
+ * @param used the percentage spent, or `null`.
+ * @param resetsAtMs when the window resets, or `null`.
+ * @param cached whether these numbers are the last good answer.
+ * @return the label.
+ */
+@Composable
+private fun limitText(used: Double?, resetsAtMs: Long?, cached: Boolean): String {
+    if (used == null) return "—"
+    val left = stringResource(R.string.agents_limits_left, (100 - used).toInt())
+    val reset = resetIn(resetsAtMs)
+    val base = if (reset == null) left else "$left · $reset"
+    return if (cached) "$base · " + stringResource(R.string.agents_limits_cached) else base
+}
+
+/**
+ * The time until a window resets: "4h 59m", "3d 4h", or `null` when unknown.
+ *
+ * @param resetsAtMs the reset time in Unix milliseconds.
+ * @return the label, or `null`.
+ */
+@Composable
+private fun resetIn(resetsAtMs: Long?): String? {
+    if (resetsAtMs == null) return null
+    val left = resetsAtMs - System.currentTimeMillis()
+    if (left <= 0) return stringResource(R.string.machine_limits_reset_now)
+    val minutes = left / 60_000
+    val days = minutes / 1_440
+    val hours = (minutes % 1_440) / 60
+    val rest = minutes % 60
+    return when {
+        days > 0 -> stringResource(R.string.machine_limits_reset_days, days, hours)
+        hours > 0 -> stringResource(R.string.machine_limits_reset_hours, hours, rest)
+        else -> stringResource(R.string.machine_limits_reset_minutes, rest)
     }
 }
