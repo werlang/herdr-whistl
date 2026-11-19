@@ -93,18 +93,37 @@ def token_in_file(path):
 def claude_tokens():
     """Every Claude Code token this process can find, in the order they should be tried.
 
-    The important case is the second one: `machine.exec` runs as the SSH user, and the login often belongs to another
+    Priority, highest first: CLAUDE_CODE_OAUTH_TOKEN, ~/.config/agent-limits/claude-token, CLAUDE_CREDENTIALS_JSON,
+    every ~/.claude/.credentials.json (this user first, then the other accounts on the machine), and the macOS Keychain.
+    A token seen twice keeps its first, highest-priority place.
+
+    The home-directory case matters: `machine.exec` runs as the SSH user, and the login often belongs to another
     account on the same box (root here, ubuntu there). Reading the other homes is why a machine with Claude logged in
     stopped reporting "not signed in".
 
     @return the tokens, possibly empty; more than one when the machine has more than one login.
     """
     found = []
+
+    def add(token):
+        """Keep the first sighting of a token: that is the place its source earned in the order."""
+        token = token.strip() if isinstance(token, str) else None
+        if token and token not in found:
+            found.append(token)
+
+    # `claude setup-token` exists for unattended jobs: this token never needs the Keychain or a home directory, and an
+    # environment variable is the token the user set on purpose, so it is tried before anything read from disk.
+    add(os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"))
+    # The same token written down once, for the machines where an environment variable never reaches the core's ssh session.
+    add(read_secret_file(os.path.join(os.path.expanduser("~"), ".config", "agent-limits", "claude-token")))
     raw = os.environ.get("CLAUDE_CREDENTIALS_JSON")
     if raw:
-        token = (json.loads(raw).get("claudeAiOauth") or {}).get("accessToken")
-        if token:
-            found.append(token)
+        try:
+            parsed = json.loads(raw)
+        except (ValueError, TypeError):
+            parsed = None  # broken JSON is one unusable source, not the end of the search
+        oauth = parsed.get("claudeAiOauth") if isinstance(parsed, dict) else None
+        add(oauth.get("accessToken") if isinstance(oauth, dict) else None)
     # This user first, then the other accounts on the machine: the login is a per-user thing, the machine is not.
     homes = [os.path.expanduser("~")]
     for root in ("/home", "/Users"):
@@ -113,17 +132,7 @@ def claude_tokens():
         except OSError:
             pass
     for home in homes:
-        token = token_in_file(os.path.join(home, ".claude", ".credentials.json"))
-        if token and token not in found:
-            found.append(token)
-    # `claude setup-token` exists for unattended jobs: this token never needs the Keychain or a home directory. The file is
-    # the same token written down once, for the machines where an environment variable never reaches the core's ssh session.
-    for source in (
-        os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"),
-        read_secret_file(os.path.join(os.path.expanduser("~"), ".config", "agent-limits", "claude-token")),
-    ):
-        if source and source.strip() and source.strip() not in found:
-            found.insert(0, source.strip())
+        add(token_in_file(os.path.join(home, ".claude", ".credentials.json")))
     if sys.platform == "darwin":
         # The Keychain item is readable only when the reading process may touch it; over ssh it usually is not.
         for service in (CLAUDE_KEYCHAIN_SERVICE, "Claude Code"):
@@ -136,11 +145,13 @@ def claude_tokens():
             if item.returncode != 0 or not item.stdout.strip():
                 continue
             try:
-                token = (json.loads(item.stdout).get("claudeAiOauth") or {}).get("accessToken")
-            except ValueError:
+                parsed = json.loads(item.stdout)
+            except (ValueError, TypeError):
                 token = item.stdout.strip()
-            if token and token not in found:
-                found.append(token)
+            else:
+                oauth = parsed.get("claudeAiOauth") if isinstance(parsed, dict) else None
+                token = oauth.get("accessToken") if isinstance(oauth, dict) else None
+            add(token)
     return found
 
 

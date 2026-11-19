@@ -25,3 +25,7 @@ keystore.properties
 
 # macOS AppleDouble files, copied along by tar from a Mac
 ._*
+
+# Python bytecode from running or importing the bundled scripts (never committed)
+__pycache__/
+*.pyc
