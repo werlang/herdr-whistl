@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -152,7 +154,14 @@ private fun SheetAction(label: String, onClick: () -> Unit) {
 fun AgentLimitsBlock(loading: Boolean, result: LimitsResult?) {
     val tokens = LocalWhistlTokens.current
     if (!loading && result == null) return
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 320.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(top = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         when {
             loading -> Text(
                 text = stringResource(R.string.agents_limits_loading),
@@ -206,32 +215,33 @@ private fun LimitRow(window: LimitWindow, cached: Boolean) {
         used >= 70 -> tokens.working
         else -> tokens.done
     }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(
-            text = window.label,
-            style = MaterialTheme.typography.bodySmall,
-            fontFamily = WhistlMono,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.widthIn(min = 52.dp),
-            maxLines = 1,
-        )
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        // The name on the left, the numbers on the right: on a phone the single line clipped the numbers, which are the
+        // part that matters.
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = window.label,
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = WhistlMono,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = limitText(used, window.resetsAtMs, cached),
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = WhistlMono,
+                color = color,
+                maxLines = 1,
+            )
+        }
         // The bar is what makes 91% and 96% different at a glance.
         LinearProgressIndicator(
             progress = { ((used ?: 0.0) / 100.0).toFloat().coerceIn(0f, 1f) },
             color = color,
             trackColor = tokens.field,
-            modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)),
-        )
-        Text(
-            text = limitText(used, window.resetsAtMs, cached),
-            style = MaterialTheme.typography.bodySmall,
-            fontFamily = WhistlMono,
-            color = color,
-            maxLines = 1,
+            modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
         )
     }
 }

@@ -157,8 +157,7 @@ def claude():
             failures.append(str(error.code))
     if body is None:
         raise RuntimeError(
-            "the endpoint refused every token on this machine (" + ", ".join(failures) + " on "
-            + str(len(tokens)) + "): run `claude` once to refresh the login",
+            "the endpoint refused the token (" + ", ".join(failures) + "): run `claude` once to refresh the login",
         )
     windows = {}
     for name in ("five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet"):

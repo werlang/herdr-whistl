@@ -7,6 +7,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 Nothing yet.
 
+## [0.7.7] - 2026-11-11
+
+### Fixed
+
+- **The limits sheet no longer clips its numbers.** Each window puts its name and its numbers on one line above the bar, so the
+  value is never squeezed out of the right edge on a phone, and the block scrolls inside the sheet instead of pushing the
+  actions off the screen. The same block sat flush against both edges in the agent screen's own menu; it now has the sheet's
+  side padding, like the list's.
+- **A shorter reason when every token is refused:** `the endpoint refused the token (401): run claude once to refresh the
+  login`.
+
 ## [0.7.6] - 2026-11-11
 
 ### Added
@@ -506,7 +517,8 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.6...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.7...HEAD
+[0.7.7]: https://github.com/werlang/herdr-whistl/compare/v0.7.6...v0.7.7
 [0.7.6]: https://github.com/werlang/herdr-whistl/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/werlang/herdr-whistl/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/werlang/herdr-whistl/compare/v0.7.3...v0.7.4

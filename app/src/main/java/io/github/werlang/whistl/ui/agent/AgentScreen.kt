@@ -258,8 +258,11 @@ fun AgentContent(
                 SheetAction(text = stringResource(R.string.agents_action_rename), onClick = onStartRename)
             }
             SheetAction(text = stringResource(R.string.agents_action_limits), onClick = onShowLimits)
-            // The same block the Agents list shows, so the two sheets say the same things in the same order (0.7.6).
-            AgentLimitsBlock(state.limitsLoading, state.limits)
+            // The same block the Agents list shows, so the two sheets say the same things in the same order (0.7.6). It sits
+            // inside the sheet's own padding: without it the labels and the numbers ran off both edges of the screen.
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+                AgentLimitsBlock(state.limitsLoading, state.limits)
+            }
             Spacer(Modifier.height(24.dp))
         }
     }
