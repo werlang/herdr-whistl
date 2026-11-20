@@ -5,7 +5,29 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **A machine's state reads the same on every screen.** Machines, Spaces, New space and Space detail share one label and
+  one colour per state, instead of all of them calling the machine "offline".
+- **Waiting for you is amber, and the limits line is not the working blue.** A pending host-key confirmation shows in
+  amber ("needs you") instead of red; a machine's limits line is muted, turns amber at 20 or fewer left, and red at none.
+- **The agent's controls dim when they cannot be used.** While the agent is offline or finished, the shortcut keys, the
+  arrows, the field and Send sit at 38% opacity on the field's own background; with text to send, Send takes the accent.
+- **The agent's status bar keeps the agent's name whole.** "offline" and "finished" are said in fewer words, so
+  "[machine] space · agent" no longer truncates before the message; TalkBack still reads the full sentence.
+- **Empty states offer the next step.** "Add machine" in Machines, "New space" in Spaces without repeating "No spaces
+  yet", clearer guidance in the Agents list with no agents, and "Tap + to start an agent or a terminal." in a space.
+- **The host-key sheets name the machine they are about**: "First connection to X" and "The host key of X changed",
+  instead of "Add machine".
+- **Long folder paths keep their last segment.** Spaces, Space detail and the folder picker truncate a path in the
+  middle, with agent counts set in sans and paths in monospace.
+
+### Fixed
+
+- **The notification hint in Settings lines up with the other rows** of its card.
+- **Portuguese limits agree in number**: "restantes", and "1 restante" when one is left, in the machine and agent limits.
+- **A missing space says so**, with a "Space not found" card explaining it and a "Back to Spaces" button, instead of an
+  empty screen.
 
 ## [0.7.8] - 2026-11-11
 
