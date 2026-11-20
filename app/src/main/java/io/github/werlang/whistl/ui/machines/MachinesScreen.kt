@@ -209,14 +209,16 @@ private fun MachineCardView(card: MachineCard, onMenu: () -> Unit, onOpen: () ->
                     )
                 }
                 // What the agents on this machine have left of their subscription, when the limits command answered: the
-                // provider closest to running out, with when it comes back (0.7.4).
+                // provider closest to running out, with when it comes back (0.7.4). The line leaves the "working" blue: it
+                // is muted while there is room left, amber when the subscription is nearly spent and red when it is gone.
                 card.limits?.let { provider ->
                     val window = provider.fullest
                     val used = window?.usedPercent
                     if (used != null) {
+                        val remaining = (100 - used).toInt()
                         val color = when {
-                            used >= 90 -> tokens.blocked
-                            used >= 70 -> tokens.working
+                            remaining <= 0 -> MaterialTheme.colorScheme.error
+                            remaining <= 20 -> tokens.blocked
                             else -> tokens.muted
                         }
                         Text(
@@ -224,7 +226,7 @@ private fun MachineCardView(card: MachineCard, onMenu: () -> Unit, onOpen: () ->
                                 R.string.machine_limits,
                                 provider.title,
                                 window.label,
-                                (100 - used).toInt(),
+                                remaining,
                                 resetIn(window.resetsAtMs),
                             ),
                             style = MaterialTheme.typography.bodySmall,

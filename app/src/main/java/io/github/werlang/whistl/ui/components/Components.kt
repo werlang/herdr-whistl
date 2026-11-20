@@ -116,9 +116,12 @@ fun machineStatusLabelRes(status: MachineStatus, issue: MachineIssue?): Int = wh
  * The colour of a machine's status: connected is done, connecting is working, offline is idle, an error is the error colour.
  * The label always says the status too, so the colour is never the only signal (SPEC §3).
  *
+ * A host key waiting for the user is the exception among errors: it is not a failure but a decision the user has to make, so
+ * it uses the "needs you" colour (`blocked`) instead of the error colour. Every other error, including a changed host key,
+ * which is a real warning, keeps the error colour.
+ *
  * @param status the machine's status.
- * @param issue the reason, for an error. Every error uses the error colour for now; the issue is read so a host-key error can
- *   get its own colour without changing the callers.
+ * @param issue the reason, for an error.
  * @return the colour.
  */
 @Composable
@@ -128,7 +131,10 @@ fun machineStatusColor(status: MachineStatus, issue: MachineIssue? = null): Colo
         MachineStatus.Connected -> tokens.done
         MachineStatus.Connecting -> tokens.working
         MachineStatus.Offline -> tokens.idle
-        MachineStatus.Error -> MaterialTheme.colorScheme.error
+        MachineStatus.Error -> when (issue) {
+            MachineIssue.HostKeyToConfirm -> tokens.blocked
+            else -> MaterialTheme.colorScheme.error
+        }
     }
 }
 
