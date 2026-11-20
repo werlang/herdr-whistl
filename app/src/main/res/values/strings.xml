@@ -256,7 +256,9 @@
     <string name="space_detail_empty_hint">Tap + to start an agent or a terminal.</string>
     <string name="space_detail_offline">%1$s is offline. Reconnect it in Machines to see and start agents here.</string>
     <string name="space_detail_machine_state">%1$s: %2$s. Fix it in Machines to see and start agents here.</string>
-    <string name="space_detail_missing">This space is no longer on its machine.</string>
+    <string name="space_detail_missing_title">Space not found</string>
+    <string name="space_detail_missing">It was removed on the machine or from another device.</string>
+    <string name="space_detail_missing_back">Back to Spaces</string>
     <string name="space_detail_header">%1$s:</string>
     <string name="new_agent">New agent</string>
     <string name="new_agent_off_machine">New agent is off: %1$s is offline.</string>

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -21,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -61,6 +63,7 @@ import io.github.werlang.whistl.ui.components.SheetDragHandle
 import io.github.werlang.whistl.ui.components.StatusLabel
 import io.github.werlang.whistl.ui.components.machineStatusColor
 import io.github.werlang.whistl.ui.components.machineStatusLabelRes
+import io.github.werlang.whistl.ui.components.whistlButtonColors
 import io.github.werlang.whistl.ui.machines.MachineStatus
 import io.github.werlang.whistl.ui.spaces.FolderState
 import io.github.werlang.whistl.ui.spaces.unresolvedTextRes
@@ -188,11 +191,9 @@ fun SpaceDetailScreen(
                 }
             }
             if (state.missing) {
-                Text(
-                    text = stringResource(R.string.space_detail_missing),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = LocalWhistlTokens.current.muted,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                MissingSpace(
+                    onBack = onBack,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
                 return@Box
             }
@@ -216,6 +217,46 @@ fun SpaceDetailScreen(
             onClick = onNewAgent,
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
         )
+    }
+}
+
+/**
+ * The state of a space that is gone: a bordered box with the title, the explanation and the way back (SPEC §2.3).
+ *
+ * @param onBack called when Back to Spaces is tapped.
+ * @param modifier the modifier for the box.
+ */
+@Composable
+private fun MissingSpace(onBack: () -> Unit, modifier: Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .border(BorderStroke(1.dp, LocalWhistlTokens.current.field), RoundedCornerShape(14.dp))
+            .padding(horizontal = 18.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.space_detail_missing_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.semantics { heading() },
+        )
+        Text(
+            text = stringResource(R.string.space_detail_missing),
+            style = MaterialTheme.typography.bodyMedium,
+            color = LocalWhistlTokens.current.muted,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(6.dp))
+        Button(
+            onClick = onBack,
+            colors = whistlButtonColors(),
+            modifier = Modifier.heightIn(min = MinTouchTarget),
+        ) {
+            Text(stringResource(R.string.space_detail_missing_back))
+        }
     }
 }
 

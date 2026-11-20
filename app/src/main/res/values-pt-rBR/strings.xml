@@ -260,7 +260,9 @@
     <string name="space_detail_empty_hint">Toque em + para iniciar um agente ou um terminal.</string>
     <string name="space_detail_offline">%1$s está offline. Reconecte-a em Máquinas para ver e iniciar agentes aqui.</string>
     <string name="space_detail_machine_state">%1$s: %2$s. Corrija em Máquinas para ver e iniciar agentes aqui.</string>
-    <string name="space_detail_missing">Este ambiente não está mais na máquina.</string>
+    <string name="space_detail_missing_title">Ambiente não encontrado</string>
+    <string name="space_detail_missing">Ele foi removido na máquina ou em outro dispositivo.</string>
+    <string name="space_detail_missing_back">Voltar para Ambientes</string>
     <string name="space_detail_header">%1$s:</string>
     <string name="new_agent">Novo agente</string>
     <string name="new_agent_off_machine">Novo agente desligado: %1$s está offline.</string>
