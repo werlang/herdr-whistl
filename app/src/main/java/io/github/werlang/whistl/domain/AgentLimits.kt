@@ -28,6 +28,7 @@ data class LimitWindow(val label: String, val usedPercent: Double?, val resetsAt
  * @property error why the numbers are missing, when [ok] is false.
  * @property cached whether these numbers are the last good answer instead of a fresh one.
  * @property windows the windows the provider reports, fullest first.
+ * @property errorCode the stable reason the command sent for a failure the app can explain, `null` when there is none.
  */
 data class ProviderLimits(
     val id: String,
@@ -35,6 +36,7 @@ data class ProviderLimits(
     val error: String?,
     val cached: Boolean,
     val windows: List<LimitWindow>,
+    val errorCode: String? = null,
 ) {
     /** The window closest to running out, which is the one a card shows. */
     val fullest: LimitWindow? = windows.maxByOrNull { it.usedPercent ?: -1.0 }
@@ -87,12 +89,13 @@ fun parseLimits(text: String): LimitsReport {
 private fun provider(id: String, obj: JsonObject): ProviderLimits {
     val ok = (obj["ok"] as? JsonPrimitive)?.contentOrNull?.toBooleanStrictOrNull() ?: false
     val error = (obj["error"] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull
+    val errorCode = (obj["error_code"] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull
     val cached = (obj["cached"] as? JsonPrimitive)?.contentOrNull?.toBooleanStrictOrNull() ?: false
     val windows = (obj["windows"] as? JsonObject)
         ?.mapNotNull { (name, value) -> window(name, value as? JsonObject ?: return@mapNotNull null) }
         ?.sortedByDescending { it.usedPercent ?: -1.0 }
         .orEmpty()
-    return ProviderLimits(id = id, ok = ok, error = error, cached = cached, windows = windows)
+    return ProviderLimits(id = id, ok = ok, error = error, cached = cached, windows = windows, errorCode = errorCode)
 }
 
 /** One window, in either provider shape; `plan` and unknown keys are not windows and are dropped. */

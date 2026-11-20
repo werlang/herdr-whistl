@@ -466,3 +466,34 @@ Codex…) and key glyphs (Esc, ↑) are not translated.
 Implementation choices that this spec does not pin down (tilde resolution, the bundled BouncyCastle
 as the SSH provider on every API level, the recorded `terminal.interrupt` fixture, screenshot platform, release signing) are recorded
 in `docs/IMPLEMENTATION-NOTES.md`. Contributions follow `CONTRIBUTING.md`.
+
+## 10. Limits
+
+**Check limits** in an agent's action sheet asks the machine the agent runs on, because the
+credentials — and therefore the limits — belong to the machine, not to the agent. The app ships
+`app/src/main/assets/limits.py` and runs it over the core's `machine.exec` as
+`python3 -c <script>`; nothing is installed or written on the machine. The script prints one JSON
+document with a `providers` entry per provider it asked (`claude`, `codex`, `antigravity`,
+`opencode`). A provider that answers has `ok: true` and its windows; one that cannot is kept with
+`ok: false`, a human-readable `error`, and — when the app can explain the failure — a stable
+`error_code`. The last good answer is cached on the machine
+(`~/.cache/agent-limits/<provider>.json`, seven days) and returned with `cached: true` when a fresh
+ask fails, so a temporary failure does not erase the numbers.
+
+**Claude's long-lived token.** Claude Code's own login is a short-lived token the CLI rotates, and
+an SSH session usually cannot read or renew it. The reliable source is the long-lived token made by
+`claude setup-token`, written once to `~/.config/agent-limits/claude-token` (or exported as
+`CLAUDE_CODE_OAUTH_TOKEN`). The script tries that token first, then every
+`~/.claude/.credentials.json` on the machine, then the macOS Keychain. A Claude limit failure
+carries one of three codes: `claude_token_setup_required` (an account exists but no token is
+readable), `claude_not_configured` (no account and no token), and `claude_token_expired` (a token
+was found, but every attempt was refused with HTTP 401 or 403). All three name
+`claude setup-token` and that file; none claims the machine is signed out, because a login in
+another home is still a login. A non-auth HTTP failure (429, 5xx) keeps its HTTP error and carries
+no code.
+
+**Reading the failure.** In the sheet, pending setup (`claude_token_setup_required`,
+`claude_not_configured`) is a neutral notice in the `dim` colour; an expired token
+(`claude_token_expired`) is a warning in `working`; any other failure, and any provider that sent
+no code, is an error in `blocked`. The words and the colour both keep "setup is still pending"
+apart from "the query really failed".

@@ -37,6 +37,18 @@ CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "agent-limits")
 CACHE_MAX_AGE = 7 * 24 * 3600
 
 
+class ProviderError(RuntimeError):
+    """A provider failure that carries a stable code the app can turn into its own words.
+
+    @param message the reason, for a human.
+    @param code the stable reason, `None` when the failure has none the app can explain.
+    """
+
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code
+
+
 def cache_path(name):
     """Where the last good answer of a provider is kept."""
     return os.path.join(CACHE_DIR, f"{name}.json")
@@ -176,23 +188,62 @@ def claude_signed_in():
         return None, None
 
 
+def claude_account_files():
+    """Every `~/.claude.json` on this machine, this user's home first, then the other accounts.
+
+    Claude Code writes `oauthAccount` there when the machine has a login, even when the token itself is in a store this
+    process cannot read (a Keychain only the desktop session may open).
+    """
+    homes = [os.path.expanduser("~"), "/root"]
+    for root in ("/home", "/Users"):
+        try:
+            homes += [os.path.join(root, name) for name in sorted(os.listdir(root))]
+        except OSError:
+            pass
+    return [os.path.join(home, ".claude.json") for home in dict.fromkeys(homes)]
+
+
+def claude_has_account():
+    """Whether Claude Code has a login on this machine, readable from here or not.
+
+    @return `True` when the CLI reports a session, or any `~/.claude.json` on the machine carries an `oauthAccount`.
+    """
+    if claude_signed_in()[0]:
+        return True
+    for path in claude_account_files():
+        try:
+            with open(path, encoding="utf-8") as handle:
+                body = json.load(handle)
+        except Exception:  # noqa: BLE001 - an unreadable file is just no account here
+            continue
+        if isinstance(body, dict) and body.get("oauthAccount"):
+            return True
+    return False
+
+
 def claude():
     """The 5-hour and 7-day windows Claude Code spends.
 
     Every token found is tried: a machine can have more than one login, and the first one may be the expired account of
     another user. The first token the endpoint accepts answers; only when none does is the reason reported.
+
+    A failure that has a remedy carries a [ProviderError] code, so the app can say what to do in its own words:
+    `claude_token_setup_required` when an account exists but no token is readable, `claude_not_configured` when there is
+    neither, and `claude_token_expired` when every token was refused as unauthorised. Any other HTTP failure stays a plain
+    error: a rate limit or a broken endpoint is not a token problem.
     """
     tokens = claude_tokens()
     if not tokens:
-        signed_in, how = claude_signed_in()
-        if signed_in:
-            raise RuntimeError(
-                "Claude is signed in on this machine (" + str(how) + ") but its token is not readable from here: run "
-                "`claude setup-token` and set CLAUDE_CODE_OAUTH_TOKEN for unattended use",
+        if claude_has_account():
+            raise ProviderError(
+                "Claude has an account on this machine but no limits token readable from here: run "
+                "`claude setup-token` and save it to ~/.config/agent-limits/claude-token",
+                "claude_token_setup_required",
             )
-        raise RuntimeError(
-            "Claude is not signed in for this account: run `claude auth login`, or `claude setup-token` and set "
-            "CLAUDE_CODE_OAUTH_TOKEN",
+        raise ProviderError(
+            "no Claude limits token on this machine: run `claude setup-token` and save it to "
+            "~/.config/agent-limits/claude-token",
+            "claude_not_configured",
         )
     body = None
     failures = []
@@ -211,15 +262,14 @@ def claude():
         except urllib.error.HTTPError as error:
             failures.append(str(error.code))
     if body is None:
-        signed_in, _ = claude_signed_in()
-        if signed_in:
-            raise RuntimeError(
-                "the token on this machine is expired and cannot be renewed (" + ", ".join(failures)
-                + "): run `claude auth login` again, or use a long-lived token from `claude setup-token`",
+        if failures and all(code in ("401", "403") for code in failures):
+            raise ProviderError(
+                "the saved Claude token expired (" + ", ".join(failures) + "): run `claude setup-token` and update "
+                "~/.config/agent-limits/claude-token",
+                "claude_token_expired",
             )
         raise RuntimeError(
-            "not signed in on this machine (" + ", ".join(failures) + " on " + str(len(tokens)) + " token(s)): run "
-            "`claude auth login`, or `claude setup-token` and set CLAUDE_CODE_OAUTH_TOKEN",
+            "the limits endpoint refused the request (" + ", ".join(failures) + "): try again later",
         )
     windows = {}
     for name in ("five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet"):
@@ -394,12 +444,17 @@ def collect(name):
     except urllib.error.HTTPError as error:
         retry_after = error.headers.get("Retry-After") if error.headers else None
         return fallback(name, f"HTTP {error.code}", started, retry_after=retry_after)
+    except ProviderError as error:
+        return fallback(name, str(error)[:200], started, error_code=error.code)
     except Exception as error:  # noqa: BLE001 - a provider failure is data, not a crash
         return fallback(name, str(error)[:200], started)
 
 
-def fallback(name, reason, started, retry_after=None):
-    """The last good answer, marked as such, or the reason there is none."""
+def fallback(name, reason, started, retry_after=None, error_code=None):
+    """The last good answer, marked as such, or the reason there is none.
+
+    @param error_code the stable reason for a failure with no numbers; kept only when no cached answer stands in for it.
+    """
     cached = read_cache(name)
     result = {"ok": False, "error": reason, "checked_at": time.time(), "ms": int((time.time() - started) * 1000)}
     if retry_after:
@@ -407,6 +462,8 @@ def fallback(name, reason, started, retry_after=None):
     if cached:
         result.update({"ok": True, "cached": True, "warning": reason, "windows": cached.get("windows"),
                        "fetched_at": cached.get("fetched_at")})
+    elif error_code:
+        result["error_code"] = error_code
     return result
 
 

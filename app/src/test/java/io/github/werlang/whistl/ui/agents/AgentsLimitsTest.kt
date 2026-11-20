@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.ui.agents
 
+import io.github.werlang.whistl.R
 import io.github.werlang.whistl.data.ConnectionState
 import io.github.werlang.whistl.data.LimitsResult
 import io.github.werlang.whistl.data.MachineAgent
@@ -7,6 +8,7 @@ import io.github.werlang.whistl.data.SpaceRecord
 import io.github.werlang.whistl.domain.Agent
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.Machine
+import io.github.werlang.whistl.domain.ProviderLimits
 import io.github.werlang.whistl.domain.Terminal
 import io.github.werlang.whistl.domain.TerminalState
 import io.github.werlang.whistl.support.FakePins
@@ -92,6 +94,39 @@ class AgentsLimitsTest {
         assertEquals(1, limits.asked.size)
         assertEquals(false, vm.state.value.menu?.limitsLoading)
     }
+
+    /**
+     * The three Claude codes the command can send get the app's own words, and only the expired token is a warning: pending
+     * setup is a neutral notice, and a provider without a code keeps its reason as an error (0.7.9).
+     */
+    @Test
+    fun aFailedProviderReadsTheCodeTheMachineSent() {
+        assertEquals(
+            LimitsFailure(R.string.agents_limits_claude_setup, LimitsFailureTone.Notice),
+            limitsFailure(failed("claude_token_setup_required")),
+        )
+        assertEquals(
+            LimitsFailure(R.string.agents_limits_claude_not_configured, LimitsFailureTone.Notice),
+            limitsFailure(failed("claude_not_configured")),
+        )
+        assertEquals(
+            LimitsFailure(R.string.agents_limits_claude_expired, LimitsFailureTone.Warning),
+            limitsFailure(failed("claude_token_expired")),
+        )
+        // A rate limit, or any failure without a code, is a real error and keeps the machine's own sentence.
+        assertEquals(LimitsFailure(null, LimitsFailureTone.Error), limitsFailure(failed(error = "HTTP 429")))
+        assertEquals(LimitsFailure(null, LimitsFailureTone.Error), limitsFailure(failed()))
+    }
+
+    /** A provider that failed, with the code the command sent when there is one. */
+    private fun failed(errorCode: String? = null, error: String? = null) = ProviderLimits(
+        id = "claude",
+        ok = false,
+        error = error,
+        cached = false,
+        windows = emptyList(),
+        errorCode = errorCode,
+    )
 
     /** A machine with one live, working agent in a space, and the view model wired to [limits]. */
     private suspend fun TestScope.model(limits: FakeLimits): AgentsViewModel {

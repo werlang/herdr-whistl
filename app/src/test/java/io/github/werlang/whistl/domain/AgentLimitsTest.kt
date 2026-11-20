@@ -94,15 +94,45 @@ class AgentLimitsTest {
     fun aFailedProviderKeepsItsReason() {
         val report = parseLimits(
             """
-            {"providers": {"claude": {"ok": false, "error": "not signed in: no Claude credentials on this machine", "ms": 3}}}
+            {"providers": {"claude": {"ok": false, "error": "the limits endpoint refused the request (429): try again later", "ms": 3}}}
             """,
         )
 
         val claude = report.providers.single()
         assertEquals(false, claude.ok)
-        assertEquals("not signed in: no Claude credentials on this machine", claude.error)
+        assertEquals("the limits endpoint refused the request (429): try again later", claude.error)
         assertTrue(claude.windows.isEmpty())
         assertNull(report.highest)
+    }
+
+    /** A failure carries the stable code the machine sent, so the sheet can say what to do in its own words (0.7.9). */
+    @Test
+    fun aFailedProviderCarriesItsErrorCode() {
+        val report = parseLimits(
+            """
+            {"providers": {"claude": {"ok": false, "error": "run `claude setup-token`", "error_code": "claude_token_setup_required"}}}
+            """,
+        )
+
+        val claude = report.providers.single()
+        assertEquals(false, claude.ok)
+        assertEquals("claude_token_setup_required", claude.errorCode)
+    }
+
+    /** A provider that sent no code, or a null one, has none: the sheet shows its own reason as an error. */
+    @Test
+    fun aFailedProviderWithoutACodeHasNone() {
+        val report = parseLimits(
+            """
+            {"providers": {
+              "claude": {"ok": false, "error": "HTTP 429"},
+              "codex": {"ok": false, "error": "HTTP 500", "error_code": null}
+            }}
+            """,
+        )
+
+        assertNull(report.providers.first { it.id == "claude" }.errorCode)
+        assertNull(report.providers.first { it.id == "codex" }.errorCode)
     }
 
     /** Cached numbers are still numbers, and the card is told they are cached. */

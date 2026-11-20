@@ -354,6 +354,9 @@
     <string name="agents_limits_loading">Consultando a máquina…</string>
     <string name="agents_limits_none">Nenhum limite reportado nesta máquina.</string>
     <string name="agents_limits_failed">Não foi possível consultar.</string>
+    <string name="agents_limits_claude_setup">Para ver limites do Claude, gere um token com `claude setup-token` e salve em ~/.config/agent-limits/claude-token.</string>
+    <string name="agents_limits_claude_not_configured">Nenhum token de limites do Claude nesta máquina. Rode `claude setup-token` e salve em ~/.config/agent-limits/claude-token.</string>
+    <string name="agents_limits_claude_expired">O token salvo do Claude expirou. Rode `claude setup-token` e atualize ~/.config/agent-limits/claude-token.</string>
     <string name="agents_limits_offline">A máquina está offline, então os limites não puderam ser consultados.</string>
     <string name="agents_limits_left">%1$d restante</string>
     <string name="agents_limits_cached">em cache</string>

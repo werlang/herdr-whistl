@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.ui.agents
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.ui.theme.WhistlMono
 import io.github.werlang.whistl.domain.LimitWindow
+import io.github.werlang.whistl.domain.ProviderLimits
 import io.github.werlang.whistl.data.LimitsResult
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -181,10 +183,16 @@ fun AgentLimitsBlock(loading: Boolean, result: LimitsResult?) {
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 if (!provider.ok) {
+                    val failure = limitsFailure(provider)
                     Text(
-                        text = provider.error.orEmpty().ifEmpty { stringResource(R.string.agents_limits_failed) },
+                        text = failure.text?.let { stringResource(it) }
+                            ?: provider.error.orEmpty().ifEmpty { stringResource(R.string.agents_limits_failed) },
                         style = MaterialTheme.typography.bodySmall,
-                        color = tokens.blocked,
+                        color = when (failure.tone) {
+                            LimitsFailureTone.Notice -> tokens.dim
+                            LimitsFailureTone.Warning -> tokens.working
+                            LimitsFailureTone.Error -> tokens.blocked
+                        },
                     )
                 } else {
                     provider.windows.forEach { window -> LimitRow(window, provider.cached) }
@@ -202,6 +210,37 @@ fun AgentLimitsBlock(loading: Boolean, result: LimitsResult?) {
             )
         }
     }
+}
+
+/** How loud a failed provider reads: a pending setup is a notice, an expired token a warning, anything else an error. */
+internal enum class LimitsFailureTone { Notice, Warning, Error }
+
+/**
+ * What a failed provider shows.
+ *
+ * @property text the string resource for a failure the command explained, `null` when the provider's own reason is shown.
+ * @property tone how loud the line is.
+ */
+internal data class LimitsFailure(@StringRes val text: Int?, val tone: LimitsFailureTone)
+
+/**
+ * The words and tone of a failed provider.
+ *
+ * The command sends a stable code for the Claude failures the app can explain, so the sheet says what to do instead of
+ * repeating the machine's sentence. Pending setup is neutral, an expired token is a warning, and a provider without a code
+ * keeps its own reason as an error.
+ *
+ * @param provider the provider that did not answer.
+ * @return the string resource to show, or `null` for [ProviderLimits.error], and the tone.
+ */
+internal fun limitsFailure(provider: ProviderLimits): LimitsFailure = when (provider.errorCode) {
+    "claude_token_setup_required" ->
+        LimitsFailure(R.string.agents_limits_claude_setup, LimitsFailureTone.Notice)
+    "claude_not_configured" ->
+        LimitsFailure(R.string.agents_limits_claude_not_configured, LimitsFailureTone.Notice)
+    "claude_token_expired" ->
+        LimitsFailure(R.string.agents_limits_claude_expired, LimitsFailureTone.Warning)
+    else -> LimitsFailure(null, LimitsFailureTone.Error)
 }
 
 /** One window: its name, the bar, and what is left with the reset time. */

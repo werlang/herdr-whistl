@@ -348,6 +348,9 @@
     <string name="agents_limits_loading">Asking the machine…</string>
     <string name="agents_limits_none">No limits reported on this machine.</string>
     <string name="agents_limits_failed">Could not ask.</string>
+    <string name="agents_limits_claude_setup">Limits need a saved token on this machine. Run `claude setup-token` and save it to ~/.config/agent-limits/claude-token.</string>
+    <string name="agents_limits_claude_not_configured">No Claude limits token on this machine. Run `claude setup-token` and save it to ~/.config/agent-limits/claude-token.</string>
+    <string name="agents_limits_claude_expired">The saved Claude token expired. Run `claude setup-token` and update ~/.config/agent-limits/claude-token.</string>
     <string name="agents_limits_offline">The machine is offline, so the limits could not be asked.</string>
     <string name="agents_limits_left">%1$d left</string>
     <string name="agents_limits_cached">cached</string>

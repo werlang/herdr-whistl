@@ -42,7 +42,11 @@ if ! docker image inspect "$image" > /dev/null 2>&1; then
 fi
 tty_flag=()
 [ -t 1 ] && tty_flag=(-t)
+# Cap the build container: the JVM allows -Xmx2g (see gradle.properties), and
+# this host has 8 GB shared with the rest of the stack. Without this cap the
+# Gradle process can grow past 2 GB and trigger host-wide OOM/swap thrash.
 exec docker run --rm "${tty_flag[@]}" --platform linux/amd64 \
+  --memory 3g --memory-swap 3584m \
   -v "$root":/work \
   -v herdr-whistl-gradle:/gradle \
   -w /work \
