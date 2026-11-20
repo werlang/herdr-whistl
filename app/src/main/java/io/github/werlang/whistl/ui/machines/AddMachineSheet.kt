@@ -162,6 +162,18 @@ fun AddMachineSheet(
             PrimaryAction(R.string.add_retry, ADD_RETRY_TAG, true, false, onRetry)
         AddStage.Connecting, AddStage.UnsupportedCore, AddStage.Connected, AddStage.Missing -> null
     }
+    // The sheet's title names what the stage is about, so the host-key stages do not repeat it in the panel below.
+    val name = state.machineName ?: state.host
+    val title = when (state.stage) {
+        AddStage.HostKeyUnknown -> stringResource(R.string.add_host_key_title, name)
+        AddStage.HostKeyChanged -> stringResource(R.string.add_host_key_changed_title, name)
+        else -> stringResource(if (state.editing) R.string.edit_machine_title else R.string.add_machine_title)
+    }
+    val titleColor = if (state.stage == AddStage.HostKeyChanged) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
     // Opens fully expanded: the form is taller than a partly open sheet, and its fields and actions must be reachable at once.
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
@@ -177,9 +189,9 @@ fun AddMachineSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = stringResource(if (state.editing) R.string.edit_machine_title else R.string.add_machine_title),
+                text = title,
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = titleColor,
                 modifier = Modifier.semantics { heading() },
             )
             if (state.stage == AddStage.Form) {
@@ -487,11 +499,6 @@ private fun StagePanel(state: AddMachineUiState) {
 
         AddStage.HostKeyUnknown -> {
             Text(
-                text = stringResource(R.string.add_host_key_title, name),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
                 text = stringResource(R.string.add_host_key_hint),
                 style = MaterialTheme.typography.bodyMedium,
                 color = tokens.muted,
@@ -501,11 +508,6 @@ private fun StagePanel(state: AddMachineUiState) {
         }
 
         AddStage.HostKeyChanged -> {
-            Text(
-                text = stringResource(R.string.add_host_key_changed_title, name),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
             Text(
                 text = stringResource(R.string.add_host_key_changed_text),
                 style = MaterialTheme.typography.bodyMedium,

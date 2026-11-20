@@ -334,8 +334,11 @@ fun ShotScreen.expectedText(): String {
         ShotScreen.AddKeySheet -> app.getString(R.string.settings_add_key)
         ShotScreen.Machines, ShotScreen.MachinesEmpty, ShotScreen.MachinesLong -> app.getString(R.string.machines_title)
         ShotScreen.EditMachine -> app.getString(R.string.edit_machine_title)
-        ShotScreen.AddMachineKey, ShotScreen.AddMachinePassword, ShotScreen.HostKeyUnknown, ShotScreen.HostKeyChanged ->
+        ShotScreen.AddMachineKey, ShotScreen.AddMachinePassword ->
             app.getString(R.string.add_machine_title)
+        // The host-key stages title the sheet after the machine, in place of "Add machine".
+        ShotScreen.HostKeyUnknown -> app.getString(R.string.add_host_key_title, "build")
+        ShotScreen.HostKeyChanged -> app.getString(R.string.add_host_key_changed_title, "build")
 
         ShotScreen.MachineMenu -> "mac"
         ShotScreen.AgentActions -> "claude"
