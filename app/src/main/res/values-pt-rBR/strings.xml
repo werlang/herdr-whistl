@@ -29,6 +29,7 @@
     <string name="agents_filter_working">Trabalhando</string>
     <string name="agents_filter_idle">Parados</string>
     <string name="agents_filter_empty">Nenhum agente com esse status.</string>
+    <string name="agents_empty_all">Nenhum agente ainda. Conecte uma máquina, abra um ambiente e inicie um lá.</string>
 
     <!-- Rótulos de estado, sempre ao lado do ponto (SPEC §3) -->
     <string name="status_working">trabalhando</string>
@@ -256,7 +257,7 @@
     <string name="space_close_title">Fechar %1$s?</string>
     <string name="space_close_none">Está vazio; nada roda nele.</string>
     <string name="space_detail_empty_title">Nenhum agente aqui ainda.</string>
-    <string name="space_detail_empty_hint">Toque em Novo agente para abrir um agente ou um terminal.</string>
+    <string name="space_detail_empty_hint">Toque em + para iniciar um agente ou um terminal.</string>
     <string name="space_detail_offline">%1$s está offline. Reconecte-a em Máquinas para ver e iniciar agentes aqui.</string>
     <string name="space_detail_machine_state">%1$s: %2$s. Corrija em Máquinas para ver e iniciar agentes aqui.</string>
     <string name="space_detail_missing">Este ambiente não está mais na máquina.</string>

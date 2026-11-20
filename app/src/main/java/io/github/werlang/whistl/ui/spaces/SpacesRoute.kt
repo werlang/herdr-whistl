@@ -27,6 +27,7 @@ fun SpacesRoute(
         state = state,
         onOpen = onOpenSpace,
         onMenu = { machineId, spaceId -> model.openMenu(machineId, spaceId) },
+        onAdd = model::openNewSpace,
         onClearFilter = onClearFilter,
         modifier = modifier,
     )

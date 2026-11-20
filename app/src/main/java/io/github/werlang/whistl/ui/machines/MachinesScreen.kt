@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +44,7 @@ import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.StatusLabel
 import io.github.werlang.whistl.ui.components.machineStatusColor
 import io.github.werlang.whistl.ui.components.machineStatusLabelRes
+import io.github.werlang.whistl.ui.components.whistlButtonColors
 import io.github.werlang.whistl.ui.theme.AppMark
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
@@ -61,12 +65,14 @@ fun machineCardTag(id: String): String = "machine-card-$id" // i18n-ok: test tag
  *
  * @param state what the screen shows.
  * @param onMenu called with the id of the machine whose menu button was tapped.
+ * @param onAdd called to add a machine: the empty state's button, which does what the add button does.
  * @param modifier the modifier for the screen.
  */
 @Composable
 fun MachinesScreen(
     state: MachinesUiState,
     onMenu: (String) -> Unit,
+    onAdd: () -> Unit = {},
     onOpenSpaces: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -97,7 +103,7 @@ fun MachinesScreen(
             )
         }
         if (state.cards.isEmpty()) {
-            EmptyMachines(Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            EmptyMachines(onAdd = onAdd, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         } else {
             LazyColumn(
                 modifier = Modifier.testTag(MACHINES_LIST_TAG),
@@ -112,9 +118,14 @@ fun MachinesScreen(
     }
 }
 
-/** The empty state: a bordered box with a title and a hint (SPEC §2.1). */
+/**
+ * The empty state: a bordered box with a title, a hint and the button that adds the first machine (SPEC §2.1).
+ *
+ * @param onAdd called when the Add machine button is tapped.
+ * @param modifier the modifier for the box.
+ */
 @Composable
-private fun EmptyMachines(modifier: Modifier) {
+private fun EmptyMachines(onAdd: () -> Unit, modifier: Modifier) {
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -135,6 +146,14 @@ private fun EmptyMachines(modifier: Modifier) {
             color = LocalWhistlTokens.current.muted,
             textAlign = TextAlign.Center,
         )
+        Spacer(Modifier.height(6.dp))
+        Button(
+            onClick = onAdd,
+            colors = whistlButtonColors(),
+            modifier = Modifier.heightIn(min = MinTouchTarget),
+        ) {
+            Text(stringResource(R.string.add_machine_title))
+        }
     }
 }
 

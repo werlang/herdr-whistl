@@ -118,8 +118,10 @@ fun AgentsScreen(
             }
         }
         if (state.rows.isEmpty()) {
+            // With no agent anywhere, the list says how to make the first one; only a filter can be empty on its own (SPEC §2.4).
+            val noneAtAll = state.chips.firstOrNull { it.filter == AgentsFilter.All }?.count == 0
             Text(
-                text = stringResource(R.string.agents_filter_empty),
+                text = stringResource(if (noneAtAll) R.string.agents_empty_all else R.string.agents_filter_empty),
                 style = MaterialTheme.typography.bodyMedium,
                 color = LocalWhistlTokens.current.dim,
                 modifier = Modifier

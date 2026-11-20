@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +51,7 @@ import io.github.werlang.whistl.ui.agentLabelRes
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.machineStatusColor
 import io.github.werlang.whistl.ui.components.machineStatusLabelRes
+import io.github.werlang.whistl.ui.components.whistlButtonColors
 import io.github.werlang.whistl.ui.machines.MachineStatus
 import io.github.werlang.whistl.ui.machines.text
 import io.github.werlang.whistl.ui.statusColor
@@ -75,6 +79,7 @@ fun spaceRowTag(machineId: String, spaceId: String): String = "space-row-$machin
  * @param state the groups and whether there is any space.
  * @param onOpen called with the machine and the space when a row is tapped.
  * @param onMenu called with the machine and the space when a row's options button is tapped.
+ * @param onAdd called to open the New space sheet: the empty state's button, which does what the add button does.
  * @param modifier the modifier for the screen.
  */
 @Composable
@@ -82,6 +87,7 @@ fun SpacesScreen(
     state: SpacesUiState,
     onOpen: (machineId: String, spaceId: String) -> Unit,
     onMenu: (machineId: String, spaceId: String) -> Unit,
+    onAdd: () -> Unit = {},
     onClearFilter: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -114,7 +120,8 @@ fun SpacesScreen(
         ) {
             items(state.groups, key = { it.machineId }) { group ->
                 GroupHeader(group)
-                if (group.rows.isEmpty()) {
+                // Unfiltered and empty, the card at the end says it once: the groups do not repeat it (SPEC §2.2).
+                if (group.rows.isEmpty() && !(state.isEmpty && state.filterName == null)) {
                     Text(
                         text = stringResource(R.string.spaces_empty_title),
                         style = MaterialTheme.typography.bodyMedium,
@@ -128,15 +135,20 @@ fun SpacesScreen(
             }
             // Unfiltered and empty, the message belongs under the machines it is about, not over them (0.5.1).
             if (state.isEmpty && state.filterName == null) {
-                item { EmptySpaces(Modifier.padding(top = 4.dp)) }
+                item { EmptySpaces(onAdd = onAdd, modifier = Modifier.padding(top = 4.dp)) }
             }
         }
     }
 }
 
-/** The empty state: a bordered box with the title and the hint (SPEC §2.2). */
+/**
+ * The empty state: a bordered box with the title, the hint and the button that opens New space (SPEC §2.2).
+ *
+ * @param onAdd called when the New space button is tapped.
+ * @param modifier the modifier for the box.
+ */
 @Composable
-private fun EmptySpaces(modifier: Modifier) {
+private fun EmptySpaces(onAdd: () -> Unit, modifier: Modifier) {
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -157,6 +169,14 @@ private fun EmptySpaces(modifier: Modifier) {
             color = LocalWhistlTokens.current.muted,
             textAlign = TextAlign.Center,
         )
+        Spacer(Modifier.height(6.dp))
+        Button(
+            onClick = onAdd,
+            colors = whistlButtonColors(),
+            modifier = Modifier.heightIn(min = MinTouchTarget),
+        ) {
+            Text(stringResource(R.string.space_new_title))
+        }
     }
 }
 

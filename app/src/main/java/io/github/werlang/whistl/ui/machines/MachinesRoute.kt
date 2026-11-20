@@ -34,7 +34,13 @@ fun MachinesRoute(
     modifier: Modifier = Modifier,
 ) {
     val state by model.state.collectAsState()
-    MachinesScreen(state = state, onMenu = model::openMenu, onOpenSpaces = onOpenSpaces, modifier = modifier)
+    MachinesScreen(
+        state = state,
+        onMenu = model::openMenu,
+        onAdd = model::openAdd,
+        onOpenSpaces = onOpenSpaces,
+        modifier = modifier,
+    )
     state.menu?.let { menu ->
         MachineMenuSheet(
             menu = menu,

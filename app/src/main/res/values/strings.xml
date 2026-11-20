@@ -26,6 +26,7 @@
     <string name="agents_filter_working">Working</string>
     <string name="agents_filter_idle">Idle</string>
     <string name="agents_filter_empty">No agents with this status.</string>
+    <string name="agents_empty_all">No agents yet. Connect a machine, open a space and start one there.</string>
 
     <!-- Status labels, always beside the dot (SPEC §3) -->
     <string name="status_working">working</string>
@@ -252,7 +253,7 @@
     <string name="space_close_title">Close %1$s?</string>
     <string name="space_close_none">It is empty; nothing runs in it.</string>
     <string name="space_detail_empty_title">No agents here yet.</string>
-    <string name="space_detail_empty_hint">Tap New agent to start an agent or a terminal.</string>
+    <string name="space_detail_empty_hint">Tap + to start an agent or a terminal.</string>
     <string name="space_detail_offline">%1$s is offline. Reconnect it in Machines to see and start agents here.</string>
     <string name="space_detail_machine_state">%1$s: %2$s. Fix it in Machines to see and start agents here.</string>
     <string name="space_detail_missing">This space is no longer on its machine.</string>
