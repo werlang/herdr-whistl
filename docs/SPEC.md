@@ -30,13 +30,19 @@ Bottom navigation, 4 destinations: **Machines, Spaces, Agents, Settings**.
 The Agents destination shows a badge with the count of agents in `blocked`.
 
 1. **Machines** — cards: name, status pill (connected / connecting / offline /
-   error), `user@host[:port]`, `N agents · hc <version>`, installed agents.
+   error), `user@host[:port]`, `N agents · hc <version>`, installed agents, and
+   the limits line when the limits command answered: muted while there is room,
+   amber (`blocked`) with 20 or fewer left, red (`danger`) at 0 — no longer the
+   `working` blue. A host key to confirm is amber too (a decision the user has
+   to make); a changed host key and every other error use the error colour.
    FAB/+ opens **Add machine**: host, user, port (default 22), display name
    (default: first host label), auth = SSH key (default) | password.
    SSH key mode shows this device's public key with a Copy button and the
    hint "add it to ~/.ssh/authorized_keys". Connect → first-connection
    host-key confirmation (algorithm + SHA256 fingerprint) → Trust and connect →
-   detection of installed agents. Card menu: Edit machine, Reconnect, Remove
+   detection of installed agents. The host-key sheet is titled for the context —
+   "First connection to <machine>" or "The host key of <machine> changed", never
+   "Add machine". Card menu: Edit machine, Reconnect, Remove
    (confirm; spaces of that machine leave the app, agents keep running there).
    Reconnect restarts the session: a connected machine's session is closed and
    connected again (connecting → connected); an offline machine makes one
@@ -67,19 +73,30 @@ The Agents destination shows a badge with the count of agents in `blocked`.
      machine.
    - **R4, identity:** the machine keeps its id and the machine count is unchanged,
      so its spaces (keyed by machine id) stay listed under it.
+   An empty list shows a button that opens **Add machine**.
 2. **Spaces** — grouped by machine, pinned first, then user order. A machine
    card tapped on the Machines screen shows **only that machine's group**, with
    a banner naming it and one tap to show every machine again; the filter lives
    in the container because Spaces is a bottom destination without arguments. Row: name,
-   status dots per agent, "waiting" badge if any agent is blocked,
-   `N agents · folder`. Offline machine → group subtitle "offline", rows dimmed.
+   status dots per agent, "waiting" badge if any agent is blocked, `N agents ·
+   folder`. The count is sans and only the folder monospace; a long folder
+   truncates in the middle, keeping its last segment (and so does the New space
+   folder picker). A group whose machine is not connected shows the same real
+   state label and colour as its Machines card — connecting, offline, login
+   refused, host key — in the header and in New space's machine picker, instead
+   of a generic "offline"; its rows are dimmed.
    + opens **New space**: pick an added machine, folder (default `~`), name
    (default: last folder segment). Row menu: Pin/Unpin, Move up, Move down,
-   Rename, Close space (confirm; kills its agents).
-3. **Space detail** — header `name` + `machine:folder`; agent rows (name, id,
-   status pill on its own line); FAB **New agent** (disabled when offline) →
-   **picker only**: the agents installed on that machine + "Terminal" (the
-   machine's shell). No task text box. Tapping an option starts it and opens it.
+   Rename, Close space (confirm; kills its agents). An empty list shows a button
+   that opens **New space**, and the groups do not repeat "No spaces yet".
+3. **Space detail** — header `name` + `machine:folder`, the folder truncated in
+   the middle; when the machine is not connected it shows the machine's real
+   state in its colour. Agent rows: name, id, status pill on its own line. FAB
+   **New agent** (disabled when offline) → **picker only**: the agents installed
+   on that machine + "Terminal" (the machine's shell). No task text box. Tapping
+   an option starts it and opens it. An empty list says "Tap + to start an agent
+   or a terminal."; a space that is gone shows a "Space not found" card with an
+   explanation and **Back to Spaces**.
 4. **Agents** — every agent on connected machines; filter chips All / Needs
    you / Working / Idle with counts; sorted blocked → working → done → idle.
    Each row has an **action sheet** (its overflow button, or a long press):
@@ -90,7 +107,9 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    live terminal — and the row shows that label over the name the terminal was
    started with. Every action reports itself under the chips: interrupted,
    stopped, closed, renamed, machine offline, agent already gone, or the core
-   refused it.
+   refused it. With no agent anywhere, the empty list says how to start the first
+   one — connect a machine, open a space and start one there — unlike an empty
+   filter, which says "No agents with this status."
 5. **Agent** — a tmux-like **terminal only**, no chat UI: full-height monospace
    screen, a one-line status bar `[machine] space · agent    status`, then a
    horizontally scrolling **shortcut key bar**, then a text field + Send.
@@ -105,13 +124,8 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    reflows instead of scrolling off the top. Each line is also
    a node of its own, so a screen reader moves line by line (phase 7 r6).
    Output that outruns the redraw never shows half an update: every frame is one
-   state of the emulator, redrawn at most every 33 ms.
-   There is no text field and no Send button: the keyboard writes to the terminal
-   directly. A 1 dp transparent field holds focus only to receive the IME, and
-   keeps a mirror of the line the terminal has, so a deletion is recognised and
-   sent as DELETE and Enter travels as a carriage return. A paste button sends the
-   phone's clipboard at the cursor. `Ctrl` is a
-   sticky modifier: armed, the next bar key is sent with Ctrl (`ctrl+<key>`).
+   state of the emulator, redrawn at most every 33 ms. `Ctrl` is a sticky
+   modifier: armed, the next bar key is sent with Ctrl (`ctrl+<key>`).
    With Ctrl armed and the field empty, one typed letter is sent as its Ctrl
    combination (`s` → `ctrl+s`), is not inserted, and Ctrl disarms; a digit or
    punctuation is inserted and Ctrl stays armed; typing into a field that has
@@ -120,8 +134,13 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    goes out plainly and clears the latch (phase 7 r5 amendment U3). Menu:
    Interrupt (Ctrl+C), Stop and remove. While the machine has no connection
    (offline or connecting), the screen keeps the agent's last known status and
-   space and its status bar says `offline`; it says `finished` only when the
-   core reported the program finished (phase 7 r7).
+   space; its status bar says `offline · reconnect in Machines`, and `finished ·
+   read-only` only when the core reported the program finished (phase 7 r7).
+   TalkBack reads the full sentence behind either short notice. The place
+   `[machine] space · agent` never truncates before the message: the message is
+   what ellipsises. While offline or finished, the bar keys, the arrows, the
+   text field and Send are dimmed (the field keeps its background, its content
+   at 38% opacity); with an active agent and text, Send uses the accent colour.
 6. **Settings** — General: Language (System / English / Português), terminal
    font size (S/M/L), theme (System / Dark / Light). Shortcut keys: list in bar
    order with move up / move down / remove, "Add key" sheet listing the keys
