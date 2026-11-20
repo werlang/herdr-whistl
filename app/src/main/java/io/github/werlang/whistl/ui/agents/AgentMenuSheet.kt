@@ -19,6 +19,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -296,7 +297,8 @@ private fun LimitRow(window: LimitWindow, cached: Boolean) {
 @Composable
 private fun limitText(used: Double?, resetsAtMs: Long?, cached: Boolean): String {
     if (used == null) return stringResource(R.string.agents_limits_unknown)
-    val left = stringResource(R.string.agents_limits_left, (100 - used).toInt())
+    val remaining = (100 - used).toInt()
+    val left = pluralStringResource(R.plurals.agents_limits_left, remaining, remaining)
     val reset = resetIn(resetsAtMs)
     val cachedWord = stringResource(R.string.agents_limits_cached)
     // Every composition is a string resource, so a separator or a dash can be translated with the rest of the sentence.
