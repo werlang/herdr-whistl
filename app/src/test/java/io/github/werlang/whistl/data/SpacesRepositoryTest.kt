@@ -225,6 +225,64 @@ class SpacesRepositoryTest {
         assertEquals(listOf("sp_b"), h.storedSpaces().map { it.getValue("id").jsonPrimitive.content })
     }
 
+    /**
+     * The desktop may keep several spaces on one folder. Adoption keeps them all, by id only; the tab map read from the
+     * same document is kept for the machine (0.7.3).
+     */
+    @Test
+    fun desktopSpacesThatShareAFolderAreAllAdoptedAndTheirTabsAreKept() = runTest {
+        val h = RepoStack(this)
+        h.core.value = spacesDocJson(emptyList())
+        h.core.desktop = JsonObject(
+            mapOf(
+                "spaces" to JsonArray(
+                    listOf(
+                        desktopSpaceJson("sp74d8", "one", "/p/shared", tabs = listOf("tb1")),
+                        desktopSpaceJson("sp75x", "two", "/p/shared", tabs = listOf("tb2")),
+                    ),
+                ),
+            ),
+        )
+
+        val id = h.addMachine()
+        runCurrent()
+
+        val group = h.spaces.groups().value.single()
+        assertEquals(id, group.machineId)
+        assertEquals(listOf("sp74d8", "sp75x"), group.spaces.map { it.id })
+        assertEquals(listOf("/p/shared", "/p/shared"), group.spaces.map { it.folder })
+        assertEquals(mapOf("tb1" to "sp74d8", "tb2" to "sp75x"), group.tabSpaces)
+    }
+
+    /**
+     * Close kills an agent that reaches the space through the desktop's tab map, even when its cwd does not match and its
+     * `herdr.space` is unknown (0.7.3).
+     */
+    @Test
+    fun closeKillsAnAgentThatReachesTheSpaceThroughItsDesktopTab() = runTest {
+        val h = RepoStack(this)
+        h.core.value = spacesDocJson(listOf(spaceJson("sp_a", "web", "/home/u/web")))
+        h.core.desktop = JsonObject(
+            mapOf(
+                "spaces" to JsonArray(
+                    listOf(desktopSpaceJson("sp_a", "web", "/home/u/web", tabs = listOf("tb1"))),
+                ),
+            ),
+        )
+        h.core.terminals += terminalJson(
+            "t-tab",
+            cwd = "/tmp",
+            labels = mapOf("herdr.tab" to "tb1", "herdr.space" to "sp_unknown"),
+        )
+        h.addMachine()
+        runCurrent()
+
+        val result = h.spaces.close(h.machines.machines().value.single().id, "sp_a")
+
+        assertEquals(SpaceResult.Done("sp_a"), result)
+        assertEquals(listOf("t-tab"), h.core.killed)
+    }
+
     /** An edit to a space that is not in the document is reported, not guessed. */
     @Test
     fun editingAnUnknownSpaceIsReported() = runTest {
@@ -421,6 +479,17 @@ class SpacesRepositoryTest {
             ),
         )
     }
+
+    /** A desktop space object for [HERDR_DOCUMENT], with the tabs it owns (0.7.3). */
+    private fun desktopSpaceJson(id: String, name: String, folder: String, tabs: List<String> = emptyList()): JsonObject =
+        JsonObject(
+            mapOf(
+                "id" to JsonPrimitive(id),
+                "name" to JsonPrimitive(name),
+                "folder" to JsonPrimitive(folder),
+                "tabs" to JsonArray(tabs.map { tab -> JsonObject(mapOf("id" to JsonPrimitive(tab))) }),
+            ),
+        )
 
     /** A request object for [method] with the given params (no id; [Exchange] compares without it). */
     private fun rpc(method: String, vararg params: Pair<String, JsonElement>): JsonObject = JsonObject(

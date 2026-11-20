@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.support
 
+import io.github.werlang.whistl.data.HERDR_DOCUMENT
 import io.github.werlang.whistl.data.PROBE_LABEL
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -23,6 +24,12 @@ import kotlinx.serialization.json.long
 class FakeCoreDoc(initialValue: JsonObject? = null, initialVersion: Long = 1) {
     /** The stored document value, or `null` when never written. */
     var value: JsonObject? = initialValue
+
+    /**
+     * The Herdr desktop's document value, answered by `doc.get` for [HERDR_DOCUMENT], or `null` when the desktop keeps no
+     * spaces. It is a document of its own: the desktop's spaces are adopted from it (0.7.3).
+     */
+    var desktop: JsonObject? = null
 
     /** The stored version. */
     var version: Long = initialVersion
@@ -114,9 +121,13 @@ class FakeCoreDoc(initialValue: JsonObject? = null, initialVersion: Long = 1) {
         methods += method.orEmpty()
         requests += request
         return when (method) {
-            "doc.get" -> reply(
-                mapOf<String, JsonElement>("value" to (value ?: JsonNull), "version" to JsonPrimitive(version)),
-            )
+            "doc.get" -> {
+                val name = params["name"]?.jsonPrimitive?.contentOrNull
+                val stored = if (name == HERDR_DOCUMENT) desktop else value
+                reply(
+                    mapOf<String, JsonElement>("value" to (stored ?: JsonNull), "version" to JsonPrimitive(version)),
+                )
+            }
 
             "doc.set" -> {
                 beforeSet(this)

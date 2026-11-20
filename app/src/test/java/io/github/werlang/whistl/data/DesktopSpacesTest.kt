@@ -48,13 +48,52 @@ class DesktopSpacesTest {
         assertEquals("/p/edupage", adopted.single().folder)
     }
 
-    /** A folder this app already has is not adopted twice, whatever its id, and a trailing slash does not fool it. */
+    /** A folder this app already has is not a reason to skip a desktop space: only its id is (0.7.3). */
     @Test
-    fun aFolderAlreadyHereIsNotAdopted() {
+    fun spacesThatShareAFolderAreAllAdopted() {
         val own = listOf(record("sp_aaa", "/p/edupage/"))
         val desktop = listOf(DesktopSpace("sp74d8", "edupage", "/p/edupage"), DesktopSpace("sp75x", "other", "/p/other"))
 
-        assertEquals(listOf("sp75x"), adoptedSpaces(own, desktop).map { it.id })
+        assertEquals(listOf("sp74d8", "sp75x"), adoptedSpaces(own, desktop).map { it.id })
+    }
+
+    /** Two desktop spaces may keep the same folder: each one is a space there, so both are adopted. */
+    @Test
+    fun adoptingMultipleDesktopSpacesThatShareTheSameFolder() {
+        val desktop = listOf(
+            DesktopSpace("sp74d8", "web-one", "/p/shared"),
+            DesktopSpace("sp75x", "web-two", "/p/shared"),
+        )
+
+        val adopted = adoptedSpaces(own = emptyList(), desktop = desktop)
+
+        assertEquals(listOf("sp74d8", "sp75x"), adopted.map { it.id })
+        assertEquals(listOf("/p/shared", "/p/shared"), adopted.map { it.folder })
+        assertEquals(listOf(0, 1), adopted.map { it.order })
+    }
+
+    /** The desktop's tab ids map to the space that owns them; blank or missing ids are skipped. */
+    @Test
+    fun itReadsTheDesktopsTabSpaces() {
+        val tabs = parseDesktopTabSpaces(document("""
+            {"spaces": [
+              {"id": "sp1", "folder": "/p", "tabs": [{"id": "tb1"}, {"id": "tb2"}]},
+              {"id": "sp2", "folder": "/p", "tabs": [{"id": "tb3"}]},
+              {"id": "", "folder": "/q", "tabs": [{"id": "tb4"}]},
+              {"id": "sp3", "folder": "/r", "tabs": [{"id": ""}, {"no_id": true}]}
+            ]}
+        """))
+
+        assertEquals(mapOf("tb1" to "sp1", "tb2" to "sp1", "tb3" to "sp2"), tabs)
+    }
+
+    /** The tab map is read as leniently as the spaces: another shape yields nothing, and never throws. */
+    @Test
+    fun aTabDocumentOfAnotherShapeYieldsNothing() {
+        assertTrue(parseDesktopTabSpaces(null).isEmpty())
+        assertTrue(parseDesktopTabSpaces(document("""{"spaces": "nope"}""")).isEmpty())
+        assertTrue(parseDesktopTabSpaces(document("""{"spaces": [{"id": "sp1", "tabs": "nope"}]}""")).isEmpty())
+        assertTrue(parseDesktopTabSpaces(document("""{"spaces": [{"id": "sp1", "tabs": ["nope"]}]}""")).isEmpty())
     }
 
     /** An id already here is not adopted again, even under another folder. */

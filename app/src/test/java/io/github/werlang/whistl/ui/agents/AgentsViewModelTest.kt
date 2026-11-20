@@ -7,8 +7,11 @@ import io.github.werlang.whistl.support.MainDispatcherRule
 import io.github.werlang.whistl.support.RepoStack
 import io.github.werlang.whistl.support.eventsSnapshot
 import io.github.werlang.whistl.support.snapshotPipe
+import io.github.werlang.whistl.support.spaceJson
+import io.github.werlang.whistl.support.spacesDocJson
 import io.github.werlang.whistl.support.terminalJson
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -55,6 +58,29 @@ class AgentsViewModelTest {
 
         assertNull("no space filter, no New agent", vm.state.value.newAgent)
         assertNull(vm.state.value.picker)
+    }
+
+    /** The list keeps naming the space it is filtered to even when that space has no agents (0.7.3). */
+    @Test
+    fun theFilteredSpacesNameIsKeptWhenItHasNoAgents() = runTest {
+        val h = RepoStack(this)
+        h.core.value = spacesDocJson(listOf(spaceJson("sp_a", "web", "/home/u/web")))
+        h.connector.eventsPipeFactory = { snapshotPipe(eventsSnapshot(1, emptyList())) }
+        val machineId = h.addMachine()
+        runCurrent()
+
+        val vm = AgentsViewModel(
+            h.agents,
+            h.machines,
+            FakePins(),
+            h.spaces,
+            StaticInstalled(),
+            MutableStateFlow<SpaceFilter?>(SpaceFilter(machineId, "sp_a")),
+        )
+        runCurrent()
+
+        assertTrue(vm.state.value.rows.isEmpty())
+        assertEquals("web", vm.state.value.filterName)
     }
 
     /** A terminal no space claims shows up only under its own chip: the list of agents is the spaces' (0.6.3). */

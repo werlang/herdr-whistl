@@ -14,11 +14,15 @@ https://claude.ai/artifact/GErDLM34YhtZjk5vTV9j3a
 |---|---|---|
 | **Machine** | A computer reachable over SSH that runs herdr-core. | App storage (connection settings, pinned host key, credentials encrypted). |
 | **Space** | A named folder on one machine where agents work. Pure app abstraction. | A JSON document named `whistl` in **that machine's** core (`doc.get` / `doc.set`), cached locally. |
-| **Agent** | A terminal on a machine's core, started in the space's folder. | The core. Membership is the terminal label `whistl.space=<space id>`. |
+| **Agent** | A terminal on a machine's core, started in the space's folder. | The core. Membership is the terminal label `whistl.space=<space id>`, or the desktop's `herdr.space` / `herdr.tab` resolved to a space. |
 
-Agents started elsewhere (e.g. from Herdr desktop) with no `whistl.space`
-label are matched to a space on the same machine whose folder equals the
-terminal's `cwd`; otherwise they show under "No space" in the Agents tab.
+An agent belongs to the first of these matches on its machine: the
+`whistl.space` label from this app, or `herdr.space` from Herdr desktop,
+naming a space by id; the `herdr.tab` label naming a tab the desktop's
+document maps to a space; a space whose folder equals the terminal's `cwd`,
+the deepest folder winning when spaces nest. Otherwise the agent shows under
+"No space" in the Agents tab. The desktop's own spaces are adopted with their
+ids (§5), so a space made there works here without retyping the folder.
 
 ## 2. Screens (see prototype)
 
@@ -335,6 +339,30 @@ The `whistl` document on each machine:
 ```
 
 Unknown fields are preserved on write (round-trip `JsonObject`).
+
+### The Herdr desktop's spaces (0.7.3)
+
+The desktop keeps its spaces in a second document on the same core,
+`herdr-app`: each space has an `id`, a `folder`, a `name` and `tabs`, each tab
+with an `id`. Every refresh reads both documents.
+
+- **Adoption keeps the desktop's id and deduplicates by id only.** A desktop
+  space missing from `whistl` is appended as it is. The folder is not a key:
+  the desktop may keep several spaces on the same folder, and each of them is
+  adopted, so none of their terminals is left under "No space". A trailing
+  slash, or a hand-made space on the same folder, does not hide one either.
+- **The tab map is kept per machine, in memory.** `spaces[].tabs[].id` maps to
+  the owning `spaces[].id`; it is replaced on each successful read, and a
+  failed read keeps the last map. It is never written to the document.
+- **Matching precedence** is: `whistl.space` / `herdr.space` by space id;
+  `herdr.tab` through the tab map; then `cwd` (exact folder first, then the
+  deepest folder that is a prefix); then no space.
+- **An unknown desktop label asks for one immediate refresh.** When a terminal
+  arrives with a `herdr.space` or `herdr.tab` that resolves to no known space
+  on its machine, the app requests one re-read of the documents, deduplicated
+  per (machine, label). The adopted space then appears without waiting for a
+  `doc` event, and a label the desktop's document does not hold cannot cause a
+  refresh loop.
 
 ## 6. Security (non-negotiable)
 

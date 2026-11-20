@@ -38,6 +38,12 @@ data class Agent(val terminal: Terminal) {
         /** The space label the Herdr desktop app writes on the terminals it starts; a terminal of either kind is claimed. */
         const val HERDR_SPACE_LABEL: String = "herdr.space"
 
+        /**
+         * The tab label the Herdr desktop app writes on the terminals it starts in a tab. The desktop's document maps the tab
+         * id to the space that owns it, so a terminal whose `herdr.space` is unknown can still resolve to its space by tab.
+         */
+        const val HERDR_TAB_LABEL: String = "herdr.tab"
+
         /** The hc label that carries a name the user chose. */
         const val NAME_LABEL: String = "whistl.name"
     }

@@ -253,7 +253,7 @@ class AgentsViewModel(
             blockedCount = blocked,
             menu = menu,
             notice = lastNotice,
-            filterName = only?.let { filter -> list.firstOrNull()?.space?.name },
+            filterName = only?.let { space?.name ?: list.firstOrNull()?.space?.name },
             newAgent = space?.let { NewAgentUi(enabled = block == null, block = block) },
             picker = pickerSheet?.let { sheet ->
                 PickerUi(

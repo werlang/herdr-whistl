@@ -28,32 +28,40 @@ fun sortSpaces(spaces: List<SpaceRecord>): List<SpaceRecord> =
     spaces.sortedWith(compareBy<SpaceRecord>({ !it.pinned }, { it.order }))
 
 /**
- * The space an agent belongs to (SPEC §1, precedence in this order, 0.7.1):
+ * The space an agent belongs to (SPEC §1, precedence in this order, 0.7.3):
  * 1. a space label — `whistl.space` from this app, `herdr.space` from the Herdr desktop app — that names a space on this
  *    machine. The label does not depend on any folder resolution;
- * 2. otherwise the space whose resolved path is the terminal's `cwd`, after [normalizeFolder] on both; the deepest folder
+ * 2. otherwise the tab label `herdr.tab`, mapped through [tabSpaceId] to the space that owns that tab. A desktop terminal
+ *    whose `herdr.space` is unknown here still resolves when its tab does;
+ * 3. otherwise the space whose resolved path is the terminal's `cwd`, after [normalizeFolder] on both; the deepest folder
  *    wins when one space is inside another, so a terminal started in `web/app` lands in `web/app` and not in `web`;
- * 3. otherwise `null`, shown as "No space".
+ * 4. otherwise `null`, shown as "No space".
  *
- * **The folder is what the two apps agree on.** A terminal started on the desktop carries the desktop's own space id,
- * which this app's document does not know, so the id falls through and the folder decides — that is what lets an agent
- * started on the Mac show up in the same space here. A space whose [resolvedPath] is `null` (not resolved yet, or
- * unresolvable) never matches by cwd.
+ * **The id and the tab are what the desktop and this app agree on.** A terminal started on the desktop carries the
+ * desktop's own space id, which this app's document may not know yet; the shots at the id, then the tab, let it land in the
+ * adopted space before the folder has to decide. A space whose [resolvedPath] is `null` (not resolved yet, or unresolvable)
+ * never matches by cwd.
  *
  * @param terminal the agent's terminal.
  * @param spaces the machine's spaces, in display order.
  * @param resolvedPath the absolute path each space's folder resolved to, or `null` when it did not. The default compares
  *   the folder as stored, which is the rule for a folder that needs no resolution.
+ * @param tabSpaceId the space that owns a tab, for a `herdr.tab` label. The default knows no tabs.
  * @return the matched space, or `null`.
  */
 fun matchSpace(
     terminal: Terminal,
     spaces: List<SpaceRecord>,
     resolvedPath: (SpaceRecord) -> String? = { it.folder },
+    tabSpaceId: (String) -> String? = { null },
 ): SpaceRecord? {
     val label = terminal.labels[Agent.SPACE_LABEL] ?: terminal.labels[Agent.HERDR_SPACE_LABEL]
     if (label != null) {
         spaces.firstOrNull { it.id == label }?.let { return it }
+    }
+    val tab = terminal.labels[Agent.HERDR_TAB_LABEL]
+    if (tab != null) {
+        tabSpaceId(tab)?.let { spaceId -> spaces.firstOrNull { it.id == spaceId } }?.let { return it }
     }
     val cwd = terminal.cwd?.let(::normalizeFolder) ?: return null
     // Deepest match wins: a folder inside another space is the more specific answer.

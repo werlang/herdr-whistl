@@ -440,6 +440,16 @@ class AgentsRepositoryTest {
         }
     }
 
+    /** A document-change hub that records every announcement and still delivers it, as the real one does. */
+    private class RecordingDocumentChanges : DocumentChanges() {
+        val announced = mutableListOf<String>()
+
+        override fun notifyChanged(machineId: String) {
+            announced += machineId
+            super.notifyChanged(machineId)
+        }
+    }
+
     /** A `doc` event on the events channel: the `whistl` document changed. */
     private fun docEvent(): String = eventLine("doc", null, 2, dataOf("name" to JsonPrimitive("whistl"), "version" to JsonPrimitive(2)))
 
@@ -470,6 +480,87 @@ class AgentsRepositoryTest {
 
         val matched = h.agents.agents.value.associate { it.agent.terminal.address to it.spaceId }
         assertEquals(mapOf("t-label" to "sp_b", "t-cwd" to "sp_b", "t-none" to null), matched)
+    }
+
+    /**
+     * A terminal the desktop started with a `herdr.space` this app does not know asks for the document to be read again,
+     * once for that (machine, label): the adopted space then arrives without waiting for a `doc` event (0.7.3).
+     */
+    @Test
+    fun anUnknownDesktopSpaceAsksForTheDocumentOnce() = runTest {
+        val changes = RecordingDocumentChanges()
+        val h = RepoStack(this, docChanges = changes)
+        h.connector.eventsPipeFactory = {
+            snapshotPipe(eventsSnapshot(1, listOf(terminalJson("t1", labels = mapOf("herdr.space" to "sp_unknown")))))
+        }
+        h.addMachine()
+        runCurrent()
+
+        assertEquals(1, changes.announced.size)
+
+        // A later event on the same terminal is observed again: the label must not ask a second time, or a space the
+        // desktop does not hold would keep the repository refreshing forever.
+        h.pushEvent(eventLine("title", "t1", 2, dataOf("title" to JsonPrimitive("desktop"))))
+        runCurrent()
+
+        assertEquals("one ask per (machine, label)", 1, changes.announced.size)
+    }
+
+    /** The same safety net covers `herdr.tab`, and it, too, asks once for its (machine, label) pair. */
+    @Test
+    fun anUnknownDesktopTabAsksForTheDocumentOnce() = runTest {
+        val changes = RecordingDocumentChanges()
+        val h = RepoStack(this, docChanges = changes)
+        h.connector.eventsPipeFactory = {
+            snapshotPipe(eventsSnapshot(1, listOf(terminalJson("t1", labels = mapOf("herdr.tab" to "tb_unknown")))))
+        }
+        h.addMachine()
+        runCurrent()
+
+        assertEquals(1, changes.announced.size)
+
+        h.pushEvent(eventLine("title", "t1", 2, dataOf("title" to JsonPrimitive("desktop"))))
+        runCurrent()
+
+        assertEquals(1, changes.announced.size)
+    }
+
+    /** A desktop label that names a space here, or a tab that maps to one, asks for nothing. */
+    @Test
+    fun knownDesktopLabelsDoNotAskForARead() = runTest {
+        val changes = RecordingDocumentChanges()
+        val h = RepoStack(this, docChanges = changes)
+        h.core.value = spacesDocJson(listOf(spaceJson("sp_a", "a", "/a")))
+        h.core.desktop = JsonObject(
+            mapOf(
+                "spaces" to JsonArray(
+                    listOf(
+                        JsonObject(
+                            mapOf(
+                                "id" to JsonPrimitive("sp_a"),
+                                "name" to JsonPrimitive("a"),
+                                "folder" to JsonPrimitive("/a"),
+                                "tabs" to JsonArray(listOf(JsonObject(mapOf("id" to JsonPrimitive("tb1"))))),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        h.connector.eventsPipeFactory = { snapshotPipe(eventsSnapshot(1, emptyList())) }
+        h.addMachine()
+        runCurrent()
+        assertEquals(listOf("sp_a"), h.spaces.groups().value.single().spaces.map { it.id })
+
+        h.pushEvent(
+            eventLine(
+                "created", "t1", 2,
+                terminalJson("t1", labels = mapOf("herdr.space" to "sp_a", "herdr.tab" to "tb1")),
+            ),
+        )
+        runCurrent()
+
+        assertTrue("both labels resolve: ${changes.announced}", changes.announced.isEmpty())
     }
 
     /** Removing a machine removes its agents and releases its lease. */

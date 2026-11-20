@@ -47,11 +47,39 @@ fun parseDesktopSpaces(value: JsonElement?): List<DesktopSpace> {
 }
 
 /**
+ * Reads the desktop's tab-to-space map out of its document.
+ *
+ * Every space may hold `tabs`, each with an id. A terminal the desktop starts in a tab carries `herdr.tab=<tab id>`, so this
+ * map is what lets such a terminal resolve to the space that owns the tab even when its `herdr.space` label does not name a
+ * space here. A tab of a space without an id, a tab without an id, and a document of another shape are skipped; nothing
+ * throws.
+ *
+ * @param value the `value` of `doc.get` for [HERDR_DOCUMENT], or `null`.
+ * @return the parent space id of each tab, keyed by tab id.
+ */
+fun parseDesktopTabSpaces(value: JsonElement?): Map<String, String> {
+    val root = value as? JsonObject ?: return emptyMap()
+    val spaces = root["spaces"] as? JsonArray ?: return emptyMap()
+    val tabs = LinkedHashMap<String, String>()
+    for (element in spaces) {
+        val space = element as? JsonObject ?: continue
+        val spaceId = (space["id"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() } ?: continue
+        val spaceTabs = space["tabs"] as? JsonArray ?: continue
+        for (tabElement in spaceTabs) {
+            val tab = tabElement as? JsonObject ?: continue
+            val tabId = (tab["id"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() } ?: continue
+            tabs[tabId] = spaceId
+        }
+    }
+    return tabs
+}
+
+/**
  * The desktop's spaces that this app does not have yet.
  *
- * A space is already here when its id is here, or when a space already points at the same folder after [normalizeFolder] —
- * the second rule is what keeps a space the user created by hand on the phone, with its own id, from being duplicated when
- * the desktop has the same folder. Adopted spaces are appended in the desktop's order, so the document reads in the order the
+ * Only the id decides: a space is already here when its id is here. The folder does not, because the desktop may keep
+ * several spaces on the same folder — each of them is a space of its own there, and dropping all but one would hide the
+ * others and their terminals. Adopted spaces are appended in the desktop's order, so the document reads in the order the
  * user made them.
  *
  * @param own the spaces this app's document holds.
@@ -60,10 +88,9 @@ fun parseDesktopSpaces(value: JsonElement?): List<DesktopSpace> {
  */
 fun adoptedSpaces(own: List<SpaceRecord>, desktop: List<DesktopSpace>): List<SpaceRecord> {
     val ids = own.map { it.id }.toSet()
-    val folders = own.map { normalizeFolder(it.folder) }.toSet()
     return desktop
-        .filterNot { it.id in ids || normalizeFolder(it.folder) in folders }
-        .distinctBy { normalizeFolder(it.folder) }
+        .filterNot { it.id in ids }
+        .distinctBy { it.id }
         .mapIndexed { index, space ->
             SpaceRecord(
                 id = space.id,

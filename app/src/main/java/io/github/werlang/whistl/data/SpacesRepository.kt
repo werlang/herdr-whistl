@@ -38,12 +38,15 @@ private const val MAX_ATTEMPTS: Int = 5
  * @property resolutions each space's folder resolution, keyed by space id (phase 4 decision 1). A space with no entry has
  *   not been resolved on this device yet: its machine has never connected with that folder. An [FolderResolution.Unresolvable]
  *   entry is the typed error the space row shows.
+ * @property tabSpaces the space each Herdr desktop tab belongs to, keyed by tab id (0.7.3). Agents whose `herdr.tab` label
+ *   names one of these resolve to the owning space. Empty until the desktop's document has been read.
  */
 data class MachineSpaces(
     val machineId: String,
     val offline: Boolean,
     val spaces: List<SpaceRecord>,
     val resolutions: Map<String, FolderResolution> = emptyMap(),
+    val tabSpaces: Map<String, String> = emptyMap(),
 ) {
     /**
      * The resolution of a space's folder.
@@ -210,6 +213,9 @@ class DefaultSpacesRepository(
     /** The resolution job of each machine, cancelled when its connection ends or a newer one replaces it. */
     private val resolving = ConcurrentHashMap<String, Job>()
 
+    /** The desktop's tab-to-space map per machine, from the last successful read of [HERDR_DOCUMENT] (0.7.3). */
+    private val tabSpaces = ConcurrentHashMap<String, Map<String, String>>()
+
     override fun groups(): StateFlow<List<MachineSpaces>> = view.asStateFlow()
 
     init {
@@ -261,9 +267,15 @@ class DefaultSpacesRepository(
         if (documents[machineId]?.hasSpace(spaceId) == false) return SpaceResult.UnknownSpace(spaceId)
         val client = leases[machineId]?.client() ?: return SpaceResult.MachineOffline
         val known = documents[machineId]?.spaces.orEmpty()
+        val knownTabs = tabSpaces[machineId].orEmpty()
         try {
             for (terminal in client.terminalList().terminals) {
-                val match = matchSpace(terminal, known) { resolutionOf(machineId, it.folder).resolvedPath() }
+                val match = matchSpace(
+                    terminal,
+                    known,
+                    { resolutionOf(machineId, it.folder).resolvedPath() },
+                    { tab -> knownTabs[tab] },
+                )
                 if (terminal.state == TerminalState.Live && match?.id == spaceId) {
                     try {
                         client.terminalKill(terminal.address)
@@ -309,6 +321,7 @@ class DefaultSpacesRepository(
                 verdicts.remove(id)
                 cache.remove(id)
                 folderCache.remove(id)
+                tabSpaces.remove(id)
             }
         }
         for (id in current) {
@@ -374,30 +387,36 @@ class DefaultSpacesRepository(
         } catch (e: DocumentException) {
             return
         }
-        remember(id, adoptDesktopSpaces(client, doc))
+        remember(id, adoptDesktopSpaces(id, client, doc))
         resolveFolders(id)
     }
 
     /**
-     * The document with the Herdr desktop's spaces added (0.7.3).
+     * The document with the Herdr desktop's spaces added (0.7.3), and the desktop's tab map kept for the machine.
      *
      * The desktop keeps its spaces in [HERDR_DOCUMENT] on the same core, and labels the terminals it starts with
-     * `herdr.space` and those ids. Adopting the missing ones, id included, is what makes a space made on the desktop usable
-     * here without retyping the folder — and makes its agents resolve to it by label instead of by cwd.
+     * `herdr.space` and those ids, and with `herdr.tab` and the id of the tab they run in. Adopting the missing ones, id
+     * included, is what makes a space made on the desktop usable here without retyping the folder — and makes its agents
+     * resolve to it by label or tab instead of by cwd. Its spaces are deduplicated by id only: the desktop may keep
+     * several spaces on the same folder, and each is a space of its own.
      *
-     * A desktop document that cannot be read, or holds nothing new, leaves the document as it is. A write that fails still
-     * shows the adopted spaces: they come back on the next refresh.
+     * A desktop document that cannot be read leaves the document and the tab map as they are. A desktop document with
+     * nothing new still refreshes the tab map, so a terminal can resolve by tab even when no space is adopted. A write that
+     * fails still shows the adopted spaces: they come back on the next refresh.
      *
+     * @param machineId the machine.
      * @param client the machine's live client.
      * @param doc the document this app holds.
      * @return the document to keep.
      */
-    private suspend fun adoptDesktopSpaces(client: HcClient, doc: SpacesDocument): SpacesDocument {
-        val desktop = try {
-            parseDesktopSpaces(client.docGet(HERDR_DOCUMENT).value)
+    private suspend fun adoptDesktopSpaces(machineId: String, client: HcClient, doc: SpacesDocument): SpacesDocument {
+        val desktopValue = try {
+            client.docGet(HERDR_DOCUMENT).value
         } catch (e: HcException) {
             return doc
         }
+        tabSpaces[machineId] = parseDesktopTabSpaces(desktopValue)
+        val desktop = parseDesktopSpaces(desktopValue)
         if (adoptedSpaces(doc.spaces, desktop).isEmpty()) return doc
         return try {
             docReadModifyWrite(client, WHISTL_DOCUMENT, MAX_ATTEMPTS) { current ->
@@ -460,6 +479,7 @@ class DefaultSpacesRepository(
                 resolutions = spaces.mapNotNull { space ->
                     resolutionOf(machine.id, space.folder)?.let { space.id to it }
                 }.toMap(),
+                tabSpaces = tabSpaces[machine.id].orEmpty(),
             )
         }
     }

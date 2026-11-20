@@ -72,6 +72,40 @@ class SpaceMatchingTest {
         assertEquals("sp_other", matchSpace(terminal, nested)?.id)
     }
 
+    /** The desktop's `herdr.tab` resolves to the space that owns the tab, and that beats the folder (0.7.3). */
+    @Test
+    fun theDesktopsTabLabelResolvesToItsParentSpace() {
+        val terminal = agent("/home/u/api", mapOf(Agent.HERDR_TAB_LABEL to "tb1"))
+
+        assertEquals("sp_a", matchSpace(terminal, spaces, tabSpaceId = { if (it == "tb1") "sp_a" else null })?.id)
+    }
+
+    /** A tab naming no known space falls through to the cwd rule. */
+    @Test
+    fun anUnknownTabFallsToCwd() {
+        val terminal = agent("/home/u/web", mapOf(Agent.HERDR_TAB_LABEL to "tb_missing"))
+
+        assertEquals("sp_a", matchSpace(terminal, spaces, tabSpaceId = { "sp_missing" })?.id)
+    }
+
+    /** The precedence is space label, then tab, then cwd, then no space. */
+    @Test
+    fun labelBeatsTabAndTabBeatsCwd() {
+        val labelAndTab = agent(
+            "/home/u/api",
+            mapOf(Agent.HERDR_SPACE_LABEL to "sp_b", Agent.HERDR_TAB_LABEL to "tb1"),
+        )
+
+        assertEquals(
+            "sp_b",
+            matchSpace(labelAndTab, spaces, tabSpaceId = { "sp_a" })?.id,
+        )
+        assertEquals(
+            "sp_a",
+            matchSpace(agent("/home/u/api", mapOf(Agent.HERDR_TAB_LABEL to "tb1")), spaces, tabSpaceId = { "sp_a" })?.id,
+        )
+    }
+
     @Test
     fun labelNamingAnUnknownSpaceFallsToCwd() {
         val terminal = agent(cwd = "/home/u/web", labels = mapOf(Agent.SPACE_LABEL to "sp_missing"))

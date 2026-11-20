@@ -171,6 +171,12 @@ class DefaultAgentsRepository(
     /** The retry scheduled for each machine after a failed subscription, so leaving Connected can cancel it (p7r8 item 3). */
     private val resubscribes = ConcurrentHashMap<String, Job>()
 
+    /**
+     * The (machine, label) pairs already announced as unknown (0.7.3): one immediate document re-read per pair, so a
+     * `herdr.space` or `herdr.tab` that the desktop's document does not hold cannot loop through the refresh it asks for.
+     */
+    private val announcedUnknown = ConcurrentHashMap<String, MutableSet<String>>()
+
     private companion object {
         const val TAG: String = "AgentsRepository"
 
@@ -196,8 +202,14 @@ class DefaultAgentsRepository(
             val group = groups.firstOrNull { it.machineId == machine.id }
             val spacesOfMachine = group?.spaces.orEmpty()
             byMachine[machine.id].orEmpty().values.map { terminal ->
-                // Matched by cwd against the resolved path; a space that did not resolve never matches by cwd (SPEC §1).
-                val space = matchSpace(terminal, spacesOfMachine) { group?.resolvedPathOf(it) }
+                // Matched by label, then the desktop's tab map, then cwd against the resolved path; a space that did not
+                // resolve never matches by cwd (SPEC §1).
+                val space = matchSpace(
+                    terminal,
+                    spacesOfMachine,
+                    resolvedPath = { group?.resolvedPathOf(it) },
+                    tabSpaceId = { tab -> group?.tabSpaces?.get(tab) },
+                )
                 MachineAgent(machine.id, Agent(terminal), space, updated["${machine.id}/${terminal.address}"] ?: 0L)
             }
         }
@@ -337,7 +349,10 @@ class DefaultAgentsRepository(
 
     private suspend fun reconcile(ids: Set<String>) {
         for (id in watchers.keys.toList()) {
-            if (id !in ids) watchers.remove(id)?.cancelAndJoin()
+            if (id !in ids) {
+                watchers.remove(id)?.cancelAndJoin()
+                announcedUnknown.remove(id)
+            }
         }
         for (id in ids) {
             if (!watchers.containsKey(id)) watchers[id] = scope.launch { watch(id) }
@@ -390,12 +405,13 @@ class DefaultAgentsRepository(
                 open = subscription
                 // Folder probes are not agents: the snapshot drops them as the events reducer does.
                 val agentsOnly = subscription.terminals.filterNot { it.isProbe() }
+                val next = agentsOnly.associateBy { it.address }
                 terminals.update { all ->
                     val previous = all[id].orEmpty()
-                    val next = agentsOnly.associateBy { it.address }
                     stampChanged(id, previous, next)
                     all + (id to next)
                 }
+                announceUnknownSpaces(id, next)
                 // The retry count resets only once the subscription has stayed up for a while (p7r8 item 4).
                 val healthy = launch {
                     delay(HEALTHY_AFTER_MS)
@@ -461,6 +477,45 @@ class DefaultAgentsRepository(
             stampChanged(id, previous, next)
             all + (id to next)
         }
+        announceUnknownSpaces(id, terminals.value[id].orEmpty())
+    }
+
+    /**
+     * Asks for an immediate document re-read when a terminal names a Herdr desktop space or tab this app does not know yet
+     * (0.7.3).
+     *
+     * The desktop writes `herdr.space` and `herdr.tab` on the terminals it starts, and a space made there is adopted on
+     * the next read of its document. Waiting for a `doc` event would leave the terminal under "No space" until something
+     * else changed, so the observation itself asks for the read. The (machine, label) pair is remembered even when the
+     * space never arrives, so a label the desktop's document does not hold cannot start a refresh loop.
+     *
+     * @param machineId the machine the terminals belong to.
+     * @param byAddress the machine's terminals, by address.
+     */
+    private fun announceUnknownSpaces(machineId: String, byAddress: Map<String, Terminal>) {
+        val group = spaces.groups().value.firstOrNull { it.machineId == machineId }
+        val known = group?.spaces.orEmpty().map { it.id }.toSet()
+        val announced = announcedUnknown.getOrPut(machineId) { ConcurrentHashMap.newKeySet() }
+        for (terminal in byAddress.values) {
+            val spaceLabel = terminal.labels[Agent.HERDR_SPACE_LABEL]?.takeIf { it.isNotBlank() }
+            if (spaceLabel != null && spaceLabel !in known) announceOnce(machineId, spaceLabel, announced)
+            val tabLabel = terminal.labels[Agent.HERDR_TAB_LABEL]?.takeIf { it.isNotBlank() }
+            if (tabLabel != null) {
+                val spaceOfTab = group?.tabSpaces?.get(tabLabel)
+                if (spaceOfTab == null || spaceOfTab !in known) announceOnce(machineId, tabLabel, announced)
+            }
+        }
+    }
+
+    /**
+     * Announces one unknown label for a machine, at most once for the life of this repository.
+     *
+     * @param machineId the machine.
+     * @param label the `herdr.space` or `herdr.tab` value.
+     * @param announced the labels already announced for the machine.
+     */
+    private fun announceOnce(machineId: String, label: String, announced: MutableSet<String>) {
+        if (announced.add(label)) documentChanges.notifyChanged(machineId)
     }
 
     /**
