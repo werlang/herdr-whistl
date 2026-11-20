@@ -353,7 +353,7 @@ fun ShotScreen.expectedText(): String {
         ShotScreen.MachineHostKeySheet -> app.getString(R.string.add_host_key_title, "build")
         ShotScreen.AgentsWorking, ShotScreen.AgentsIdle, ShotScreen.AgentsEmpty -> app.getString(R.string.agents_title)
         ShotScreen.AgentFinished -> app.getString(R.string.agent_notice_finished)
-        ShotScreen.AgentOffline -> app.getString(R.string.agent_notice_offline, "lab")
+        ShotScreen.AgentOffline -> app.getString(R.string.agent_notice_offline)
         ShotScreen.AddMachineConnecting, ShotScreen.AddMachineRefused, ShotScreen.AddMachineCoreMissing,
         ShotScreen.AddMachineConnectionRefused,
         -> app.getString(R.string.add_machine_title)

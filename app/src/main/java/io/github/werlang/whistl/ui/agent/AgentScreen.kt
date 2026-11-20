@@ -101,6 +101,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -710,10 +711,10 @@ private const val FLASH_MS: Long = 2_000L
 /** How long the once-only tip about holding Send stays: long enough to read and use (0.6.3). */
 private const val TIP_MS: Long = 8_000L
 
-/** The words for a notice, shown in the status bar (0.5.8). */
+/** The words for a notice, shown in the status bar (0.5.8). Short, so the bar keeps the place of the agent in full. */
 @Composable
-private fun noticeText(notice: AgentNotice, machineName: String): String = when (notice) {
-    AgentNotice.Offline -> stringResource(R.string.agent_notice_offline, machineName)
+private fun noticeText(notice: AgentNotice): String = when (notice) {
+    AgentNotice.Offline -> stringResource(R.string.agent_notice_offline)
     AgentNotice.Gone -> stringResource(R.string.agent_notice_gone)
     AgentNotice.Finished -> stringResource(R.string.agent_notice_finished)
     AgentNotice.NotTypable -> stringResource(R.string.agent_notice_not_typable)
@@ -723,16 +724,35 @@ private fun noticeText(notice: AgentNotice, machineName: String): String = when 
 }
 
 /**
+ * The full sentence a notice stands for, for TalkBack (0.7.1): the bar shows a short message to keep the agent's place
+ * readable, and the screen reader still gets the whole instruction.
+ *
+ * @param notice what happened to the agent.
+ * @param machineName the machine the agent runs on, named in the offline notice.
+ * @return the sentence, or null for a notice that is already short enough.
+ */
+@Composable
+private fun noticeA11yText(notice: AgentNotice, machineName: String): String? = when (notice) {
+    AgentNotice.Offline -> stringResource(R.string.agent_notice_offline_a11y, machineName)
+    AgentNotice.Finished -> stringResource(R.string.agent_notice_finished_a11y)
+    else -> null
+}
+
+/**
  * The one-line status bar, on the accent colour: `[machine] space · agent`, and on the right either the status or, for a
  * moment, what was just sent or refused (0.5.8). A message used to have a line of its own above the keys, which cost a
  * row of terminal all the time to show something for a second.
+ *
+ * The place never truncates before the message: it takes the width it needs, and the message on the right is the part
+ * that ellipsises when the row runs out of room.
  */
 @Composable
 private fun StatusBar(state: AgentUiState) {
     val flash = remember { mutableStateOf<String?>(null) }
     val ctrlHint = stringResource(R.string.agent_ctrl_on)
     val sentHint = state.lastKey?.let { key -> stringResource(R.string.agent_key_sent, sentKeyText(key)) }
-    val noticeHint = state.notice?.let { notice -> noticeText(notice, state.machineName) }
+    val noticeHint = state.notice?.let { notice -> noticeText(notice) }
+    val noticeA11y = state.notice?.let { notice -> noticeA11yText(notice, state.machineName) }
     val message = noticeHint ?: sentHint
     LaunchedEffect(message, state.ctrlArmed) {
         flash.value = if (state.ctrlArmed) ctrlHint else message
@@ -747,6 +767,11 @@ private fun StatusBar(state: AgentUiState) {
     // grey when it is idle or offline (0.7.1).
     val container = statusBarColor(state.statusLabel, LocalWhistlTokens.current)
     val content = MaterialTheme.colorScheme.surface
+    val shown = flash.value ?: stringResource(statusLabelRes(state.statusLabel))
+    // The short notice stands for a longer sentence: TalkBack reads the whole of it, but only while the notice is what
+    // the bar shows and Ctrl is not taking the right side.
+    val a11y = if (!state.ctrlArmed && shown == noticeHint) noticeA11y else null
+    val a11yModifier = a11y?.let { text -> Modifier.semantics { contentDescription = text } } ?: Modifier
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -767,15 +792,17 @@ private fun StatusBar(state: AgentUiState) {
             color = content,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(12.dp))
         Text(
-            text = flash.value ?: stringResource(statusLabelRes(state.statusLabel)),
+            text = shown,
             style = MaterialTheme.typography.labelMedium,
             fontFamily = WhistlMono,
             color = content,
+            textAlign = TextAlign.End,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).then(a11yModifier),
         )
     }
 }
