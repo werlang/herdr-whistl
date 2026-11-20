@@ -221,7 +221,7 @@
     <string name="spaces_no_machine">A space lives on a machine. Add a machine first.</string>
     <string name="spaces_waiting_badge">waiting</string>
     <string name="spaces_pinned">Pinned</string>
-    <string name="spaces_summary">%1$s · %2$s</string>
+    <string name="spaces_summary">%1$s ·</string>
     <string name="space_folder_not_checked">Folder not checked yet</string>
     <string name="space_unresolved_not_found">The folder is not on the machine.</string>
     <string name="space_unresolved_unsupported_tilde">Only ~ and ~/… are expanded here, not another user’s home.</string>
@@ -257,7 +257,7 @@
     <string name="space_detail_offline">%1$s is offline. Reconnect it in Machines to see and start agents here.</string>
     <string name="space_detail_machine_state">%1$s: %2$s. Fix it in Machines to see and start agents here.</string>
     <string name="space_detail_missing">This space is no longer on its machine.</string>
-    <string name="space_detail_header">%1$s:%2$s</string>
+    <string name="space_detail_header">%1$s:</string>
     <string name="new_agent">New agent</string>
     <string name="new_agent_off_machine">New agent is off: %1$s is offline.</string>
     <string name="new_agent_off_folder">New agent is off: the folder is not available on the machine.</string>

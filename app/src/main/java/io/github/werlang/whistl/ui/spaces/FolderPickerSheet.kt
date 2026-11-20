@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.data.FolderProblem
+import io.github.werlang.whistl.ui.components.MiddleEllipsisPath
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.SheetDragHandle
 import io.github.werlang.whistl.ui.components.whistlButtonColors
@@ -79,15 +80,24 @@ fun FolderPickerSheet(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.semantics { heading() },
             )
-            Text(
-                text = ui.path.ifEmpty { stringResource(R.string.space_folder_browse_loading) },
-                style = MaterialTheme.typography.bodyMedium,
-                fontFamily = FontFamily.Monospace,
-                color = tokens.muted,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (ui.path.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.space_folder_browse_loading),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontFamily = FontFamily.Monospace,
+                    color = tokens.muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                MiddleEllipsisPath(
+                    path = ui.path,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                    color = tokens.muted,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             if (ui.loading) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth().heightIn(min = 4.dp))
             }

@@ -55,6 +55,7 @@ import io.github.werlang.whistl.ui.agentLabelRes
 import io.github.werlang.whistl.ui.agents.AgentCloseSheet
 import io.github.werlang.whistl.ui.agents.AgentMenuSheet
 import io.github.werlang.whistl.ui.agents.NoticeBar
+import io.github.werlang.whistl.ui.components.MiddleEllipsisPath
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.SheetDragHandle
 import io.github.werlang.whistl.ui.components.StatusLabel
@@ -237,14 +238,21 @@ private fun Header(state: SpaceDetailUiState) {
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.semantics { heading() },
         )
-        Text(
-            text = stringResource(R.string.space_detail_header, state.machineName, state.folder),
-            style = MaterialTheme.typography.bodyMedium,
-            fontFamily = WhistlMono,
-            color = tokens.muted,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.space_detail_header, state.machineName),
+                style = MaterialTheme.typography.bodyMedium,
+                fontFamily = WhistlMono,
+                color = tokens.muted,
+                maxLines = 1,
+            )
+            MiddleEllipsisPath(
+                path = state.folder,
+                style = MaterialTheme.typography.bodyMedium.copy(fontFamily = WhistlMono),
+                color = tokens.muted,
+                modifier = Modifier.weight(1f),
+            )
+        }
         when (val folder = state.folderState) {
             FolderState.Resolved -> Unit
             FolderState.NotChecked -> Text(

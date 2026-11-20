@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.ui.agentLabelRes
+import io.github.werlang.whistl.ui.components.MiddleEllipsisPath
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.machineStatusColor
 import io.github.werlang.whistl.ui.components.machineStatusLabelRes
@@ -271,18 +272,24 @@ private fun SpaceRowView(row: SpaceRow, onOpen: () -> Unit, onMenu: () -> Unit) 
                     }
                 }
                 AgentDots(row.agents)
-                Text(
-                    text = stringResource(
-                        R.string.spaces_summary,
-                        pluralStringResource(R.plurals.space_agents_count, row.agents.size, row.agents.size),
-                        row.folder,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = WhistlMono,
-                    color = tokens.muted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = stringResource(
+                            R.string.spaces_summary,
+                            pluralStringResource(R.plurals.space_agents_count, row.agents.size, row.agents.size),
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = tokens.muted,
+                        maxLines = 1,
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    MiddleEllipsisPath(
+                        path = row.folder,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = WhistlMono),
+                        color = tokens.muted,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 FolderLine(row.folderState)
             }
             IconButton(onClick = onMenu, modifier = Modifier.size(width = MinTouchTarget, height = 52.dp)) {
