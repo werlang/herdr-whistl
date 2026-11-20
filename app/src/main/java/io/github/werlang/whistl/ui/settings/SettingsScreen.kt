@@ -228,6 +228,8 @@ private fun GeneralSection(state: SettingsUiState, viewModel: SettingsViewModel)
                 text = stringResource(R.string.settings_notify_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = LocalWhistlTokens.current.muted,
+                // Inset like SwitchRow and ChoiceRow, so the hint lines up with the title it explains.
+                modifier = Modifier.padding(horizontal = 14.dp),
             )
             ChoiceRow(label = stringResource(R.string.settings_font)) {
                 FontSize.entries.forEach { size ->
