@@ -58,6 +58,9 @@ import io.github.werlang.whistl.ui.agents.NoticeBar
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.SheetDragHandle
 import io.github.werlang.whistl.ui.components.StatusLabel
+import io.github.werlang.whistl.ui.components.machineStatusColor
+import io.github.werlang.whistl.ui.components.machineStatusLabelRes
+import io.github.werlang.whistl.ui.machines.MachineStatus
 import io.github.werlang.whistl.ui.spaces.FolderState
 import io.github.werlang.whistl.ui.spaces.unresolvedTextRes
 import io.github.werlang.whistl.ui.statusColor
@@ -216,7 +219,8 @@ fun SpaceDetailScreen(
 }
 
 /**
- * The header: the space's name, `machine:folder` in monospace, the folder's state, and the machine's offline notice.
+ * The header: the space's name, `machine:folder` in monospace, the folder's state, and the machine's state when it is not
+ * connected.
  *
  * @param state the screen's state.
  */
@@ -255,11 +259,17 @@ private fun Header(state: SpaceDetailUiState) {
                 color = MaterialTheme.colorScheme.error,
             )
         }
-        if (state.machineOffline) {
+        if (state.machineOffline || state.machineStatus != MachineStatus.Connected) {
+            val status = state.machineStatus
+            val label = stringResource(machineStatusLabelRes(status, state.machineIssue))
             Text(
-                text = stringResource(R.string.space_detail_offline, state.machineName),
+                text = if (status == MachineStatus.Offline) {
+                    stringResource(R.string.space_detail_offline, state.machineName)
+                } else {
+                    stringResource(R.string.space_detail_machine_state, state.machineName, label)
+                },
                 style = MaterialTheme.typography.bodyMedium,
-                color = tokens.muted,
+                color = machineStatusColor(status, state.machineIssue),
             )
         }
     }

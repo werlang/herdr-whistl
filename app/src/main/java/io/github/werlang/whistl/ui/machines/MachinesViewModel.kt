@@ -228,14 +228,8 @@ class MachinesViewModel(
         }
     }
 
-    /** Every machine's connection state, by id. Re-evaluated when the list of machines changes. */
-    private val connections: Flow<Map<String, ConnectionState>> = machines.machines().flatMapLatest { list ->
-        if (list.isEmpty()) {
-            flowOf(emptyMap())
-        } else {
-            combine(list.map { machine -> machines.observe(machine.id).map { machine.id to it } }) { pairs -> pairs.toMap() }
-        }
-    }
+    /** Every machine's connection state, by id, re-evaluated when the list of machines changes. */
+    private val connections: Flow<Map<String, ConnectionState>> = machines.connectionStates()
 
     /** The limits answers, by machine: empty when the app was built without the limits command. */
     private val limitReports: Flow<Map<String, LimitsResult>> = limits?.reports() ?: flowOf(emptyMap())
@@ -416,6 +410,21 @@ class MachinesViewModel(
         is ConnectionState.HostKeyUnknown -> HostKeyPrompt.Unknown(id, name, address, state, state.algorithm, state.fingerprint)
         is ConnectionState.HostKeyChanged -> HostKeyPrompt.Changed(id, name, address, state, state.algorithm, state.expected, state.actual)
         else -> null
+    }
+}
+
+/**
+ * Every machine's connection state, by id, re-evaluated when the list of machines changes. The Machines list and the screens
+ * that name a machine's state (Spaces, New space, Space detail) share it, so they all read the same connection.
+ *
+ * @return the states, keyed by machine id.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+internal fun MachinesRepository.connectionStates(): Flow<Map<String, ConnectionState>> = machines().flatMapLatest { list ->
+    if (list.isEmpty()) {
+        flowOf(emptyMap())
+    } else {
+        combine(list.map { machine -> observe(machine.id).map { machine.id to it } }) { pairs -> pairs.toMap() }
     }
 }
 

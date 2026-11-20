@@ -26,7 +26,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -40,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.StatusLabel
+import io.github.werlang.whistl.ui.components.machineStatusColor
+import io.github.werlang.whistl.ui.components.machineStatusLabelRes
 import io.github.werlang.whistl.ui.theme.AppMark
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
@@ -180,7 +181,10 @@ private fun MachineCardView(card: MachineCard, onMenu: () -> Unit, onOpen: () ->
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    StatusLabel(label = stringResource(cardStatusLabelRes(card)), color = cardStatusColor(card.status))
+                    StatusLabel(
+                        label = stringResource(machineStatusLabelRes(card.status, card.issue)),
+                        color = machineStatusColor(card.status, card.issue),
+                    )
                 }
                 // Two lines, not one: the port is the part that tells two machines apart, so it must not be cut off.
                 Text(
@@ -252,46 +256,6 @@ private fun MachineCardView(card: MachineCard, onMenu: () -> Unit, onOpen: () ->
                 )
             }
         }
-    }
-}
-
-/**
- * The status label of a card: its connection, or for an error the reason the user has to act on.
- *
- * @param card the card.
- * @return the string resource.
- */
-private fun cardStatusLabelRes(card: MachineCard): Int = when (card.status) {
-    MachineStatus.Connected -> R.string.machine_status_connected
-    MachineStatus.Connecting -> R.string.machine_status_connecting
-    MachineStatus.Offline -> R.string.machine_status_offline
-    MachineStatus.Error -> when (card.issue) {
-        MachineIssue.LoginRefused -> R.string.machine_issue_login_refused
-        MachineIssue.UnsupportedCore -> R.string.machine_issue_unsupported_core
-        MachineIssue.HostKeyToConfirm -> R.string.machine_issue_host_key
-        MachineIssue.HostKeyChanged -> R.string.machine_issue_host_key_changed
-        MachineIssue.ConnectionRefused -> R.string.machine_issue_connection_refused
-        MachineIssue.Internal -> R.string.machine_issue_internal
-        MachineIssue.CoreMissing -> R.string.machine_issue_core_missing
-        null -> R.string.status_error
-    }
-}
-
-/**
- * The dot colour of a card's status: connected is done, connecting is working, offline is idle, an error is the error colour.
- * The label always says the status too, so the colour is never the only signal (SPEC §3).
- *
- * @param status the card's status.
- * @return the colour.
- */
-@Composable
-private fun cardStatusColor(status: MachineStatus): Color {
-    val tokens = LocalWhistlTokens.current
-    return when (status) {
-        MachineStatus.Connected -> tokens.done
-        MachineStatus.Connecting -> tokens.working
-        MachineStatus.Offline -> tokens.idle
-        MachineStatus.Error -> MaterialTheme.colorScheme.error
     }
 }
 

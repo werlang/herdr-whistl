@@ -2,9 +2,11 @@ package io.github.werlang.whistl.ui.space
 
 import io.github.werlang.whistl.data.AgentsRepository
 import io.github.werlang.whistl.data.ConnectionState
+import io.github.werlang.whistl.data.ErrorKind
 import io.github.werlang.whistl.data.FolderResolution
 import io.github.werlang.whistl.data.MachineAgent
 import io.github.werlang.whistl.data.MachineSpaces
+import io.github.werlang.whistl.data.MachinesRepository
 import io.github.werlang.whistl.data.SpaceRecord
 import io.github.werlang.whistl.data.StartChoice
 import io.github.werlang.whistl.data.StartResult
@@ -22,6 +24,8 @@ import io.github.werlang.whistl.support.ScriptedMachines
 import io.github.werlang.whistl.support.StaticInstalled
 import io.github.werlang.whistl.support.StaticSpaces
 import io.github.werlang.whistl.support.testHello
+import io.github.werlang.whistl.ui.machines.MachineIssue
+import io.github.werlang.whistl.ui.machines.MachineStatus
 import io.github.werlang.whistl.ui.spaces.FolderState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -118,10 +122,20 @@ class SpaceDetailViewModelTest {
             resolutions = resolution?.let { mapOf(SPACE to it) }.orEmpty(),
         )
 
+    /** The machine `m1`, named `build`. */
+    private fun machine(): Machine = Machine(id = MACHINE, name = "build", host = "build.lan", port = 22, user = "ci")
+
     /** The connected machine `m1`, named `build`. */
     private fun machines(): ScriptedMachines {
         val machines = ScriptedMachines()
-        machines.put(Machine(id = MACHINE, name = "build", host = "build.lan", port = 22, user = "ci"), ConnectionState.Connected(testHello()))
+        machines.put(machine(), ConnectionState.Connected(testHello()))
+        return machines
+    }
+
+    /** The offline machine `m1`, named `build`. */
+    private fun offlineMachines(): ScriptedMachines {
+        val machines = ScriptedMachines()
+        machines.put(machine(), ConnectionState.Offline)
         return machines
     }
 
@@ -131,18 +145,20 @@ class SpaceDetailViewModelTest {
      * @param groups the groups the spaces repository reports.
      * @param agents the agents repository.
      * @param installed the installed agents of each machine.
+     * @param machineRepo the machines, and so the state the header names.
      * @return the view model.
      */
     private fun model(
         groups: List<MachineSpaces>,
         agents: AgentsRepository = ScriptedAgents(emptyList()),
         installed: Map<String, List<KnownAgent>> = emptyMap(),
+        machineRepo: MachinesRepository = machines(),
     ): SpaceDetailViewModel = SpaceDetailViewModel(
         machineId = MACHINE,
         spaceId = SPACE,
         spaces = StaticSpaces(groups),
         agents = agents,
-        machines = machines(),
+        machines = machineRepo,
         installed = StaticInstalled(installed),
         pins = FakePins(),
     )
@@ -156,6 +172,39 @@ class SpaceDetailViewModelTest {
         assertEquals("build", state.machineName)
         assertEquals("~/web", state.folder)
         assertFalse(state.missing)
+    }
+
+    /**
+     * The header carries the machine's real state, not only offline: a connecting machine and an error with its issue, so the
+     * screen says what the user has to fix.
+     */
+    @Test
+    fun theHeaderCarriesTheMachinesRealStatusAndIssue() {
+        val cases = listOf(
+            ConnectionState.Connecting to (MachineStatus.Connecting to null),
+            ConnectionState.Error(ErrorKind.AuthFailed) to (MachineStatus.Error to MachineIssue.LoginRefused),
+            ConnectionState.HostKeyUnknown("ssh-ed25519", "SHA256:new") to
+                (MachineStatus.Error to MachineIssue.HostKeyToConfirm),
+        )
+        cases.forEach { (connection, expected) ->
+            val machines = ScriptedMachines()
+            machines.put(machine(), connection)
+
+            val state = model(listOf(group(offline = true)), machineRepo = machines).state.value
+
+            assertEquals("status for $connection", expected.first, state.machineStatus)
+            assertEquals("issue for $connection", expected.second, state.machineIssue)
+            assertEquals("name for $connection", "build", state.machineName)
+        }
+    }
+
+    /** An offline group whose machine is not in the list any more keeps the offline default. */
+    @Test
+    fun anOfflineGroupWithoutItsMachineStaysOffline() {
+        val state = model(listOf(group(offline = true)), machineRepo = ScriptedMachines()).state.value
+
+        assertEquals(MachineStatus.Offline, state.machineStatus)
+        assertNull(state.machineIssue)
     }
 
     /** The rows are the agents of this space only, each with its own name and status. */
@@ -188,14 +237,17 @@ class SpaceDetailViewModelTest {
     }
 
     /**
-     * New agent is off while the machine is offline, and the picker does not open from it: the FAB offline check.
+     * New agent is off while the machine is offline, and the picker does not open from it: the FAB offline check. The header
+     * reads the machine's real state.
      */
     @Test
     fun theNewAgentIsOffWhileTheMachineIsOfflineAndThePickerDoesNotOpen() {
-        val vm = model(listOf(group(offline = true)))
+        val vm = model(listOf(group(offline = true)), machineRepo = offlineMachines())
 
         assertFalse(vm.state.value.newAgent.enabled)
         assertEquals(NewAgentBlock.MachineOffline, vm.state.value.newAgent.block)
+        assertEquals(MachineStatus.Offline, vm.state.value.machineStatus)
+        assertNull(vm.state.value.machineIssue)
 
         vm.openPicker()
         assertNull("no picker from an offline FAB", vm.state.value.picker)

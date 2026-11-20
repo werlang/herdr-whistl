@@ -35,7 +35,10 @@ import io.github.werlang.whistl.R
 import io.github.werlang.whistl.ui.machines.text
 import io.github.werlang.whistl.ui.components.MinTouchTarget
 import io.github.werlang.whistl.ui.components.SheetDragHandle
+import io.github.werlang.whistl.ui.components.machineStatusColor
+import io.github.werlang.whistl.ui.components.machineStatusLabelRes
 import io.github.werlang.whistl.ui.components.whistlButtonColors
+import io.github.werlang.whistl.ui.machines.MachineStatus
 import io.github.werlang.whistl.ui.machines.SheetRow
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
@@ -101,7 +104,8 @@ fun newSpaceMachineTag(id: String): String = "new-space-machine-$id" // i18n-ok:
 
 /**
  * The New space sheet (SPEC §2.2): pick an added machine, a folder (default `~`), and a name (default: the folder's last
- * segment, shown as the placeholder). Problems show under their field. With no machine added, it says so and offers Add machine.
+ * segment, shown as the placeholder). Each machine names its real state when it is not connected. Problems show under their
+ * field. With no machine added, it says so and offers Add machine.
  *
  * @param ui the sheet's state.
  * @param onPick called with the machine the user picked.
@@ -181,11 +185,11 @@ fun NewSpaceSheet(
                             color = LocalWhistlTokens.current.muted,
                         )
                     }
-                    if (machine.offline) {
+                    if (machine.status != MachineStatus.Connected) {
                         Text(
-                            text = stringResource(R.string.machine_status_offline),
+                            text = stringResource(machineStatusLabelRes(machine.status, machine.issue)),
                             style = MaterialTheme.typography.bodySmall,
-                            color = LocalWhistlTokens.current.muted,
+                            color = machineStatusColor(machine.status, machine.issue),
                         )
                     }
                 }

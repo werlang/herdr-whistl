@@ -46,6 +46,9 @@ import androidx.compose.ui.unit.dp
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.ui.agentLabelRes
 import io.github.werlang.whistl.ui.components.MinTouchTarget
+import io.github.werlang.whistl.ui.components.machineStatusColor
+import io.github.werlang.whistl.ui.components.machineStatusLabelRes
+import io.github.werlang.whistl.ui.machines.MachineStatus
 import io.github.werlang.whistl.ui.machines.text
 import io.github.werlang.whistl.ui.statusColor
 import io.github.werlang.whistl.ui.theme.AppMark
@@ -66,8 +69,8 @@ fun spaceRowTag(machineId: String, spaceId: String): String = "space-row-$machin
 
 /**
  * The Spaces list (SPEC §2.2): one group per machine, pinned first and then the user's order. A row shows its name, one dot per
- * agent (each named in words), the waiting badge, `N agents · folder`, and the folder's state. An offline machine's group says
- * so, and its rows are dimmed; they still open.
+ * agent (each named in words), the waiting badge, `N agents · folder`, and the folder's state. A group whose machine is not
+ * connected names the machine's real state, and its rows are dimmed; they still open.
  *
  * @param state the groups and whether there is any space.
  * @param onOpen called with the machine and the space when a row is tapped.
@@ -158,7 +161,7 @@ private fun EmptySpaces(modifier: Modifier) {
 }
 
 /**
- * A group's header: the machine's name and address, and "offline" when it is not connected.
+ * A group's header: the machine's name and address, and its real state when it is not connected.
  *
  * @param group the group.
  */
@@ -174,12 +177,14 @@ private fun GroupHeader(group: SpaceGroup) {
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                // The status is measured first and keeps its words; a long machine name gives way, as on a machine card.
+                modifier = Modifier.weight(1f, fill = false),
             )
-            if (group.offline) {
+            if (group.offline || group.machineStatus != MachineStatus.Connected) {
                 Text(
-                    text = stringResource(R.string.machine_status_offline),
+                    text = stringResource(machineStatusLabelRes(group.machineStatus, group.machineIssue)),
                     style = MaterialTheme.typography.bodySmall,
-                    color = muted,
+                    color = machineStatusColor(group.machineStatus, group.machineIssue),
                 )
             }
         }

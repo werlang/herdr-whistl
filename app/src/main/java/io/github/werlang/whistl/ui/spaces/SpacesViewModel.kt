@@ -3,6 +3,7 @@ package io.github.werlang.whistl.ui.spaces
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.werlang.whistl.data.AgentsRepository
+import io.github.werlang.whistl.data.ConnectionState
 import io.github.werlang.whistl.data.DEFAULT_FOLDER
 import io.github.werlang.whistl.data.ExecFolderBrowser
 import io.github.werlang.whistl.data.FolderBrowser
@@ -25,7 +26,11 @@ import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.domain.Rejection
 import io.github.werlang.whistl.domain.TerminalState
 import io.github.werlang.whistl.ui.machines.MachineAddress
+import io.github.werlang.whistl.ui.machines.MachineIssue
+import io.github.werlang.whistl.ui.machines.MachineStatus
 import io.github.werlang.whistl.ui.machines.address
+import io.github.werlang.whistl.ui.machines.classify
+import io.github.werlang.whistl.ui.machines.connectionStates
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -109,8 +114,10 @@ data class SpaceRow(
  * @property machineId the machine.
  * @property name the machine's name.
  * @property address the machine's address, or `null` when the machine is not known.
- * @property offline whether the machine is offline: the group's subtitle says so, and its rows are dimmed.
+ * @property offline whether the machine is offline: its rows are dimmed.
  * @property rows the rows.
+ * @property machineStatus the machine's connection status: the group's subtitle says it when it is not connected.
+ * @property machineIssue the reason, for an error.
  */
 data class SpaceGroup(
     val machineId: String,
@@ -118,6 +125,8 @@ data class SpaceGroup(
     val address: MachineAddress?,
     val offline: Boolean,
     val rows: List<SpaceRow>,
+    val machineStatus: MachineStatus = if (offline) MachineStatus.Offline else MachineStatus.Connected,
+    val machineIssue: MachineIssue? = null,
 )
 
 /**
@@ -127,8 +136,17 @@ data class SpaceGroup(
  * @property name its name.
  * @property address its address.
  * @property offline whether it is offline.
+ * @property status its connection status: the radio row says it when it is not connected.
+ * @property issue the reason, for an error.
  */
-data class MachineChoice(val id: String, val name: String, val address: MachineAddress, val offline: Boolean)
+data class MachineChoice(
+    val id: String,
+    val name: String,
+    val address: MachineAddress,
+    val offline: Boolean,
+    val status: MachineStatus = if (offline) MachineStatus.Offline else MachineStatus.Connected,
+    val issue: MachineIssue? = null,
+)
 
 /** A typed problem of one field of a space form. The screen maps each to its message. */
 enum class SpaceProblem {
@@ -320,15 +338,21 @@ class SpacesViewModel(
 ) : ViewModel() {
     private val sheets = MutableStateFlow(Sheets())
 
+    /** Every machine's connection state, by id, for the group subtitles and the New space choices. */
+    private val connections = machines.connectionStates()
+
+    /** The machine list and their states together: the group names and the New space choices read both. */
+    private val machineStates = combine(machines.machines(), connections, ::Pair)
+
     /** The screen's state. */
     val state: StateFlow<SpacesUiState> = combine(
         spaces.groups(),
         agents.agents,
-        machines.machines(),
+        machineStates,
         sheets,
         machineFilter,
-    ) { groups, agentList, machineList, open, filter ->
-        build(groups, agentList.withLiveTerminal(), machineList, open, filter)
+    ) { groups, agentList, (machineList, states), open, filter ->
+        build(groups, agentList.withLiveTerminal(), machineList, states, open, filter)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SpacesUiState(emptyList(), false, true, null, null, null, null))
 
     /**
@@ -593,18 +617,24 @@ class SpacesViewModel(
         groups: List<MachineSpaces>,
         agentList: List<MachineAgent>,
         machineList: List<Machine>,
+        connections: Map<String, ConnectionState>,
         open: Sheets,
         filter: String?,
     ): SpacesUiState {
         // The filter only hides groups: counts, menus and the machine picker keep working on every machine.
         val shown = groups.filter { filter == null || it.machineId == filter }
-        val groupUi = shown.map { group -> groupOf(group, agentList, machineList) }
+        val groupUi = shown.map { group -> groupOf(group, agentList, machineList, connections) }
         val choices = machineList.map { machine ->
+            val offline = groups.firstOrNull { it.machineId == machine.id }?.offline ?: true
+            val (status, issue) = connections[machine.id]?.let(::classify)
+                ?: (if (offline) MachineStatus.Offline else MachineStatus.Connected) to null
             MachineChoice(
                 id = machine.id,
                 name = machine.name,
                 address = machine.address(),
-                offline = groups.firstOrNull { it.machineId == machine.id }?.offline ?: true,
+                offline = offline,
+                status = status,
+                issue = issue,
             )
         }
         val rowsByKey = groupUi.flatMap { it.rows }.associateBy { SpaceKey(it.machineId, it.spaceId) }
@@ -630,14 +660,23 @@ class SpacesViewModel(
         )
     }
 
-    private fun groupOf(group: MachineSpaces, agentList: List<MachineAgent>, machineList: List<Machine>): SpaceGroup {
+    private fun groupOf(
+        group: MachineSpaces,
+        agentList: List<MachineAgent>,
+        machineList: List<Machine>,
+        connections: Map<String, ConnectionState>,
+    ): SpaceGroup {
         val machine = machineList.firstOrNull { it.id == group.machineId }
         val rules = moveRules(group.spaces)
+        val (status, issue) = connections[group.machineId]?.let(::classify)
+            ?: (if (group.offline) MachineStatus.Offline else MachineStatus.Connected) to null
         return SpaceGroup(
             machineId = group.machineId,
             name = machine?.name ?: group.machineId,
             address = machine?.address(),
             offline = group.offline,
+            machineStatus = status,
+            machineIssue = issue,
             rows = group.spaces.mapIndexed { index, space ->
                 val mine = agentList.filter { it.machineId == group.machineId && it.spaceId == space.id }
                 SpaceRow(

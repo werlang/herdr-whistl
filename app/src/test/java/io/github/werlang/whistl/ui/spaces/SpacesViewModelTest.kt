@@ -1,6 +1,8 @@
 package io.github.werlang.whistl.ui.spaces
 
 import io.github.werlang.whistl.R
+import io.github.werlang.whistl.data.ConnectionState
+import io.github.werlang.whistl.data.ErrorKind
 import io.github.werlang.whistl.data.FolderResolution
 import io.github.werlang.whistl.data.MachineAgent
 import io.github.werlang.whistl.data.MachineSpaces
@@ -10,6 +12,8 @@ import io.github.werlang.whistl.data.SpacesRepository
 import io.github.werlang.whistl.data.UnresolvableReason
 import io.github.werlang.whistl.domain.Agent
 import io.github.werlang.whistl.ui.machines.MachineAddress
+import io.github.werlang.whistl.ui.machines.MachineIssue
+import io.github.werlang.whistl.ui.machines.MachineStatus
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.Terminal
 import io.github.werlang.whistl.domain.TerminalState
@@ -21,7 +25,6 @@ import io.github.werlang.whistl.support.StaticSpaces
 import io.github.werlang.whistl.support.eventLine
 import io.github.werlang.whistl.support.terminalJson
 import io.github.werlang.whistl.domain.Machine
-import io.github.werlang.whistl.data.ConnectionState
 import io.github.werlang.whistl.support.testHello
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent
@@ -95,10 +98,13 @@ class SpacesViewModelTest {
     private fun space(id: String, name: String, pinned: Boolean = false, order: Int = 0): SpaceRecord =
         SpaceRecord(id = id, name = name, folder = "~/$name", pinned = pinned, order = order)
 
+    /** The machine `m1`. */
+    private fun machine(): Machine = Machine(id = MACHINE, name = "build", host = "build.lan", port = 22, user = "ci")
+
     /** One machine, connected, in a fixed list of machines. */
     private fun machines(): ScriptedMachines {
         val machines = ScriptedMachines()
-        machines.put(Machine(id = MACHINE, name = "build", host = "build.lan", port = 22, user = "ci"), ConnectionState.Connected(testHello()))
+        machines.put(machine(), ConnectionState.Connected(testHello()))
         return machines
     }
 
@@ -148,6 +154,40 @@ class SpacesViewModelTest {
         assertEquals("build", group.name)
         assertEquals(MachineAddress("ci", "build.lan", 22), group.address)
         assertFalse(group.offline)
+    }
+
+    /**
+     * A group and a New space choice carry the machine's real connection status and, for an error, its issue: the screens
+     * name the same state the Machines list does, not a generic "offline" for every state.
+     */
+    @Test
+    fun aGroupAndAChoiceCarryTheMachinesRealStatusAndIssue() {
+        val cases = listOf(
+            ConnectionState.Connected(testHello()) to (MachineStatus.Connected to null),
+            ConnectionState.Connecting to (MachineStatus.Connecting to null),
+            ConnectionState.Offline to (MachineStatus.Offline to null),
+            ConnectionState.Error(ErrorKind.AuthFailed) to (MachineStatus.Error to MachineIssue.LoginRefused),
+            ConnectionState.HostKeyUnknown("ssh-ed25519", "SHA256:new") to
+                (MachineStatus.Error to MachineIssue.HostKeyToConfirm),
+        )
+        cases.forEach { (connection, expected) ->
+            val machines = ScriptedMachines()
+            machines.put(machine(), connection)
+            val vm = SpacesViewModel(
+                StaticSpaces(listOf(group(emptyList(), offline = connection !is ConnectionState.Connected))),
+                StaticAgents(),
+                machines,
+            )
+
+            vm.openNewSpace()
+            val groupUi = vm.state.value.groups.single()
+            val choice = vm.state.value.newSpace?.machines?.single()
+
+            assertEquals("group status for $connection", expected.first, groupUi.machineStatus)
+            assertEquals("group issue for $connection", expected.second, groupUi.machineIssue)
+            assertEquals("choice status for $connection", expected.first, choice?.status)
+            assertEquals("choice issue for $connection", expected.second, choice?.issue)
+        }
     }
 
     /** A space's waiting badge counts the agents of that space that wait for the user, and no other space's. */

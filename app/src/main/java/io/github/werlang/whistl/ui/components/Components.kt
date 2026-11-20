@@ -26,6 +26,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import io.github.werlang.whistl.R
+import io.github.werlang.whistl.ui.machines.MachineIssue
+import io.github.werlang.whistl.ui.machines.MachineStatus
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 
 /** The minimum touch target (SPEC §3): every clickable control is at least this tall and wide. */
@@ -82,6 +85,50 @@ fun StatusLabel(label: String, color: Color, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.width(6.dp))
         Text(text = label, color = color, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+/**
+ * The label of a machine's status: its connection, or for an error the reason the user has to act on. The Machines list uses
+ * it on its cards; every screen that names a machine's state uses the same mapping, so the state reads the same everywhere.
+ *
+ * @param status the machine's status.
+ * @param issue the reason, for an error.
+ * @return the string resource.
+ */
+fun machineStatusLabelRes(status: MachineStatus, issue: MachineIssue?): Int = when (status) {
+    MachineStatus.Connected -> R.string.machine_status_connected
+    MachineStatus.Connecting -> R.string.machine_status_connecting
+    MachineStatus.Offline -> R.string.machine_status_offline
+    MachineStatus.Error -> when (issue) {
+        MachineIssue.LoginRefused -> R.string.machine_issue_login_refused
+        MachineIssue.UnsupportedCore -> R.string.machine_issue_unsupported_core
+        MachineIssue.HostKeyToConfirm -> R.string.machine_issue_host_key
+        MachineIssue.HostKeyChanged -> R.string.machine_issue_host_key_changed
+        MachineIssue.ConnectionRefused -> R.string.machine_issue_connection_refused
+        MachineIssue.Internal -> R.string.machine_issue_internal
+        MachineIssue.CoreMissing -> R.string.machine_issue_core_missing
+        null -> R.string.status_error
+    }
+}
+
+/**
+ * The colour of a machine's status: connected is done, connecting is working, offline is idle, an error is the error colour.
+ * The label always says the status too, so the colour is never the only signal (SPEC §3).
+ *
+ * @param status the machine's status.
+ * @param issue the reason, for an error. Every error uses the error colour for now; the issue is read so a host-key error can
+ *   get its own colour without changing the callers.
+ * @return the colour.
+ */
+@Composable
+fun machineStatusColor(status: MachineStatus, issue: MachineIssue? = null): Color {
+    val tokens = LocalWhistlTokens.current
+    return when (status) {
+        MachineStatus.Connected -> tokens.done
+        MachineStatus.Connecting -> tokens.working
+        MachineStatus.Offline -> tokens.idle
+        MachineStatus.Error -> MaterialTheme.colorScheme.error
     }
 }
 

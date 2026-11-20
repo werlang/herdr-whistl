@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.werlang.whistl.data.ActionResult
 import io.github.werlang.whistl.data.AgentAction
 import io.github.werlang.whistl.data.AgentsRepository
+import io.github.werlang.whistl.data.ConnectionState
 import io.github.werlang.whistl.data.InstalledAgentsRepository
 import io.github.werlang.whistl.data.LimitsRepository
 import io.github.werlang.whistl.data.LimitsResult
@@ -26,6 +27,10 @@ import io.github.werlang.whistl.ui.agents.AgentMenu
 import io.github.werlang.whistl.ui.agents.AgentNotice
 import io.github.werlang.whistl.ui.agents.AgentRow
 import io.github.werlang.whistl.ui.agents.displayName
+import io.github.werlang.whistl.ui.machines.MachineIssue
+import io.github.werlang.whistl.ui.machines.MachineStatus
+import io.github.werlang.whistl.ui.machines.classify
+import io.github.werlang.whistl.ui.machines.connectionStates
 import io.github.werlang.whistl.ui.spaces.FolderState
 import io.github.werlang.whistl.ui.spaces.folderStateOf
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -111,11 +116,13 @@ data class PickerUi(val choices: List<StartChoice>, val starting: Boolean, val p
  * @property machineName the machine's name.
  * @property folder the folder as stored.
  * @property folderState the folder's state.
- * @property machineOffline whether the machine is offline; the header says so and the rows are shown without a connection.
+ * @property machineOffline whether the machine is offline; the rows are shown without a connection.
  * @property agents the agents of the space.
  * @property newAgent the New agent button.
  * @property picker the picker, or `null` when it is closed.
  * @property opened the address of an agent that just started, to open once; cleared by [SpaceDetailViewModel.consumeOpened].
+ * @property machineStatus the machine's connection status: the header says it when the machine is not connected.
+ * @property machineIssue the reason, for an error.
  */
 data class SpaceDetailUiState(
     val missing: Boolean,
@@ -130,6 +137,8 @@ data class SpaceDetailUiState(
     val opened: String?,
     val menu: AgentMenu? = null,
     val notice: AgentNotice? = null,
+    val machineStatus: MachineStatus = if (machineOffline) MachineStatus.Offline else MachineStatus.Connected,
+    val machineIssue: MachineIssue? = null,
 )
 
 /** The picker's state while it is open: whether a start is running, and the last start's problem. */
@@ -168,15 +177,21 @@ class SpaceDetailViewModel(
     private val pinnedFlow = pins.pinned
     private val sheets = MutableStateFlow(DetailSheets())
 
+    /** The machine's connection state, by id, for the header's status. */
+    private val connections = machines.connectionStates()
+
+    /** The machine list and their states together: the header reads the name from one and the status from the other. */
+    private val machineStates = combine(machines.machines(), connections, ::Pair)
+
     /** The screen's state. */
     val state: StateFlow<SpaceDetailUiState> = combine(
         spaces.groups(),
         agents.agents,
-        machines.machines(),
+        machineStates,
         installed.installed,
         combine(sheets, pinnedFlow, ::Pair),
-    ) { groups, agentList, machineList, installedMap, (open, pinnedKeys) ->
-        build(groups, agentList.withLiveTerminal(), machineList, installedMap, open, pinnedKeys)
+    ) { groups, agentList, (machineList, states), installedMap, (open, pinnedKeys) ->
+        build(groups, agentList.withLiveTerminal(), machineList, installedMap, states, open, pinnedKeys)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyState())
 
     /**
@@ -227,6 +242,7 @@ class SpaceDetailViewModel(
         folder = "",
         folderState = FolderState.NotChecked,
         machineOffline = true,
+        machineStatus = MachineStatus.Offline,
         agents = emptyList(),
         newAgent = NewAgentUi(enabled = false, block = NewAgentBlock.MachineOffline),
         picker = null,
@@ -238,6 +254,7 @@ class SpaceDetailViewModel(
         agentList: List<MachineAgent>,
         machineList: List<Machine>,
         installedMap: Map<String, List<io.github.werlang.whistl.domain.KnownAgent>>,
+        connections: Map<String, ConnectionState>,
         open: DetailSheets,
         pinnedKeys: Set<String>,
     ): SpaceDetailUiState {
@@ -248,6 +265,8 @@ class SpaceDetailViewModel(
         }
         val machine = machineList.firstOrNull { it.id == machineId }
         val folderState = folderStateOf(group.resolutionOf(space))
+        val (status, issue) = connections[machineId]?.let(::classify)
+            ?: (if (group.offline) MachineStatus.Offline else MachineStatus.Connected) to null
         val block = when {
             group.offline -> NewAgentBlock.MachineOffline
             folderState != FolderState.Resolved -> NewAgentBlock.Folder(folderState)
@@ -261,6 +280,8 @@ class SpaceDetailViewModel(
             folder = space.folder,
             folderState = folderState,
             machineOffline = group.offline,
+            machineStatus = status,
+            machineIssue = issue,
             agents = sortWithPinned(
                 agentList.filter { it.machineId == machineId && it.spaceId == spaceId },
                 pinnedKeys,

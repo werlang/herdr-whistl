@@ -252,6 +252,7 @@
     <string name="space_detail_empty_title">No agents here yet.</string>
     <string name="space_detail_empty_hint">Tap New agent to start an agent or a terminal.</string>
     <string name="space_detail_offline">%1$s is offline. Reconnect it in Machines to see and start agents here.</string>
+    <string name="space_detail_machine_state">%1$s: %2$s. Fix it in Machines to see and start agents here.</string>
     <string name="space_detail_missing">This space is no longer on its machine.</string>
     <string name="space_detail_header">%1$s:%2$s</string>
     <string name="new_agent">New agent</string>
