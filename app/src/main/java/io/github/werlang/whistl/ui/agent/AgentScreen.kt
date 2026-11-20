@@ -47,6 +47,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -86,6 +87,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
@@ -816,9 +818,11 @@ private fun KeyBar(
                     .widthIn(min = MinTouchTarget)
                     .semantics { contentDescription = description },
                 contentPadding = PaddingValues(horizontal = 10.dp),
-                colors = whistlButtonColors(
+                colors = ButtonDefaults.buttonColors(
                     containerColor = if (armed) MaterialTheme.colorScheme.primary else tokens.field,
                     contentColor = if (armed) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    disabledContainerColor = tokens.field,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
                 ),
             ) {
                 Text(text = key.label, fontFamily = WhistlMono, style = MaterialTheme.typography.labelLarge)
@@ -839,7 +843,11 @@ private fun KeyBar(
 @Composable
 private fun ArrowCluster(enabled: Boolean, onKey: (ShortcutKey) -> Unit) {
     val tokens = LocalWhistlTokens.current
-    val ink = if (enabled) MaterialTheme.colorScheme.onSurface else tokens.muted
+    val ink = if (enabled) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    }
     // One control, always there: the four arrows are segments of a single rounded container, separated by hairlines
     // instead of gaps. It never collapses — sending an arrow must stay one tap, and stepping up three lines must not
     // mean opening the bundle three times (0.3.4). Each segment is a 48 dp target, which is what keeps it this wide;
@@ -857,7 +865,7 @@ private fun ArrowCluster(enabled: Boolean, onKey: (ShortcutKey) -> Unit) {
                     modifier = Modifier
                         .width(0.5.dp)
                         .height(18.dp)
-                        .background(tokens.muted.copy(alpha = 0.30f)),
+                        .background(tokens.muted.copy(alpha = if (enabled) 0.30f else 0.14f)),
                 )
             }
             Box(
@@ -917,7 +925,10 @@ private fun ArrowCluster(enabled: Boolean, onKey: (ShortcutKey) -> Unit) {
                             }
                         }
                     }
-                    .semantics { contentDescription = description },
+                    .semantics {
+                        contentDescription = description
+                        if (!enabled) disabled()
+                    },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -992,7 +1003,11 @@ private fun InputRow(
             maxLines = INPUT_MAX_LINES,
             textStyle = MaterialTheme.typography.bodyMedium.copy(
                 fontFamily = WhistlMono,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = if (state.canType) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                },
             ),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             // A terminal takes the keys it is given: no auto-capitalisation, no smart punctuation (0.5.9).
@@ -1022,7 +1037,7 @@ private fun InputRow(
                             text = state.user,
                             fontFamily = WhistlMono,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = tokens.muted,
+                            color = if (state.canType) tokens.muted else tokens.muted.copy(alpha = 0.38f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -1050,10 +1065,10 @@ private fun InputRow(
             Icon(
                 painter = painterResource(R.drawable.ic_send),
                 contentDescription = null,
-                tint = if (state.canSend) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    tokens.muted
+                tint = when {
+                    state.canSend -> MaterialTheme.colorScheme.primary
+                    state.canType -> tokens.muted
+                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 },
             )
         }
