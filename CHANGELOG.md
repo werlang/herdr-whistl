@@ -21,6 +21,8 @@ versions follow [Semantic Versioning](https://semver.org/).
   instead of "Add machine".
 - **Long folder paths keep their last segment.** Spaces, Space detail and the folder picker truncate a path in the
   middle, with agent counts set in sans and paths in monospace.
+- **Emulated amd64 Docker builds are refused on aarch64 by default.** `scripts/gradle` stops with exit code 2 and points to the
+  amd64 build host (`ssh -o User=root wsl`); `WHISTL_ALLOW_EMULATED=1` is the explicit opt-in.
 
 ### Fixed
 

@@ -8,6 +8,12 @@
 # android-commandlinetools`). Otherwise, or with WHISTL_DOCKER=1, it runs in
 # the pinned container from docker/android-build (needs ~4 GB free for
 # Docker). The project directory is the worktree this script lives in.
+#
+# That container is linux/amd64 and Android's aapt2 has no arm64 build, so on
+# an aarch64 host it would run the whole build under emulation. Those builds
+# are refused there with exit code 2: run them on the amd64 build host
+# (`ssh -o User=root wsl`), or set WHISTL_ALLOW_EMULATED=1 to allow the
+# emulated build anyway.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -34,6 +40,17 @@ find_android_home() {
 if [ "${WHISTL_DOCKER:-0}" != "1" ] && java_home="$(find_java_home)" && android_home="$(find_android_home)"; then
   export JAVA_HOME="$java_home" ANDROID_HOME="$android_home" ANDROID_SDK_ROOT="$android_home"
   exec ./gradlew --console=plain "$@"
+fi
+
+# Android's aapt2 has no linux/arm64 build, so the container path would run
+# the build under emulation here: slow, and prone to OOM. Refuse by default
+# and send the build to the amd64 host; WHISTL_ALLOW_EMULATED=1 opts in.
+if [ "$(uname -m)" = "aarch64" ] && [ "${WHISTL_ALLOW_EMULATED:-0}" != "1" ]; then
+  printf '%s\n' >&2 \
+    "error: emulated linux/amd64 Gradle builds are disabled on aarch64 by default." \
+    "       build on the amd64 host instead: ssh -o User=root wsl" \
+    "       or opt in explicitly: WHISTL_ALLOW_EMULATED=1 scripts/gradle <tasks...>"
+  exit 2
 fi
 
 image="herdr-whistl-build:1"
