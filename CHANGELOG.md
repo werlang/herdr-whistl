@@ -5,6 +5,18 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **A warning before a subscription window runs out.** With watch notifications on, a provider window that reaches 90% used
+  (10% or less left) is announced on its own **Usage limits** channel: the machine, the provider, the window and how much
+  remains. It is posted once per machine, provider, window and reset cycle — the reset time names the cycle — so a new cycle
+  alerts again, a window that falls below 90% re-arms before crossing it again, and an offline or failed answer neither
+  alerts nor forgets.
+- **A space's own menu, on the space's own screen.** Space detail's header gains the overflow menu the Spaces list already
+  had: **Pin/Unpin**, **Move up**, **Move down**, **Rename** and **Close space**. **Close space** asks first and then returns
+  to the previous screen; every action is off while the machine is offline, and the moves stop at the edge of the pin
+  section.
+
 ### Changed
 
 - **A machine's state reads the same on every screen.** Machines, Spaces, New space and Space detail share one label and
@@ -23,6 +35,34 @@ versions follow [Semantic Versioning](https://semver.org/).
   middle, with agent counts set in sans and paths in monospace.
 - **Emulated amd64 Docker builds are refused on aarch64 by default.** `scripts/gradle` stops with exit code 2 and points to the
   amd64 build host (`ssh -o User=root wsl`); `WHISTL_ALLOW_EMULATED=1` is the explicit opt-in.
+- **One agent sheet, wherever an agent appears.** The Agents list, a space's agent rows and the Agent screen open the same
+  sheet — the agent's name and address, then **Interrupt**, **Close & Remove** in the error colour with its question asked
+  inside the sheet, **Rename**, **Pin/Unpin** and **Check limits**, in that order. A pin set in one place is the pin the
+  others show, and the separate close sheet and duplicate action list on the Agent screen are gone.
+- **Reconnect waits in the agent's header, and the status bar keeps the message whole.** While the machine is offline, or its
+  last error is one a new attempt can fix, the header offers **Reconnect** and starts the same immediate attempt as the
+  Machines card, without leaving the screen. A refused login, an unknown host key or a changed one still need the user's
+  settings or decision first, so no Reconnect is offered there. The status itself now appears only in the status bar, and the
+  bar's priority is reversed: the right-hand message keeps its whole width, and the place "[machine] space · agent" is what
+  ellipsises.
+- **A machine exists only once it connects.** Adding a machine writes a provisional record, enough for the first connection
+  to run, and makes it permanent the first time the machine reaches connected. Closing the sheet before that — by **Close**,
+  drag or back — discards the record and its saved credentials. A failed attempt offers **Retry**, **Edit** and **Close**:
+  Retry keeps the record and tries again; Edit discards it and reopens the form with the fields as typed and the password
+  empty. A changed host key still offers only **Remove machine** or **Close**.
+- **The Agents list's order is now written down.** Pinned agents come first; inside the pinned and the unpinned groups the
+  agents that need you (blocked or error) come first, then the other live terminals, newest update first. It is the order the
+  list already followed, now stated in SPEC §2.4.
+- **Every list's add button is the accent, and Space detail's names what it adds.** The three lists fill their FAB with the
+  theme's accent, and Space detail's is extended with the icon and **+ New agent**, so the one thing it starts is written on
+  the button.
+- **Herdr Whistl heads Machines only.** Spaces, Agents and Settings show their own title instead of repeating the brand; the
+  splash and Settings' About panel still name the app.
+- **Shorter Portuguese filter chips.** The Agents filters read **Você**, **Ativos**, **Parados** and **Sem espaço**, so the
+  row stays readable on a phone.
+- **New space waits for a machine that can hold one.** With no machine connected, the + and the empty list's **New space**
+  button are off, and a notice under the header says to connect one in Machines. The notice gives the disabled button a
+  reason on screen, not only in its description.
 
 ### Fixed
 
