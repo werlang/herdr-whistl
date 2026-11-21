@@ -347,6 +347,9 @@
     <string name="notify_watching_text">Você é avisado quando um termina.</string>
     <string name="notify_finished_title">%1$s terminou</string>
     <string name="notify_finished_text">%1$s · pronto para a próxima tarefa</string>
+    <string name="notify_channel_limits">Limites de uso</string>
+    <string name="notify_limit_title">Limite de %1$s (%2$s) em %3$d%%</string>
+    <string name="notify_limit_text">%1$s · %2$d%% restante</string>
     <string name="settings_notify_title">Avisar quando um agente terminar</string>
     <string name="settings_notify_hint">Uma notificação, mesmo com o app em segundo plano.</string>
     <string name="common_on">Ligado</string>

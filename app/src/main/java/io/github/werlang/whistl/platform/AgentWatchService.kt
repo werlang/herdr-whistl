@@ -14,6 +14,8 @@ import io.github.werlang.whistl.MainActivity
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.FinishedAgents
+import io.github.werlang.whistl.domain.LimitAlert
+import io.github.werlang.whistl.domain.LimitAlerts
 import io.github.werlang.whistl.data.isWaitingForUser
 import io.github.werlang.whistl.ui.agents.displayName
 import kotlinx.coroutines.CoroutineScope
@@ -24,12 +26,12 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 /**
- * Watches the agents while the app is not on screen and notifies when one finishes (0.7.0).
+ * Watches the agents and their limits while the app is not on screen (0.7.0).
  *
  * The agents only live inside an SSH session the app holds, so a notification after the app is backgrounded needs
  * something that keeps the process running: this service, in the foreground, with its own quiet notification. It posts
  * one notification per agent that stops working, and none for an agent that is waiting for the user — that one has not
- * finished, it is asking.
+ * finished, it is asking. It also announces a provider window that reaches 90% used (0.7.9), once per reset cycle.
  */
 class AgentWatchService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -56,6 +58,14 @@ class AgentWatchService : Service() {
                 finished.forEach(::notifyFinished)
             }
         }
+        scope.launch {
+            var alerted = emptySet<String>()
+            container.limits.reports().collect { reports ->
+                val (alerts, next) = LimitAlerts.between(alerted, reports)
+                alerted = next
+                alerts.forEach(::notifyLimit)
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
@@ -74,6 +84,9 @@ class AgentWatchService : Service() {
         )
         manager.createNotificationChannel(
             NotificationChannel(FINISHED_CHANNEL, getString(R.string.notify_channel_finished), NotificationManager.IMPORTANCE_DEFAULT),
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(LIMITS_CHANNEL, getString(R.string.notify_channel_limits), NotificationManager.IMPORTANCE_DEFAULT),
         )
     }
 
@@ -104,6 +117,27 @@ class AgentWatchService : Service() {
         NotificationManagerCompat.from(this).notify(FinishedAgents.key(agent).hashCode(), notification)
     }
 
+    /** One provider window reached 90%: say which machine, provider and window, and how much is left. */
+    private fun notifyLimit(alert: LimitAlert) {
+        if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) return
+        val machineName = container.machines.machines().value.firstOrNull { it.id == alert.machineId }?.name
+            ?: alert.machineId
+        val notification = NotificationCompat.Builder(this, LIMITS_CHANNEL)
+            .setSmallIcon(R.drawable.ic_mark)
+            .setContentTitle(
+                getString(R.string.notify_limit_title, alert.providerTitle, alert.windowLabel, alert.usedPercentRounded),
+            )
+            .setContentText(getString(R.string.notify_limit_text, machineName, alert.remainingPercent))
+            .setAutoCancel(true)
+            .setContentIntent(openApp())
+            .build()
+        val computed = ("limit:" + LimitAlerts.key(alert.machineId, alert.providerId, alert.windowLabel, alert.resetsAtMs))
+            .hashCode()
+        // The service's own notification keeps WATCH_ID; a limit notification that lands on it takes the next id.
+        val id = if (computed == WATCH_ID) WATCH_ID + 1 else computed
+        NotificationManagerCompat.from(this).notify(id, notification)
+    }
+
     private fun openApp(machineId: String? = null, address: String? = null): PendingIntent {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -126,6 +160,9 @@ class AgentWatchService : Service() {
 
         /** The channel a finished agent is announced on. */
         const val FINISHED_CHANNEL = "agent-finished"
+
+        /** The channel a provider window that reached 90% is announced on. */
+        const val LIMITS_CHANNEL = "limits-threshold"
 
         /** The service's notification id. */
         const val WATCH_ID = 1

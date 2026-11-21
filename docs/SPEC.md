@@ -569,3 +569,10 @@ no code.
 (`claude_token_expired`) is a warning in `working`; any other failure, and any provider that sent
 no code, is an error in `blocked`. The words and the colour both keep "setup is still pending"
 apart from "the query really failed".
+
+**The 90% alert.** With notifications enabled, a provider window that reaches 90% used (10% or
+less left) is announced on the **Usage limits** channel: the machine's name, the provider, the
+window and how much remains. It is posted once per machine, provider, window and reset cycle —
+the reset time identifies the cycle — so a new cycle alerts again, and a window that drops below
+90% re-arms before crossing it again. An offline or failed answer neither alerts nor forgets:
+coming back does not repeat a notification already posted.

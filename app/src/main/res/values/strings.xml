@@ -341,6 +341,9 @@
     <string name="notify_watching_text">You are told when one finishes.</string>
     <string name="notify_finished_title">%1$s finished</string>
     <string name="notify_finished_text">%1$s · ready for the next task</string>
+    <string name="notify_channel_limits">Usage limits</string>
+    <string name="notify_limit_title">%1$s %2$s limit at %3$d%%</string>
+    <string name="notify_limit_text">%1$s · %2$d%% remaining</string>
     <string name="settings_notify_title">Notify when an agent finishes</string>
     <string name="settings_notify_hint">A notification, even with the app in the background.</string>
     <string name="common_on">On</string>

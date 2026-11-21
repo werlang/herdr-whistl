@@ -37,9 +37,11 @@ class StringsParityTest {
 
     /** The positional arguments of a text, as `index:type` in order; fails on a non-positional `%`. */
     private fun signature(text: String, where: String): List<String> {
-        val bare = Regex("%(?!\\d+\\$[sd]|%)").find(text)
+        // `%%` is the escape for a literal percent sign, and its second `%` is not an argument, so drop those pairs first.
+        val withoutEscaped = text.replace("%%", "")
+        val bare = Regex("%(?!\\d+\\$[sd])").find(withoutEscaped)
         assertTrue("$where: a bare % (positional arguments only): $text", bare == null)
-        return Regex("%(\\d+)\\$([sd])").findAll(text).map { "${it.groupValues[1]}:${it.groupValues[2]}" }.toList()
+        return Regex("%(\\d+)\\$([sd])").findAll(withoutEscaped).map { "${it.groupValues[1]}:${it.groupValues[2]}" }.toList()
     }
 
     /** The two resource files have the same string and plural names, and the same arguments for each. */
