@@ -25,7 +25,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -412,7 +412,7 @@ private fun AgentRowView(agent: DetailAgent, onOpen: () -> Unit, onMenu: () -> U
 
 /**
  * The New agent button. It is off while the machine is offline or the folder is not resolved; off, it does nothing, and its
- * description says why.
+ * description says why. It is the one extended FAB in the app: the label says what the picker will start (SPEC §2.3, §3).
  *
  * @param ui the button's state.
  * @param machineName the machine's name, for the offline reason.
@@ -421,8 +421,9 @@ private fun AgentRowView(agent: DetailAgent, onOpen: () -> Unit, onMenu: () -> U
  */
 @Composable
 private fun NewAgentButton(ui: NewAgentUi, machineName: String, onClick: () -> Unit, modifier: Modifier) {
-    val description = when (val block = ui.block) {
-        null -> stringResource(R.string.new_agent)
+    // Only a blocked button needs words of its own: the visible label already names the enabled one.
+    val blockDescription = when (val block = ui.block) {
+        null -> null
         NewAgentBlock.MachineOffline -> stringResource(R.string.new_agent_off_machine, machineName)
         is NewAgentBlock.Folder -> when (block.state) {
             FolderState.NotChecked -> stringResource(R.string.new_agent_off_folder_unchecked)
@@ -430,16 +431,18 @@ private fun NewAgentButton(ui: NewAgentUi, machineName: String, onClick: () -> U
         }
     }
     val tokens = LocalWhistlTokens.current
-    FloatingActionButton(
+    ExtendedFloatingActionButton(
         onClick = { if (ui.enabled) onClick() },
-        containerColor = if (ui.enabled) MaterialTheme.colorScheme.primaryContainer else tokens.field,
-        contentColor = if (ui.enabled) MaterialTheme.colorScheme.onPrimaryContainer else tokens.muted,
+        containerColor = if (ui.enabled) MaterialTheme.colorScheme.primary else tokens.field,
+        contentColor = if (ui.enabled) MaterialTheme.colorScheme.onPrimary else tokens.muted,
         modifier = modifier.testTag(NEW_AGENT_TAG).semantics {
-            contentDescription = description
+            blockDescription?.let { contentDescription = it }
             if (!ui.enabled) disabled()
         },
     ) {
         Icon(Icons.Default.Add, contentDescription = null)
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.new_agent))
     }
 }
 

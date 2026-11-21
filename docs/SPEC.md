@@ -28,6 +28,11 @@ ids (§5), so a space made there works here without retyping the folder.
 
 Bottom navigation, 4 destinations: **Machines, Spaces, Agents, Settings**.
 The Agents destination shows a badge with the count of agents in `blocked`.
+The brand name **Herdr Whistl** heads Machines only; the splash and Settings'
+About panel name it too, while Spaces, Agents and Settings show their own title.
+Each list's add button (FAB) is filled with the theme's accent (`primary`
+container, `onPrimary` content); only Space detail's is extended, with the icon
+and the label **New agent**.
 
 1. **Machines** — cards: name, status pill (connected / connecting / offline /
    error), `user@host[:port]`, `N agents · hc <version>`, installed agents, and
@@ -102,14 +107,19 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    that opens **New space**, and the groups do not repeat "No spaces yet".
 3. **Space detail** — header `name` + `machine:folder`, the folder truncated in
    the middle; when the machine is not connected it shows the machine's real
-   state in its colour. Agent rows: name, id, status pill on its own line. FAB
-   **New agent** (disabled when offline) → **picker only**: the agents installed
-   on that machine + "Terminal" (the machine's shell). No task text box. Tapping
-   an option starts it and opens it. An empty list says "Tap + to start an agent
-   or a terminal."; a space that is gone shows a "Space not found" card with an
-   explanation and **Back to Spaces**.
-4. **Agents** — every agent on connected machines; filter chips All / Needs
-   you / Working / Idle with counts; sorted blocked → working → done → idle.
+   state in its colour. Agent rows: name, id, status pill on its own line.
+   Extended FAB **+ New agent** in the accent colour (disabled when offline) →
+   **picker only**: the agents installed on that machine + "Terminal" (the
+   machine's shell). No task text box. Tapping an option starts it and opens it.
+   An empty list says "Tap + to start an agent or a terminal."; a space that is
+   gone shows a "Space not found" card with an explanation and **Back to
+   Spaces**.
+4. **Agents** — every agent in a space on connected machines, plus **No
+   space** for terminals no space claims; filter chips All / Needs you /
+   Working / Idle / No space with counts. Pinned agents come first; inside
+   the pinned and the unpinned groups the agents that need you (blocked or
+   error) come first, then the other live terminals, then the finished ones,
+   newest update first.
    Each row has an **action sheet** (its overflow button, or a long press), the
    same component the agent's own screen opens: the agent's name and address,
    then **Interrupt** (only while the agent is live), **Close & Remove** in the
@@ -219,6 +229,11 @@ Dark tokens (default):
 Light theme: same roles, values chosen for ≥4.5:1 text contrast on `#F7F8F9`
 backgrounds (e.g. accent `#16786F`, blocked `#8F5600`, working `#2459B8`,
 done `#24733D`, danger `#B3261E`). The terminal stays dark.
+
+FABs are filled with the theme's accent (`primary` container, `onPrimary`
+content): icon-only on the three lists, extended with the icon and the label
+`New agent` on the Space detail. The brand name **Herdr Whistl** appears only on
+Machines, the splash and Settings' About.
 
 Shape: cards 14dp radius, sheets 22dp top radius, chips/pills fully rounded.
 Spacing on a 4dp grid; screen gutter 16dp. Touch targets ≥48dp. Status is

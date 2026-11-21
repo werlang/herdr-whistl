@@ -231,14 +231,23 @@ fun WhistlApp(startRoute: String = Routes.MACHINES, showSplash: Boolean = true) 
         },
         floatingActionButton = {
             if (route == Routes.MACHINES) {
-                FloatingActionButton(onClick = machinesModel::openAdd) {
+                // The theme's accent, with the content colour that belongs to it: the list's one primary action (SPEC §3).
+                FloatingActionButton(
+                    onClick = machinesModel::openAdd,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = stringResource(R.string.machines_add_content_description),
                     )
                 }
             } else if (route == Routes.SPACES) {
-                FloatingActionButton(onClick = spacesModel::openNewSpace) {
+                FloatingActionButton(
+                    onClick = spacesModel::openNewSpace,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = stringResource(R.string.spaces_new_content_description),
@@ -247,7 +256,11 @@ fun WhistlApp(startRoute: String = Routes.MACHINES, showSplash: Boolean = true) 
             } else if (route == Routes.AGENTS && agentsState.newAgent?.enabled == true) {
                 // The same button as the other lists: one icon, in the corner, only when there is something to add — here
                 // a space to add an agent to (0.6.6).
-                FloatingActionButton(onClick = agentsModel::openPicker) {
+                FloatingActionButton(
+                    onClick = agentsModel::openPicker,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = stringResource(R.string.new_agent),

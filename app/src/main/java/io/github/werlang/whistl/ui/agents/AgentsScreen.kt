@@ -80,22 +80,19 @@ fun AgentsScreen(
         AgentsFilter.NoSpace to stringResource(R.string.agents_filter_no_space),
     )
     Column(modifier = modifier.fillMaxSize().testTag(AGENTS_SCREEN_TAG)) {
-        Row(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 10.dp)) {
+        Row(
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             AppMark()
             Spacer(Modifier.width(10.dp))
-            Column {
-                Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = stringResource(R.string.agents_title),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.semantics { heading() },
-                )
-            }
+            // The brand name is Machines' alone (SPEC §2): this screen carries its own title.
+            Text(
+                text = stringResource(R.string.agents_title),
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.semantics { heading() },
+            )
         }
         state.filterName?.let { name -> SpaceFilterBanner(name = name, onClear = onClearFilter) }
         state.notice?.let { notice ->
