@@ -1,9 +1,7 @@
 package io.github.werlang.whistl.ui.agent
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,18 +17,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.foundation.text.KeyboardOptions
@@ -39,7 +34,6 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -49,9 +43,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -73,14 +67,11 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
@@ -98,7 +89,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -107,7 +97,6 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.werlang.whistl.R
-import io.github.werlang.whistl.domain.KeyboardSink
 import io.github.werlang.whistl.data.FontSize
 import io.github.werlang.whistl.domain.CellColor
 import io.github.werlang.whistl.domain.CellRun
@@ -115,9 +104,7 @@ import io.github.werlang.whistl.domain.CellStyle
 import io.github.werlang.whistl.domain.ShortcutBar
 import io.github.werlang.whistl.domain.ShortcutKey
 import io.github.werlang.whistl.ui.components.MinTouchTarget
-import io.github.werlang.whistl.ui.components.StatusLabel
 import io.github.werlang.whistl.ui.keyNameRes
-import io.github.werlang.whistl.ui.statusColor
 import io.github.werlang.whistl.ui.agents.AgentMenu
 import io.github.werlang.whistl.ui.agents.AgentMenuSheet
 import io.github.werlang.whistl.ui.agents.AgentRow
@@ -172,6 +159,7 @@ fun AgentScreen(
         onConfirmRename = viewModel::onConfirmRename,
         onTogglePin = viewModel::onTogglePin,
         onShowLimits = viewModel::onShowLimits,
+        onReconnect = viewModel::onReconnect,
         onPaneSize = viewModel::onPaneSize,
         modifier = modifier,
     )
@@ -197,13 +185,14 @@ fun AgentContent(
     onConfirmRename: () -> Unit = {},
     onTogglePin: () -> Unit = {},
     onShowLimits: () -> Unit = {},
+    onReconnect: () -> Unit = {},
     onPaneSize: (Int, Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     // Tapping the terminal asks for the keyboard, which is the only way in while the field is the way in (0.6.0).
     var keyboardRequest by remember { mutableStateOf(0) }
     Column(modifier = modifier.fillMaxSize().testTag(AGENT_SCREEN_TAG)) {
-        AgentHeader(state = state, onBack = onBack, onOptions = onOpenMenu)
+        AgentHeader(state = state, onBack = onBack, onReconnect = onReconnect, onOptions = onOpenMenu)
         TerminalOutput(
             state = state,
             onPaneSize = onPaneSize,
@@ -267,9 +256,9 @@ fun AgentContent(
     }
 }
 
-/** The header: back, the name and address, the status with its dot, and the options button. */
+/** The header: back, the name and address, Reconnect while the machine can be retried, and the options button (SPEC §2.5). */
 @Composable
-private fun AgentHeader(state: AgentUiState, onBack: () -> Unit, onOptions: () -> Unit) {
+private fun AgentHeader(state: AgentUiState, onBack: () -> Unit, onReconnect: () -> Unit, onOptions: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -279,33 +268,33 @@ private fun AgentHeader(state: AgentUiState, onBack: () -> Unit, onOptions: () -
         IconButton(onClick = onBack, modifier = Modifier.size(MinTouchTarget)) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
         }
-        Column(modifier = Modifier.weight(1f).padding(horizontal = 4.dp)) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    text = state.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = state.address,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = WhistlMono,
-                    color = LocalWhistlTokens.current.dim,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            StatusLabel(
-                label = stringResource(statusLabelRes(state.statusLabel)),
-                color = when (state.statusLabel) {
-                    AgentStatusLabel.Finished, AgentStatusLabel.Offline -> LocalWhistlTokens.current.idle
-                    else -> statusColor(state.status)
-                },
+        Row(
+            modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Text(
+                text = state.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = state.address,
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = WhistlMono,
+                color = LocalWhistlTokens.current.dim,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (state.canReconnect) {
+            // The status lives only in the status bar; the header's job while the machine is down is the way back (SPEC §2.5).
+            TextButton(onClick = onReconnect, modifier = Modifier.heightIn(min = MinTouchTarget)) {
+                Text(stringResource(R.string.machine_reconnect))
+            }
         }
         IconButton(onClick = onOptions, modifier = Modifier.size(MinTouchTarget)) {
             Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.agent_options))
@@ -674,7 +663,7 @@ private const val FLASH_MS: Long = 2_000L
 /** How long the once-only tip about holding Send stays: long enough to read and use (0.6.3). */
 private const val TIP_MS: Long = 8_000L
 
-/** The words for a notice, shown in the status bar (0.5.8). Short, so the bar keeps the place of the agent in full. */
+/** The words for a notice, shown in the status bar (0.5.8). Short, so the message on the right stays whole. */
 @Composable
 private fun noticeText(notice: AgentNotice): String = when (notice) {
     AgentNotice.Offline -> stringResource(R.string.agent_notice_offline)
@@ -687,8 +676,8 @@ private fun noticeText(notice: AgentNotice): String = when (notice) {
 }
 
 /**
- * The full sentence a notice stands for, for TalkBack (0.7.1): the bar shows a short message to keep the agent's place
- * readable, and the screen reader still gets the whole instruction.
+ * The full sentence a notice stands for, for TalkBack (0.7.1): the bar shows a short notice to keep the row readable, and
+ * the screen reader still gets the whole instruction.
  *
  * @param notice what happened to the agent.
  * @param machineName the machine the agent runs on, named in the offline notice.
@@ -706,8 +695,8 @@ private fun noticeA11yText(notice: AgentNotice, machineName: String): String? = 
  * moment, what was just sent or refused (0.5.8). A message used to have a line of its own above the keys, which cost a
  * row of terminal all the time to show something for a second.
  *
- * The place never truncates before the message: it takes the width it needs, and the message on the right is the part
- * that ellipsises when the row runs out of room.
+ * The message on the right never truncates: it keeps its whole width, and the place on the left is what ellipsises when
+ * the row runs out of room (SPEC §2.5). The status lives here only; the header carries no status of its own.
  */
 @Composable
 private fun StatusBar(state: AgentUiState) {
@@ -755,6 +744,8 @@ private fun StatusBar(state: AgentUiState) {
             color = content,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            // The place is the part that gives way; the message on the right keeps its whole width.
+            modifier = Modifier.weight(1f),
         )
         Spacer(Modifier.width(12.dp))
         Text(
@@ -763,9 +754,9 @@ private fun StatusBar(state: AgentUiState) {
             fontFamily = WhistlMono,
             color = content,
             textAlign = TextAlign.End,
+            softWrap = false,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).then(a11yModifier),
+            modifier = a11yModifier,
         )
     }
 }

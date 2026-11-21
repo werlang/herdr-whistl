@@ -60,8 +60,8 @@
     <string name="address_host_port" translatable="false">%1$s:%2$d</string>
     <string name="address_host_ipv6" translatable="false">[%1$s]</string>
     <string name="agent_hint_blocked">Esperando você. Enviar vai com força.</string>
-    <string name="agent_notice_offline">offline · reconecte em Máquinas</string>
-    <string name="agent_notice_offline_a11y">%1$s está offline. Reconecte em Máquinas para continuar lendo e enviando.</string>
+    <string name="agent_notice_offline">offline</string>
+    <string name="agent_notice_offline_a11y">%1$s está offline. Toque em Reconectar no topo para continuar lendo e enviando.</string>
     <string name="agent_notice_gone">Este terminal não existe mais na máquina.</string>
     <string name="agent_notice_finished">encerrado · só leitura</string>
     <string name="agent_notice_finished_a11y">Este programa terminou. Ele é somente leitura.</string>

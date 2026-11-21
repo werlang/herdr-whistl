@@ -2,21 +2,29 @@ package io.github.werlang.whistl.ui.agent
 
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import io.github.werlang.whistl.data.ConnectionState
 import io.github.werlang.whistl.data.DefaultSettingsRepository
+import io.github.werlang.whistl.data.DefaultTerminalRepository
+import io.github.werlang.whistl.data.ErrorKind
 import io.github.werlang.whistl.data.PinnedAgents
 import io.github.werlang.whistl.data.TerminalReach
 import io.github.werlang.whistl.domain.AgentStatus
+import io.github.werlang.whistl.domain.Machine
 import io.github.werlang.whistl.domain.ShortcutKey
 import io.github.werlang.whistl.support.FakePins
 import io.github.werlang.whistl.support.InMemorySettingsStore
 import io.github.werlang.whistl.support.MainDispatcherRule
 import io.github.werlang.whistl.support.RecordingLog
 import io.github.werlang.whistl.support.RepoStack
+import io.github.werlang.whistl.support.ScriptedMachines
+import io.github.werlang.whistl.support.StaticAgents
 import io.github.werlang.whistl.support.eventsSnapshot
+import io.github.werlang.whistl.support.plainTextScreen
 import io.github.werlang.whistl.support.snapshotPipe
 import io.github.werlang.whistl.support.spaceJson
 import io.github.werlang.whistl.support.spacesDocJson
 import io.github.werlang.whistl.support.terminalJson
+import io.github.werlang.whistl.support.testHello
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -84,6 +92,34 @@ class AgentViewModelTest {
         advanceTimeBy(100)
         runCurrent()
         return Triple(h, vm, settings)
+    }
+
+    /**
+     * A screen on `t1` whose machine the test holds in [machineState], over a scripted machines repository. The terminal
+     * itself stays offline: these tests read the header's Reconnect, not the output.
+     *
+     * @param machineState the machine's connection state.
+     * @return the screen.
+     */
+    private fun TestScope.openAgentOn(machineState: ConnectionState): AgentViewModel {
+        val machines = ScriptedMachines()
+        machines.put(
+            Machine(id = "m1", name = "mac", host = "mac.local", port = 22, user = "root"),
+            machineState,
+        )
+        val vm = AgentViewModel(
+            DefaultTerminalRepository(backgroundScope, machines, newScreen = ::plainTextScreen),
+            StaticAgents(),
+            machines,
+            DefaultSettingsRepository(InMemorySettingsStore()),
+            "m1",
+            "t1",
+            FakePins(),
+        )
+        runCurrent()
+        // The placeholder has no machine name; the real state means the machine list and its connection were read.
+        assertEquals("mac", vm.state.value.machineName)
+        return vm
     }
 
     /** While connected, the output is read and shown, and the field takes input. */
@@ -436,6 +472,66 @@ class AgentViewModelTest {
         assertFalse(state.canType)
         assertFalse(state.canSend)
         assertTrue(h.sent("terminal.send").isEmpty())
+    }
+
+    /**
+     * The header's Reconnect (SPEC §2.5): an offline machine offers it, and tapping it starts a new attempt without leaving
+     * the screen — the machine comes back and the button disappears.
+     */
+    @Test
+    fun anOfflineMachineOffersReconnectAndReconnectsIt() = runTest {
+        val (h, vm, _) = openAgent()
+
+        h.connector.lastSession!!.kill()
+        advanceTimeBy(500)
+        runCurrent()
+        assertTrue("an offline machine can be reconnected", vm.state.value.canReconnect)
+
+        val attempts = h.connector.connectCalls
+        vm.onReconnect()
+        runCurrent()
+        advanceTimeBy(100)
+        runCurrent()
+
+        assertTrue("a new attempt started", h.connector.connectCalls > attempts)
+        assertTrue("the machine is back", h.machines.observe("m1").value is ConnectionState.Connected)
+        assertFalse("connected again: the header offers no Reconnect", vm.state.value.canReconnect)
+    }
+
+    /**
+     * Reconnect is offered only where a new attempt can help (SPEC §2.5): never while connected or connecting, and never for
+     * a refused login or a host-key decision, which need the user's settings or answer first.
+     */
+    @Test
+    fun reconnectIsNotOfferedWhereAnAttemptWouldNotHelp() = runTest {
+        val states = listOf(
+            ConnectionState.Connected(testHello()),
+            ConnectionState.Connecting,
+            ConnectionState.Error(ErrorKind.AuthFailed),
+            ConnectionState.HostKeyUnknown("ssh-ed25519", "SHA256:new"),
+            ConnectionState.HostKeyChanged("ssh-ed25519", "SHA256:pinned", "SHA256:presented"),
+        )
+
+        states.forEach { machineState ->
+            val vm = openAgentOn(machineState)
+            assertFalse("canReconnect for $machineState", vm.state.value.canReconnect)
+        }
+    }
+
+    /** The errors a new attempt can fix offer Reconnect (SPEC §2.5); only a login refusal and the host-key states do not. */
+    @Test
+    fun reconnectIsOfferedForErrorsAnAttemptCanFix() = runTest {
+        val states = listOf(
+            ConnectionState.Error(ErrorKind.ConnectionRefused),
+            ConnectionState.Error(ErrorKind.CoreMissing),
+            ConnectionState.Error(ErrorKind.Internal),
+            ConnectionState.Error(ErrorKind.UnsupportedGeneration),
+        )
+
+        states.forEach { machineState ->
+            val vm = openAgentOn(machineState)
+            assertTrue("canReconnect for $machineState", vm.state.value.canReconnect)
+        }
     }
 
     /**

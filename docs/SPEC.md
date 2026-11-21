@@ -141,12 +141,24 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    at the top. Close & Remove asks inside the sheet, then closes the screen.
    Dismissing the sheet also drops the question or the rename field, so it
    reopens on the actions.
+   The status lives only in the status bar, never repeated in the header: the
+   header holds the back arrow, the name and address, the agent options, and —
+   while the machine can be retried — Reconnect.
    While the machine has no connection (offline or connecting), the screen keeps
-   the agent's last known status and space; its status bar says `offline · reconnect in Machines`, and `finished ·
+   the agent's last known status and space; its status bar says `offline`, and `finished ·
    read-only` only when the core reported the program finished (phase 7 r7).
-   TalkBack reads the full sentence behind either short notice. The place
-   `[machine] space · agent` never truncates before the message: the message is
-   what ellipsises. While offline or finished, the bar keys, the arrows, the
+   The bar's message is a short notice, not an instruction: Reconnect is in the
+   header, and TalkBack reads the full sentence behind either notice.
+   Reconnect appears when a new attempt can help — the machine is offline, or
+   its last error was a refused port, a missing or unsupported core, or a
+   failure inside the app — and never while connected or connecting, for a
+   refused login, or for an unknown or changed host key, which need the user's
+   settings or decision first. It starts the same immediate attempt as the
+   Machines card menu, without leaving the screen.
+   The message on the right of the status bar never truncates — `offline`,
+   `finished · read-only` and the short sent/refused hints stay whole — and the
+   place `[machine] space · agent` is what ellipsises when the row runs out of
+   room. While offline or finished, the bar keys, the arrows, the
    text field and Send are dimmed (the field keeps its background, its content
    at 38% opacity); with an active agent and text, Send uses the accent colour.
 6. **Settings** — General: Language (System / English / Português), terminal

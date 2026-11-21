@@ -88,6 +88,31 @@ enum class ErrorKind {
 }
 
 /**
+ * Whether a reconnect makes sense from this state (SPEC §2.5): the machine is offline, or the last attempt failed for a
+ * reason another attempt can fix — a refused port, a missing or unsupported core, or a failure inside the app. A refused
+ * login needs corrected settings first, and the host-key states need the user's decision, so neither reconnects. A
+ * connected machine has nothing to retry, and a connecting one is already trying.
+ *
+ * @return `true` when the user can ask for an immediate new attempt.
+ */
+fun ConnectionState.canReconnect(): Boolean = when (this) {
+    ConnectionState.Offline -> true
+    ConnectionState.Connecting -> false
+    is ConnectionState.Connected -> false
+    is ConnectionState.Error -> when (kind) {
+        ErrorKind.ConnectionRefused,
+        ErrorKind.CoreMissing,
+        ErrorKind.Internal,
+        ErrorKind.UnsupportedGeneration -> true
+
+        ErrorKind.AuthFailed -> false
+    }
+
+    is ConnectionState.HostKeyUnknown -> false
+    is ConnectionState.HostKeyChanged -> false
+}
+
+/**
  * A machine as the user typed it, before validation. Host, port and user are validated by `domain/Validation.kt`.
  *
  * @property name the display name; blank means the first label of the host.

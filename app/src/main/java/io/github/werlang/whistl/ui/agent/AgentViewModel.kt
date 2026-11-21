@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.werlang.whistl.data.ActionResult
 import io.github.werlang.whistl.data.AgentAction
 import io.github.werlang.whistl.data.AgentsRepository
+import io.github.werlang.whistl.data.ConnectionState
 import io.github.werlang.whistl.data.FontSize
 import io.github.werlang.whistl.data.LimitsRepository
 import io.github.werlang.whistl.data.LimitsResult
@@ -19,6 +20,7 @@ import io.github.werlang.whistl.data.TerminalHandle
 import io.github.werlang.whistl.data.TerminalReach
 import io.github.werlang.whistl.data.TerminalRepository
 import io.github.werlang.whistl.data.TerminalScreen
+import io.github.werlang.whistl.data.canReconnect
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.Keystrokes
 import io.github.werlang.whistl.domain.KeyAction
@@ -30,13 +32,14 @@ import io.github.werlang.whistl.domain.ctrlCombination
 import io.github.werlang.whistl.domain.letterCombination
 import io.github.werlang.whistl.ui.agents.displayName
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.scan
@@ -108,6 +111,7 @@ enum class AgentStatusLabel {
  * @property live whether the terminal is live: a finished agent has nothing to interrupt.
  * @property frame the terminal as the emulator holds it: history and the screen rows, with the cursor.
  * @property reach whether the output is current.
+ * @property canReconnect whether the header offers Reconnect for the machine (SPEC §2.5).
  * @property input the text field, with its cursor.
  * @property ctrlArmed whether the sticky Ctrl is armed for the next key.
  * @property keyBar the shortcut keys, in the order the Settings screen holds them.
@@ -135,6 +139,7 @@ data class AgentUiState(
     val live: Boolean,
     val frame: TerminalFrame,
     val reach: TerminalReach,
+    val canReconnect: Boolean,
     val input: TextFieldValue,
     val ctrlArmed: Boolean,
     val keyBar: List<ShortcutKey>,
@@ -201,11 +206,13 @@ private data class Interaction(
  *   terminal, and the screen closes.
  * - Input is disabled while the machine is offline, the terminal is gone, or the program has finished.
  * - While the machine has no connection (offline or connecting), the agent is shown as it was last seen: its status and its
- *   space stay, and its label says offline. Only a program the core reported finished says finished (phase 7 r7).
+ *   space stay, and its status bar says offline. Only a program the core reported finished says finished (phase 7 r7).
+ * - Reconnect is offered while the machine can be retried (SPEC §2.5), and starts the same immediate attempt as the Machines
+ *   card menu without leaving the screen.
  *
  * @param terminals opens the terminal.
  * @param agents the agent's status and state.
- * @param machines the machine's name.
+ * @param machines the machine's name and connection state.
  * @param settings the font size and the shortcut bar.
  * @param machineId the machine the agent runs on.
  * @param address the terminal address.
@@ -215,7 +222,7 @@ private data class Interaction(
 class AgentViewModel(
     private val terminals: TerminalRepository,
     agents: AgentsRepository,
-    machines: MachinesRepository,
+    private val machines: MachinesRepository,
     settings: SettingsRepository,
     private val machineId: String,
     private val address: String,
@@ -229,8 +236,21 @@ class AgentViewModel(
     /** The key the pin is stored under, the same one the Agents list and the Space detail use. */
     private val pinKey: String = PinnedAgents.key(machineId, address)
 
-    /** The screen's own state and whether this agent is pinned, as one flow so the state stays a five-way combine. */
-    private val ownAndPin = combine(interaction, pins.pinned) { own, keys -> own to (pinKey in keys) }
+    /**
+     * The machine's connection state. A machine that is no longer added has no state to observe — [MachinesRepository.observe]
+     * throws for it — and reads as offline, which the screen already shows as a gone terminal rather than a crash (phase 6 P0-2).
+     */
+    private val connection = flow { emitAll(machines.observe(machineId)) }.catch { error ->
+        if (error is NoSuchElementException) emit(ConnectionState.Offline) else throw error
+    }
+
+    /**
+     * What the screen owns — its interaction state, whether this agent is pinned, and the machine's connection — as one flow,
+     * so the screen's state stays a five-way combine.
+     */
+    private val ownState = combine(interaction, pins.pinned, connection) { own, keys, state ->
+        Triple(own, pinKey in keys, state)
+    }
 
     private val screen = handle.flatMapLatest { open ->
         open?.screen ?: flowOf(TerminalScreen(frame = TerminalFrame.empty(DEFAULT_COLS, DEFAULT_ROWS), reach = TerminalReach.Offline))
@@ -255,8 +275,8 @@ class AgentViewModel(
         agent,
         machines.machines(),
         settings.settings,
-        ownAndPin,
-    ) { output, sighting, machineList, prefs, (own, pinned) ->
+        ownState,
+    ) { output, sighting, machineList, prefs, (own, pinned, machineState) ->
         val machine = machineList.firstOrNull { it.id == machineId }
         build(
             output,
@@ -267,6 +287,7 @@ class AgentViewModel(
             prefs.shortcutBar,
             own,
             pinned,
+            machineState,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, placeholder())
 
@@ -564,6 +585,21 @@ class AgentViewModel(
         handle.value?.close()
     }
 
+    /**
+     * Reconnects the agent's machine without leaving the screen: the same immediate attempt the Machines card menu offers
+     * (SPEC §2.5). The header offers it only while [canReconnect] holds.
+     */
+    fun onReconnect() {
+        viewModelScope.launch {
+            try {
+                machines.reconnect(machineId)
+            } catch (e: NoSuchElementException) {
+                // The machine left the app while the screen was open: the terminal is gone, as when it cannot be opened.
+                interaction.update { it.copy(unavailable = true) }
+            }
+        }
+    }
+
     override fun onCleared() {
         onLeave()
     }
@@ -604,6 +640,7 @@ class AgentViewModel(
         keyBar: List<ShortcutKey>,
         own: Interaction,
         pinned: Boolean,
+        machineState: ConnectionState,
     ): AgentUiState {
         // No connection (offline, or still connecting): the agent is shown as last seen, so its status and space stay (phase 7 r7).
         val offline = output.reach == TerminalReach.Offline && !own.unavailable
@@ -639,6 +676,7 @@ class AgentViewModel(
             live = live,
             frame = output.frame,
             reach = output.reach,
+            canReconnect = !own.unavailable && machineState.canReconnect(),
             input = input,
             ctrlArmed = own.ctrlArmed,
             keyBar = keyBar,
@@ -681,6 +719,7 @@ class AgentViewModel(
         live = false,
         frame = TerminalFrame.empty(DEFAULT_COLS, DEFAULT_ROWS),
         reach = TerminalReach.Offline,
+        canReconnect = false,
         input = TextFieldValue(""),
         ctrlArmed = false,
         keyBar = emptyList(),
