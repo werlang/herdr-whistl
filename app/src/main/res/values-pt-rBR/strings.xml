@@ -214,6 +214,8 @@
 
     <!-- Spaces, New space, Space detail and the picker (phase 4b r2). -->
     <string name="spaces_new_content_description">Novo ambiente</string>
+    <string name="spaces_new_disabled_content_description">Novo ambiente, indisponível até que uma máquina esteja conectada</string>
+    <string name="spaces_new_requires_connected_machine">Conecte uma máquina em Máquinas para criar um novo ambiente.</string>
     <string name="spaces_empty_title">Nenhum ambiente ainda</string>
     <string name="spaces_empty_hint">Um ambiente é uma pasta numa máquina, onde seus agentes trabalham.</string>
     <string name="spaces_no_machine">Um ambiente mora numa máquina. Adicione uma máquina antes.</string>

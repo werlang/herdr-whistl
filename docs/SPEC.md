@@ -103,11 +103,18 @@ and the label **New agent**.
    of a generic "offline"; its rows are dimmed.
    + opens **New space**: pick an added machine, folder (default `~`), name
    (default: last folder segment). Row menu: Pin/Unpin, Move up, Move down,
-   Rename, Close space (confirm; kills its agents). An empty list shows a button
-   that opens **New space**, and the groups do not repeat "No spaces yet".
+   Rename, Close space (confirm; kills its agents). New space — the + and the
+   empty list's button — is off while no machine is connected, and a notice
+   under the header says to connect one in Machines. An empty list shows a
+   button that opens **New space**, and the groups do not repeat "No spaces
+   yet".
 3. **Space detail** — header `name` + `machine:folder`, the folder truncated in
    the middle; when the machine is not connected it shows the machine's real
-   state in its colour. Agent rows: name, id, status pill on its own line.
+   state in its colour. The header has the space's own overflow menu: Pin/Unpin,
+   Move up, Move down, Rename and Close space, with every action off while the
+   machine is offline (and the moves off at the edge of the pin section).
+   Closing the space confirms first and returns to the previous screen.
+   Agent rows: name, id, status pill on its own line.
    Extended FAB **+ New agent** in the accent colour (disabled when offline) →
    **picker only**: the agents installed on that machine + "Terminal" (the
    machine's shell). No task text box. Tapping an option starts it and opens it.

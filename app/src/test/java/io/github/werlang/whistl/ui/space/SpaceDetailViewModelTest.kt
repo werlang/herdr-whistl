@@ -8,6 +8,8 @@ import io.github.werlang.whistl.data.MachineAgent
 import io.github.werlang.whistl.data.MachineSpaces
 import io.github.werlang.whistl.data.MachinesRepository
 import io.github.werlang.whistl.data.SpaceRecord
+import io.github.werlang.whistl.data.SpaceResult
+import io.github.werlang.whistl.data.SpacesRepository
 import io.github.werlang.whistl.data.StartChoice
 import io.github.werlang.whistl.data.StartResult
 import io.github.werlang.whistl.data.UnresolvableReason
@@ -41,7 +43,8 @@ import org.junit.Test
 
 /**
  * The Space detail (SPEC §2.3, phase 4b r2): the header, the space's agents, the New agent button (off while offline and while
- * the folder is not resolved), the picker's choices, and the start's outcomes. The agents' start answers are scripted.
+ * the folder is not resolved), the picker's choices, the start's outcomes, and the space's own overflow menu (Pin/Unpin, Move
+ * up, Move down, Rename, Close space, off on an offline machine). The agents' start answers are scripted.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpaceDetailViewModelTest {
@@ -68,6 +71,57 @@ class SpaceDetailViewModelTest {
         override suspend fun start(machineId: String, spaceId: String, choice: StartChoice): StartResult {
             started += choice
             return answer
+        }
+    }
+
+    /**
+     * A spaces repository whose groups are fixed and whose edits are recorded, so the space menu's calls can be asserted. Its
+     * answers do not change the groups: these tests are about what the menu asks for.
+     *
+     * @param initial the groups.
+     */
+    private class RecordingSpaces(initial: List<MachineSpaces>) : SpacesRepository {
+        private val groupsFlow = MutableStateFlow(initial)
+
+        /** Each pin, as machine, space and the value asked for. */
+        val pinned = mutableListOf<Triple<String, String, Boolean>>()
+
+        /** Each move, as `up` or `down`. */
+        val moved = mutableListOf<String>()
+
+        /** Each rename, as machine, space and the name asked for. */
+        val renamed = mutableListOf<Triple<String, String, String>>()
+
+        /** Each close, as machine and space. */
+        val closed = mutableListOf<Pair<String, String>>()
+
+        override fun groups(): StateFlow<List<MachineSpaces>> = groupsFlow
+
+        override suspend fun create(machineId: String, folder: String, name: String): SpaceResult = SpaceResult.MachineOffline
+
+        override suspend fun rename(machineId: String, spaceId: String, name: String): SpaceResult {
+            renamed += Triple(machineId, spaceId, name)
+            return SpaceResult.Done(spaceId)
+        }
+
+        override suspend fun setPinned(machineId: String, spaceId: String, pinned: Boolean): SpaceResult {
+            this.pinned += Triple(machineId, spaceId, pinned)
+            return SpaceResult.Done(spaceId)
+        }
+
+        override suspend fun moveUp(machineId: String, spaceId: String): SpaceResult {
+            moved += "up"
+            return SpaceResult.Done(spaceId)
+        }
+
+        override suspend fun moveDown(machineId: String, spaceId: String): SpaceResult {
+            moved += "down"
+            return SpaceResult.Done(spaceId)
+        }
+
+        override suspend fun close(machineId: String, spaceId: String): SpaceResult {
+            closed += machineId to spaceId
+            return SpaceResult.Done(spaceId)
         }
     }
 
@@ -112,13 +166,18 @@ class SpaceDetailViewModelTest {
      *
      * @param offline whether the machine is offline.
      * @param resolution the folder's resolution.
+     * @param records the spaces of the machine, in display order.
      * @return the group.
      */
-    private fun group(offline: Boolean = false, resolution: FolderResolution? = FolderResolution.Resolved("/home/ci/web")): MachineSpaces =
+    private fun group(
+        offline: Boolean = false,
+        resolution: FolderResolution? = FolderResolution.Resolved("/home/ci/web"),
+        records: List<SpaceRecord> = listOf(web),
+    ): MachineSpaces =
         MachineSpaces(
             machineId = MACHINE,
             offline = offline,
-            spaces = listOf(web),
+            spaces = records,
             resolutions = resolution?.let { mapOf(SPACE to it) }.orEmpty(),
         )
 
@@ -160,6 +219,28 @@ class SpaceDetailViewModelTest {
         agents = agents,
         machines = machineRepo,
         installed = StaticInstalled(installed),
+        pins = FakePins(),
+    )
+
+    /**
+     * The view model over a spaces repository the test keeps, so the space menu's calls can be read.
+     *
+     * @param spaces the repository.
+     * @param agents the agents repository.
+     * @param machineRepo the machines, and so the state the header names.
+     * @return the view model.
+     */
+    private fun modelWith(
+        spaces: SpacesRepository,
+        agents: AgentsRepository = ScriptedAgents(emptyList()),
+        machineRepo: MachinesRepository = machines(),
+    ): SpaceDetailViewModel = SpaceDetailViewModel(
+        machineId = MACHINE,
+        spaceId = SPACE,
+        spaces = spaces,
+        agents = agents,
+        machines = machineRepo,
+        installed = StaticInstalled(emptyMap()),
         pins = FakePins(),
     )
 
@@ -349,6 +430,122 @@ class SpaceDetailViewModelTest {
         val vm = model(listOf(MachineSpaces(machineId = MACHINE, offline = false, spaces = emptyList())))
 
         assertTrue(vm.state.value.missing)
+    }
+
+    /** The space's own overflow menu opens with the space and its pin-section move flags, and closes. */
+    @Test
+    fun theSpaceMenuOpensWithTheSpaceAndItsMoveFlags() {
+        val above = SpaceRecord(id = "sp_above", name = "above", folder = "~/above", pinned = true, order = 0)
+        val below = SpaceRecord(id = "sp_below", name = "below", folder = "~/below", pinned = true, order = 2)
+        val vm = model(listOf(group(records = listOf(above, web, below))))
+
+        vm.openSpaceMenu()
+
+        val menu = vm.state.value.spaceMenu
+        assertEquals("web", menu?.name)
+        assertTrue(menu?.pinned == true)
+        assertTrue("a pinned row is above", menu?.canMoveUp == true)
+        assertTrue("a pinned row is below", menu?.canMoveDown == true)
+        assertFalse(menu?.offline == true)
+
+        vm.closeSpaceMenu()
+        assertNull(vm.state.value.spaceMenu)
+    }
+
+    /** Pin and Move act on the space, and each closes the menu; a move stops at the edge of the pin section. */
+    @Test
+    fun theSpaceMenuPinsAndMovesTheSpaceInItsPinSection() = runTest {
+        val above = SpaceRecord(id = "sp_above", name = "above", folder = "~/above", pinned = true, order = 1)
+        val spaces = RecordingSpaces(listOf(group(records = listOf(above, web))))
+        val vm = modelWith(spaces)
+
+        vm.openSpaceMenu()
+        vm.toggleSpacePin()
+        runCurrent()
+
+        assertEquals(listOf(Triple(MACHINE, SPACE, false)), spaces.pinned)
+        assertNull("the menu closes on the action", vm.state.value.spaceMenu)
+
+        vm.openSpaceMenu()
+        vm.moveSpaceUp()
+        runCurrent()
+        assertEquals(listOf("up"), spaces.moved)
+
+        vm.openSpaceMenu()
+        vm.moveSpaceDown()
+        runCurrent()
+        assertEquals("the space is last, so nothing moves down", listOf("up"), spaces.moved)
+    }
+
+    /** Rename opens the space's name in the sheet and writes the typed one. */
+    @Test
+    fun theSpaceMenuRenamesTheSpace() = runTest {
+        val spaces = RecordingSpaces(listOf(group()))
+        val vm = modelWith(spaces)
+
+        vm.openSpaceMenu()
+        vm.askRenameSpace()
+
+        assertEquals("web", vm.state.value.spaceRename?.draft)
+        assertNull("the menu gives way to the sheet", vm.state.value.spaceMenu)
+
+        vm.editRenameSpace("web-app")
+        vm.confirmRenameSpace()
+        runCurrent()
+
+        assertEquals(listOf(Triple(MACHINE, SPACE, "web-app")), spaces.renamed)
+        assertNull(vm.state.value.spaceRename)
+    }
+
+    /** Close asks with the live agent count, closes the space, and tells the screen to leave. */
+    @Test
+    fun closingTheSpaceCountsItsLiveAgentsAndLeavesTheScreen() = runTest {
+        val live = MachineAgent(
+            MACHINE,
+            Agent(terminal("t-1", AgentStatus.Working, labels = mapOf(Agent.SPACE_LABEL to SPACE))),
+            web,
+        )
+        val spaces = RecordingSpaces(listOf(group()))
+        val vm = modelWith(spaces, agents = ScriptedAgents(listOf(live)))
+
+        vm.openSpaceMenu()
+        vm.askCloseSpace()
+
+        assertEquals(1, vm.state.value.spaceClose?.agentCount)
+
+        vm.confirmCloseSpace()
+        runCurrent()
+
+        assertEquals(listOf(MACHINE to SPACE), spaces.closed)
+        assertTrue("the screen leaves once closed", vm.state.value.closed)
+        assertNull(vm.state.value.spaceClose)
+    }
+
+    /** On an offline machine the space's menu opens to explain, but every action is off and no sheet opens. */
+    @Test
+    fun theSpaceMenuOfAnOfflineMachineHasItsActionsOff() = runTest {
+        val above = SpaceRecord(id = "sp_above", name = "above", folder = "~/above", pinned = true, order = 1)
+        val spaces = RecordingSpaces(listOf(group(offline = true, records = listOf(above, web))))
+        val vm = modelWith(spaces, machineRepo = offlineMachines())
+
+        vm.openSpaceMenu()
+
+        assertTrue(vm.state.value.spaceMenu?.offline == true)
+        assertTrue("a move would be allowed on a connected machine", vm.state.value.spaceMenu?.canMoveUp == true)
+
+        vm.toggleSpacePin()
+        vm.moveSpaceUp()
+        vm.moveSpaceDown()
+        vm.askRenameSpace()
+        runCurrent()
+
+        assertTrue("no action ran, so the menu stays open", vm.state.value.spaceMenu != null)
+        assertNull("no rename sheet", vm.state.value.spaceRename)
+        assertTrue(spaces.pinned.isEmpty())
+        assertTrue(spaces.moved.isEmpty())
+
+        vm.askCloseSpace()
+        assertNull("no close confirmation", vm.state.value.spaceClose)
     }
 
     private companion object {

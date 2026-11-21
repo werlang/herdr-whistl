@@ -64,7 +64,10 @@ import io.github.werlang.whistl.ui.components.machineStatusColor
 import io.github.werlang.whistl.ui.components.machineStatusLabelRes
 import io.github.werlang.whistl.ui.components.whistlButtonColors
 import io.github.werlang.whistl.ui.machines.MachineStatus
+import io.github.werlang.whistl.ui.spaces.CloseSpaceSheet
 import io.github.werlang.whistl.ui.spaces.FolderState
+import io.github.werlang.whistl.ui.spaces.RenameSpaceSheet
+import io.github.werlang.whistl.ui.spaces.SpaceMenuSheet
 import io.github.werlang.whistl.ui.spaces.unresolvedTextRes
 import io.github.werlang.whistl.ui.statusColor
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
@@ -75,6 +78,9 @@ const val SPACE_DETAIL_TAG: String = "space-detail"
 
 /** The test tag of the Space detail's Back button. */
 const val SPACE_DETAIL_BACK_TAG: String = "space-detail-back"
+
+/** The test tag of the Space detail's own overflow menu button. */
+const val SPACE_DETAIL_MENU_TAG: String = "space-detail-menu"
 
 /** The test tag of the New agent button. */
 const val NEW_AGENT_TAG: String = "new-agent"
@@ -102,8 +108,8 @@ fun detailAgentTag(address: String): String = "detail-agent-$address" // i18n-ok
 fun pickerAgentTag(id: String): String = "picker-agent-$id" // i18n-ok: test tag, never shown
 
 /**
- * The Space detail destination: the space's header, its agents, the New agent button, and the picker it opens. An agent that
- * starts opens at once; a tapped agent row opens its Agent screen.
+ * The Space detail destination: the space's header and its own overflow menu, its agents, the New agent button, and the picker
+ * it opens. An agent that starts opens at once; a tapped agent row opens its Agent screen.
  *
  * @param model the Space detail view model, for this space.
  * @param onOpenAgent called with an agent's address to open its Agent screen.
@@ -124,11 +130,16 @@ fun SpaceDetailRoute(
             onOpenAgent(address)
         }
     }
+    // The space was closed here: its screen leaves for the previous one.
+    LaunchedEffect(state.closed) {
+        if (state.closed) onBack()
+    }
     SpaceDetailScreen(
         state = state,
         onOpenAgent = onOpenAgent,
         onNewAgent = model::openPicker,
         onBack = onBack,
+        onSpaceMenu = model::openSpaceMenu,
         onMenu = model::openMenu,
         onDismissNotice = model::dismissNotice,
         modifier = modifier,
@@ -157,6 +168,31 @@ fun SpaceDetailRoute(
             onDismiss = model::closePicker,
         )
     }
+    // The space's own menu, on the screen it lives on: the row that would open this screen is left out, because it is
+    // already here.
+    state.spaceMenu?.let { ref ->
+        SpaceMenuSheet(
+            ref = ref,
+            onPin = model::toggleSpacePin,
+            onMoveUp = model::moveSpaceUp,
+            onMoveDown = model::moveSpaceDown,
+            onRename = model::askRenameSpace,
+            onClose = model::askCloseSpace,
+            onNewAgent = null,
+            onDismiss = model::closeSpaceMenu,
+        )
+    }
+    state.spaceRename?.let { ui ->
+        RenameSpaceSheet(
+            ui = ui,
+            onDraft = model::editRenameSpace,
+            onSave = model::confirmRenameSpace,
+            onCancel = model::cancelRenameSpace,
+        )
+    }
+    state.spaceClose?.let { ui ->
+        CloseSpaceSheet(ui = ui, onConfirm = model::confirmCloseSpace, onCancel = model::cancelCloseSpace)
+    }
 }
 
 /**
@@ -166,6 +202,7 @@ fun SpaceDetailRoute(
  * @param onOpenAgent called with an agent's address.
  * @param onNewAgent called when New agent is tapped; it does nothing while New agent is off.
  * @param onBack called to leave.
+ * @param onSpaceMenu called when the space's overflow button is tapped.
  * @param modifier the modifier for the screen.
  */
 @Composable
@@ -174,6 +211,7 @@ fun SpaceDetailScreen(
     onOpenAgent: (String) -> Unit,
     onNewAgent: () -> Unit,
     onBack: () -> Unit,
+    onSpaceMenu: () -> Unit = {},
     onMenu: (DetailAgent) -> Unit = {},
     onDismissNotice: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -183,6 +221,17 @@ fun SpaceDetailScreen(
             Row(modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onBack, modifier = Modifier.heightIn(min = MinTouchTarget).testTag(SPACE_DETAIL_BACK_TAG)) {
                     Text(stringResource(R.string.common_back))
+                }
+                // The space's own menu: Pin/Unpin, Move up, Move down, Rename and Close space. A space that is gone has
+                // nothing to act on, so the button is left out (SPEC §2.3).
+                if (!state.missing) {
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = onSpaceMenu, modifier = Modifier.size(MinTouchTarget).testTag(SPACE_DETAIL_MENU_TAG)) {
+                        Icon(
+                            imageVector = Icons.Filled.MoreVert,
+                            contentDescription = stringResource(R.string.space_options),
+                        )
+                    }
                 }
             }
             if (state.missing) {

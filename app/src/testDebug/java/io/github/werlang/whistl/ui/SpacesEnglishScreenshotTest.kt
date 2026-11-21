@@ -60,8 +60,8 @@ class SpacesEnglishScreenshotTest : ScreenHarness() {
 
     @Test
     @Config(qualifiers = "en-rUS-w411dp-h891dp-xxhdpi")
-    fun newSpaceNoMachine() {
-        render(ShotScreen.NewSpaceNoMachine, DARK_LIGHT)
+    fun spacesNoMachine() {
+        render(ShotScreen.SpacesNoMachine, DARK_LIGHT)
     }
 
     @Test

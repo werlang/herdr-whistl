@@ -138,8 +138,8 @@ enum class ShotScreen(val slug: String) {
     /** The New space sheet, with a folder typed. */
     NewSpace("new-space"),
 
-    /** The New space sheet with no machine added. */
-    NewSpaceNoMachine("new-space-no-machine"),
+    /** The Spaces list with no machine at all: New space is off and the notice says why. */
+    SpacesNoMachine("spaces-no-machine"),
 
     /** A space's row menu. */
     SpaceMenu("space-menu"),
@@ -283,7 +283,7 @@ fun ShotScreen.route(): String = when (this) {
     ShotScreen.SpaceDetailEmpty -> Routes.space("mac", "sp_empty")
     ShotScreen.SpaceDetailMissing -> Routes.space("mac", "sp_missing")
     ShotScreen.SpacesUnresolvedHome -> Routes.SPACES
-    ShotScreen.Spaces, ShotScreen.SpacesEmpty, ShotScreen.SpacesLong, ShotScreen.NewSpace, ShotScreen.NewSpaceNoMachine,
+    ShotScreen.Spaces, ShotScreen.SpacesEmpty, ShotScreen.SpacesLong, ShotScreen.SpacesNoMachine, ShotScreen.NewSpace,
     ShotScreen.SpaceMenu, ShotScreen.RenameSpace, ShotScreen.CloseSpaceConfirm,
     -> Routes.SPACES
 }
@@ -303,7 +303,7 @@ fun ShotScreen.sheetTag(): String? = when (this) {
 
     ShotScreen.MachineMenu -> MACHINE_MENU_SHEET_TAG
     ShotScreen.RemoveMachineConfirm -> REMOVE_MACHINE_SHEET_TAG
-    ShotScreen.NewSpace, ShotScreen.NewSpaceNoMachine -> NEW_SPACE_SHEET_TAG
+    ShotScreen.NewSpace -> NEW_SPACE_SHEET_TAG
     ShotScreen.SpaceMenu -> SPACE_MENU_SHEET_TAG
     ShotScreen.RenameSpace -> RENAME_SPACE_SHEET_TAG
     ShotScreen.CloseSpaceConfirm -> CLOSE_SPACE_SHEET_TAG
@@ -342,7 +342,9 @@ fun ShotScreen.expectedText(): String {
         ShotScreen.AgentActions -> "claude"
         ShotScreen.RemoveMachineConfirm -> app.getString(R.string.machine_confirm_remove_title, "mac")
         ShotScreen.Spaces, ShotScreen.SpacesEmpty, ShotScreen.SpacesLong -> app.getString(R.string.destination_spaces)
-        ShotScreen.NewSpace, ShotScreen.NewSpaceNoMachine -> app.getString(R.string.space_new_title)
+        ShotScreen.NewSpace -> app.getString(R.string.space_new_title)
+        // With no machine, the list itself carries the reason New space is off.
+        ShotScreen.SpacesNoMachine -> app.getString(R.string.spaces_new_requires_connected_machine)
         ShotScreen.SpaceMenu -> "api"
         ShotScreen.RenameSpace -> app.getString(R.string.space_rename_title)
         ShotScreen.CloseSpaceConfirm -> app.getString(R.string.space_close_title, "api")
@@ -392,7 +394,7 @@ private fun ShotScreen.seed(core: FakeCore, container: AppContainer) {
             container.spaces.create("mac", folder = LONG_FOLDER, name = LONG_SPACE_NAME)
         }
 
-        ShotScreen.NewSpaceNoMachine -> clearMachines(container)
+        ShotScreen.SpacesNoMachine -> clearMachines(container)
         ShotScreen.MachineHostKeySheet -> core.setConnection(
             "build",
             ConnectionState.HostKeyUnknown("ssh-ed25519", "SHA256:q8V3mZp1kT0rN7wLx2cY4bH6sJ9dF5gA3eU8iO0pQ1w"),
@@ -636,7 +638,6 @@ abstract class ScreenHarness {
                 composeRule.onNodeWithTag(NEW_SPACE_FOLDER_TAG, useUnmergedTree = true).performTextInput("/home/demo/web-app")
             }
 
-            ShotScreen.NewSpaceNoMachine -> openNewSpace()
             ShotScreen.SpaceMenu -> openSpaceMenu()
             ShotScreen.RenameSpace -> {
                 openSpaceMenu()

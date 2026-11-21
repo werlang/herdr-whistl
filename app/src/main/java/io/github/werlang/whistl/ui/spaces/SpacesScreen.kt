@@ -63,6 +63,9 @@ import io.github.werlang.whistl.ui.theme.WhistlMono
 /** The test tag of the Spaces list. */
 const val SPACES_LIST_TAG: String = "spaces-list"
 
+/** The test tag of the notice that says New space needs a connected machine. */
+const val SPACES_OFFLINE_NOTICE_TAG: String = "spaces-offline-notice"
+
 /**
  * The test tag of one space row: `space-row-<machine>-<space>`.
  *
@@ -75,7 +78,8 @@ fun spaceRowTag(machineId: String, spaceId: String): String = "space-row-$machin
 /**
  * The Spaces list (SPEC §2.2): one group per machine, pinned first and then the user's order. A row shows its name, one dot per
  * agent (each named in words), the waiting badge, `N agents · folder`, and the folder's state. A group whose machine is not
- * connected names the machine's real state, and its rows are dimmed; they still open.
+ * connected names the machine's real state, and its rows are dimmed; they still open. With no connected machine, a notice says
+ * New space needs one, and the empty state's button is off.
  *
  * @param state the groups and whether there is any space.
  * @param onOpen called with the machine and the space when a row is tapped.
@@ -107,6 +111,11 @@ fun SpacesScreen(
                 modifier = Modifier.semantics { heading() },
             )
         }
+        // A space can only be created on a connected machine: without one, the screen says so before the list, so the
+        // disabled add button is not a dead end (SPEC §2.2).
+        if (!state.hasConnectedMachine) {
+            OfflineNewSpaceNotice()
+        }
         // Reached by tapping a machine: the list shows only that machine until the filter is cleared (SPEC §2.2).
         state.filterName?.let { name ->
             FilterBanner(name = name, onClear = onClearFilter)
@@ -133,20 +142,52 @@ fun SpacesScreen(
             }
             // Unfiltered and empty, the message belongs under the machines it is about, not over them (0.5.1).
             if (state.isEmpty && state.filterName == null) {
-                item { EmptySpaces(onAdd = onAdd, modifier = Modifier.padding(top = 4.dp)) }
+                item {
+                    EmptySpaces(
+                        canAdd = state.hasConnectedMachine,
+                        onAdd = onAdd,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
         }
     }
 }
 
 /**
- * The empty state: a bordered box with the title, the hint and the button that opens New space (SPEC §2.2).
+ * The notice under the header, with no connected machine: New space needs one (SPEC §2.2). It gives the add button's disabled
+ * state a reason on screen, not only in its description.
+ */
+@Composable
+private fun OfflineNewSpaceNotice() {
+    val tokens = LocalWhistlTokens.current
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
+            .testTag(SPACES_OFFLINE_NOTICE_TAG),
+        shape = RoundedCornerShape(12.dp),
+        color = tokens.field,
+    ) {
+        Text(
+            text = stringResource(R.string.spaces_new_requires_connected_machine),
+            style = MaterialTheme.typography.bodyMedium,
+            color = tokens.muted,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+        )
+    }
+}
+
+/**
+ * The empty state: a bordered box with the title, the hint and the button that opens New space (SPEC §2.2). The button is off
+ * while no machine is connected, the same rule as the add button.
  *
+ * @param canAdd whether a machine is connected, so New space can create one.
  * @param onAdd called when the New space button is tapped.
  * @param modifier the modifier for the box.
  */
 @Composable
-private fun EmptySpaces(onAdd: () -> Unit, modifier: Modifier) {
+private fun EmptySpaces(canAdd: Boolean, onAdd: () -> Unit, modifier: Modifier) {
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -170,6 +211,7 @@ private fun EmptySpaces(onAdd: () -> Unit, modifier: Modifier) {
         Spacer(Modifier.height(6.dp))
         Button(
             onClick = onAdd,
+            enabled = canAdd,
             colors = whistlButtonColors(),
             modifier = Modifier.heightIn(min = MinTouchTarget),
         ) {

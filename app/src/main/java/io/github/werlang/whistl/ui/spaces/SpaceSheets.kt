@@ -257,8 +257,9 @@ fun NewSpaceSheet(
 }
 
 /**
- * The row menu (SPEC §2.2): Pin or Unpin, Move up, Move down, Rename, and Close space. Move up and Move down are off at the edge of
- * the pin section; every action is off on an offline machine.
+ * The space menu (SPEC §2.2, §2.3): Pin or Unpin, Move up, Move down, Rename, and Close space. Move up and Move down are off
+ * at the edge of the pin section; every action is off on an offline machine. The New agent row is optional: the space's own
+ * screen leaves it out.
  *
  * @param ref the space.
  * @param onPin called to pin or unpin it.
@@ -266,7 +267,8 @@ fun NewSpaceSheet(
  * @param onMoveDown called to move it down.
  * @param onRename called to rename it.
  * @param onClose called to close it.
- * @param onNewAgent called to open the space's own screen, where an agent is started in it (0.6.4).
+ * @param onNewAgent called to open the space's own screen, where an agent is started in it (0.6.4); `null` when the menu is
+ *   already on that screen, which hides the row.
  * @param onDismiss called when the sheet closes.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -278,7 +280,7 @@ fun SpaceMenuSheet(
     onMoveDown: () -> Unit,
     onRename: () -> Unit,
     onClose: () -> Unit,
-    onNewAgent: () -> Unit,
+    onNewAgent: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = onDismiss, modifier = Modifier.testTag(SPACE_MENU_SHEET_TAG)) {
@@ -293,15 +295,18 @@ fun SpaceMenuSheet(
             }
             Spacer(Modifier.size(8.dp))
             // Tapping the space opens its agents; starting one in it stays one step away, on the space's own screen
-            // (0.6.4).
-            SheetRow(
-                text = stringResource(R.string.space_menu_new_agent),
-                // Opening the space's screen is always allowed: it is the screen that says whether an agent can be
-                // started right now (0.6.4).
-                enabled = true,
-                modifier = Modifier.testTag(MENU_SPACE_NEW_AGENT_TAG),
-                onClick = onNewAgent,
-            )
+            // (0.6.4). That screen's own menu leaves this row out: it is already there.
+            val newAgent = onNewAgent
+            if (newAgent != null) {
+                SheetRow(
+                    text = stringResource(R.string.space_menu_new_agent),
+                    // Opening the space's screen is always allowed: it is the screen that says whether an agent can be
+                    // started right now (0.6.4).
+                    enabled = true,
+                    modifier = Modifier.testTag(MENU_SPACE_NEW_AGENT_TAG),
+                    onClick = newAgent,
+                )
+            }
             SheetRow(
                 text = stringResource(if (ref.pinned) R.string.space_menu_unpin else R.string.space_menu_pin),
                 enabled = !ref.offline,

@@ -236,6 +236,8 @@ data class CloseUi(val target: SpaceRef, val agentCount: Int)
  * @property menu the row menu's space, or `null`.
  * @property rename the rename sheet, or `null`.
  * @property close the close confirmation, or `null`.
+ * @property hasConnectedMachine whether any machine is connected: New space needs one, so the add button and the empty
+ *   state's button are off without it.
  */
 data class SpacesUiState(
     val groups: List<SpaceGroup>,
@@ -249,6 +251,7 @@ data class SpacesUiState(
     val filterName: String? = null,
     /** The folder picker, or `null` when it is not open. */
     val folderPicker: FolderPickerUi? = null,
+    val hasConnectedMachine: Boolean = false,
 )
 
 /**
@@ -428,8 +431,10 @@ class SpacesViewModel(
         )
     }
 
-    /** Opens the New space sheet, with the first machine as the one the space goes to. */
+    /** Opens the New space sheet, with the first machine as the one the space goes to. Nothing happens while no machine is
+     * connected: a space can only be created where one is (the add button and the empty state's button are off then). */
     fun openNewSpace() {
+        if (!state.value.hasConnectedMachine) return
         sheets.value = sheets.value.copy(newSpace = NewDraft())
     }
 
@@ -648,6 +653,7 @@ class SpacesViewModel(
             groups = groupUi,
             hasMachines = machineList.isNotEmpty(),
             isEmpty = groupUi.all { it.rows.isEmpty() },
+            hasConnectedMachine = choices.any { it.status == MachineStatus.Connected },
             filterName = filter?.let { id -> machineList.firstOrNull { it.id == id }?.name ?: id },
             newSpace = open.newSpace?.let { newSpaceUi(it, choices) },
             menu = menuRef,

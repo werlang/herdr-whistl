@@ -38,8 +38,8 @@ import org.junit.Test
 
 /**
  * The Spaces screen (SPEC §2.2, phase 4b r2): grouping, the repository's order, the waiting badge, the offline and unresolved
- * rows, the move and pin rules, rename and close, and New space. The order, create, rename, move and close tests run on the real
- * repositories ([RepoStack]); the state tests use fixed spaces.
+ * rows, the move and pin rules, rename and close, and New space (off while no machine is connected). The order, create,
+ * rename, move and close tests run on the real repositories ([RepoStack]); the state tests use fixed spaces.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpacesViewModelTest {
@@ -158,7 +158,8 @@ class SpacesViewModelTest {
 
     /**
      * A group and a New space choice carry the machine's real connection status and, for an error, its issue: the screens
-     * name the same state the Machines list does, not a generic "offline" for every state.
+     * name the same state the Machines list does, not a generic "offline" for every state. A second, connected machine is
+     * added for the states that are not connected, because New space only opens while one is.
      */
     @Test
     fun aGroupAndAChoiceCarryTheMachinesRealStatusAndIssue() {
@@ -173,6 +174,12 @@ class SpacesViewModelTest {
         cases.forEach { (connection, expected) ->
             val machines = ScriptedMachines()
             machines.put(machine(), connection)
+            if (connection !is ConnectionState.Connected) {
+                machines.put(
+                    Machine(id = "m2", name = "keep", host = "keep.lan", port = 22, user = "ci"),
+                    ConnectionState.Connected(testHello()),
+                )
+            }
             val vm = SpacesViewModel(
                 StaticSpaces(listOf(group(emptyList(), offline = connection !is ConnectionState.Connected))),
                 StaticAgents(),
@@ -181,7 +188,7 @@ class SpacesViewModelTest {
 
             vm.openNewSpace()
             val groupUi = vm.state.value.groups.single()
-            val choice = vm.state.value.newSpace?.machines?.single()
+            val choice = vm.state.value.newSpace?.machines?.first { it.id == MACHINE }
 
             assertEquals("group status for $connection", expected.first, groupUi.machineStatus)
             assertEquals("group issue for $connection", expected.second, groupUi.machineIssue)
@@ -452,17 +459,49 @@ class SpacesViewModelTest {
         assertTrue(vm.state.value.newSpace?.machineOffline == true)
     }
 
-    /** With no machine at all, the screen has no rows, no machine to pick, and says there is no machine. */
+    /**
+     * With no machine at all, the screen has no rows and New space is off: no sheet opens, because there is nothing to create a
+     * space on.
+     */
     @Test
-    fun withNoMachineThereAreNoChoicesAndNoRows() {
+    fun withNoMachineThereAreNoRowsAndNewSpaceIsOff() {
         val vm = SpacesViewModel(StaticSpaces(emptyList()), StaticAgents(), ScriptedMachines())
 
         vm.openNewSpace()
 
         assertFalse(vm.state.value.hasMachines)
+        assertFalse("no machine is connected", vm.state.value.hasConnectedMachine)
         assertTrue(vm.state.value.isEmpty)
-        assertTrue(vm.state.value.newSpace?.machines.orEmpty().isEmpty())
-        assertNull(vm.state.value.newSpace?.selectedId)
+        assertNull("no sheet without a machine", vm.state.value.newSpace)
+    }
+
+    /** New space is off when every added machine is offline, and opens no sheet. */
+    @Test
+    fun newSpaceIsOffWhenEveryMachineIsOffline() {
+        val repo = ScriptedMachines()
+        repo.put(machine(), ConnectionState.Offline)
+        val vm = SpacesViewModel(StaticSpaces(emptyList()), StaticAgents(), repo)
+
+        assertTrue("the machine is still listed", vm.state.value.hasMachines)
+        assertFalse(vm.state.value.hasConnectedMachine)
+
+        vm.openNewSpace()
+
+        assertNull("no sheet on an offline machine", vm.state.value.newSpace)
+    }
+
+    /** One connected machine among offline ones is enough: New space opens, with a connected machine as its default. */
+    @Test
+    fun newSpaceIsOnWhenOneMachineIsConnected() {
+        val repo = machines()
+        repo.put(Machine(id = "m2", name = "off", host = "off.lan", port = 22, user = "ci"), ConnectionState.Offline)
+        val vm = SpacesViewModel(StaticSpaces(emptyList()), StaticAgents(), repo)
+
+        assertTrue(vm.state.value.hasConnectedMachine)
+
+        vm.openNewSpace()
+
+        assertEquals(MACHINE, vm.state.value.newSpace?.selectedId)
     }
 
     /** A machine with no spaces is an empty list on a machine that exists. */

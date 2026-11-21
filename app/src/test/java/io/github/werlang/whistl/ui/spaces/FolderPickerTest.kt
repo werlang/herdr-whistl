@@ -11,6 +11,7 @@ import io.github.werlang.whistl.support.MainDispatcherRule
 import io.github.werlang.whistl.support.ScriptedMachines
 import io.github.werlang.whistl.support.StaticAgents
 import io.github.werlang.whistl.support.StaticSpaces
+import io.github.werlang.whistl.support.testHello
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runCurrent
@@ -64,7 +65,7 @@ class FolderPickerTest {
             ),
         ),
         StaticAgents(),
-        ScriptedMachines().apply { put(machine, ConnectionState.Offline) },
+        ScriptedMachines().apply { put(machine, ConnectionState.Connected(testHello())) },
         MutableStateFlow(null),
         browser,
     )

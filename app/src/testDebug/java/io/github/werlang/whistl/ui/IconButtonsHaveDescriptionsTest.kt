@@ -110,7 +110,7 @@ class IconButtonsHaveDescriptionsTest : ScreenHarness() {
     fun newSpaceNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.NewSpace)
 
     @Test
-    fun newSpaceNoMachineNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.NewSpaceNoMachine)
+    fun spacesNoMachineNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.SpacesNoMachine)
 
     @Test
     fun spaceMenuNodesAreNamedAndLargeEnough() = checkScreen(ShotScreen.SpaceMenu)

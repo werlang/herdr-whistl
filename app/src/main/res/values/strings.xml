@@ -210,6 +210,8 @@
 
     <!-- Spaces, New space, Space detail and the picker (phase 4b r2). -->
     <string name="spaces_new_content_description">New space</string>
+    <string name="spaces_new_disabled_content_description">New space, unavailable until a machine is connected</string>
+    <string name="spaces_new_requires_connected_machine">Connect a machine in Machines to create a new space.</string>
     <string name="spaces_empty_title">No spaces yet</string>
     <string name="spaces_empty_hint">A space is a folder on a machine where your agents work.</string>
     <string name="spaces_no_machine">A space lives on a machine. Add a machine first.</string>

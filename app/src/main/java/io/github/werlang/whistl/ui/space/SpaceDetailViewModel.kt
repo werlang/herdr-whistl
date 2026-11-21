@@ -13,6 +13,7 @@ import io.github.werlang.whistl.data.MachineAgent
 import io.github.werlang.whistl.data.MachineSpaces
 import io.github.werlang.whistl.data.MachinesRepository
 import io.github.werlang.whistl.data.PinnedAgents
+import io.github.werlang.whistl.data.SpaceResult
 import io.github.werlang.whistl.data.SpacesRepository
 import io.github.werlang.whistl.data.StartChoice
 import io.github.werlang.whistl.data.StartResult
@@ -31,8 +32,13 @@ import io.github.werlang.whistl.ui.machines.MachineIssue
 import io.github.werlang.whistl.ui.machines.MachineStatus
 import io.github.werlang.whistl.ui.machines.classify
 import io.github.werlang.whistl.ui.machines.connectionStates
+import io.github.werlang.whistl.ui.spaces.CloseUi
 import io.github.werlang.whistl.ui.spaces.FolderState
+import io.github.werlang.whistl.ui.spaces.RenameUi
+import io.github.werlang.whistl.ui.spaces.SpaceRef
 import io.github.werlang.whistl.ui.spaces.folderStateOf
+import io.github.werlang.whistl.ui.spaces.moveRules
+import io.github.werlang.whistl.ui.spaces.problemOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -123,6 +129,10 @@ data class PickerUi(val choices: List<StartChoice>, val starting: Boolean, val p
  * @property opened the address of an agent that just started, to open once; cleared by [SpaceDetailViewModel.consumeOpened].
  * @property machineStatus the machine's connection status: the header says it when the machine is not connected.
  * @property machineIssue the reason, for an error.
+ * @property spaceMenu the space's own overflow menu, or `null` when it is closed.
+ * @property spaceRename the space's rename sheet, or `null`.
+ * @property spaceClose the space's close confirmation, or `null`.
+ * @property closed whether the space was closed here: the screen leaves for the previous one.
  */
 data class SpaceDetailUiState(
     val missing: Boolean,
@@ -139,6 +149,10 @@ data class SpaceDetailUiState(
     val notice: AgentNotice? = null,
     val machineStatus: MachineStatus = if (machineOffline) MachineStatus.Offline else MachineStatus.Connected,
     val machineIssue: MachineIssue? = null,
+    val spaceMenu: SpaceRef? = null,
+    val spaceRename: RenameUi? = null,
+    val spaceClose: CloseUi? = null,
+    val closed: Boolean = false,
 )
 
 /** The picker's state while it is open: whether a start is running, and the last start's problem. */
@@ -150,11 +164,19 @@ private data class DetailSheets(
     val opened: String? = null,
     val menu: AgentMenu? = null,
     val notice: AgentNotice? = null,
+    /** The space's own menu, or `null` when it is closed. */
+    val spaceMenu: SpaceRef? = null,
+    /** The space's rename sheet, or `null`. */
+    val spaceRename: RenameUi? = null,
+    /** The space's close confirmation, or `null`. */
+    val spaceClose: CloseUi? = null,
+    /** Whether the space was closed here: the screen leaves once. */
+    val closed: Boolean = false,
 )
 
 /**
- * The Space detail (SPEC §2.3, phase 4b r2): the header, the agents of the space, the New agent button, and the picker that
- * starts an installed agent or the machine's shell and opens it. Events in, state out.
+ * The Space detail (SPEC §2.3, phase 4b r2): the header, the space's own overflow menu, the agents of the space, the New agent
+ * button, and the picker that starts an installed agent or the machine's shell and opens it. Events in, state out.
  *
  * @param machineId the machine the space lives on.
  * @param spaceId the space.
@@ -261,10 +283,22 @@ class SpaceDetailViewModel(
         val group = groups.firstOrNull { it.machineId == machineId }
         val space = group?.spaces?.firstOrNull { it.id == spaceId }
         if (group == null || space == null) {
-            return emptyState().copy(missing = true, opened = open.opened)
+            return emptyState().copy(missing = true, opened = open.opened, closed = open.closed)
         }
         val machine = machineList.firstOrNull { it.id == machineId }
         val folderState = folderStateOf(group.resolutionOf(space))
+        // The space's own menu uses the same pin-section rules as the row menu, and its edits are off on an offline machine.
+        val rules = moveRules(group.spaces)
+        val index = group.spaces.indexOf(space)
+        val ref = SpaceRef(
+            machineId = machineId,
+            spaceId = spaceId,
+            name = space.name,
+            pinned = space.pinned,
+            canMoveUp = rules[index].first,
+            canMoveDown = rules[index].second,
+            offline = group.offline,
+        )
         val (status, issue) = connections[machineId]?.let(::classify)
             ?: (if (group.offline) MachineStatus.Offline else MachineStatus.Connected) to null
         val block = when {
@@ -273,6 +307,8 @@ class SpaceDetailViewModel(
             else -> null
         }
         val installedHere = installedMap[machineId].orEmpty()
+        val mine = agentList.filter { it.machineId == machineId && it.spaceId == spaceId }
+        val live = mine.count { it.agent.terminal.state == TerminalState.Live }
         return SpaceDetailUiState(
             missing = false,
             name = space.name,
@@ -282,10 +318,7 @@ class SpaceDetailViewModel(
             machineOffline = group.offline,
             machineStatus = status,
             machineIssue = issue,
-            agents = sortWithPinned(
-                agentList.filter { it.machineId == machineId && it.spaceId == spaceId },
-                pinnedKeys,
-            ).map { agent ->
+            agents = sortWithPinned(mine, pinnedKeys).map { agent ->
                 val terminal = agent.agent.terminal
                 DetailAgent(
                     address = terminal.address,
@@ -307,6 +340,10 @@ class SpaceDetailViewModel(
             opened = open.opened,
             menu = open.menu,
             notice = open.notice,
+            spaceMenu = if (open.spaceMenu != null) ref else null,
+            spaceRename = open.spaceRename?.let { RenameUi(ref, it.draft, it.problem, it.machineOffline) },
+            spaceClose = open.spaceClose?.let { CloseUi(ref, live) },
+            closed = open.closed,
         )
     }
 
@@ -424,5 +461,126 @@ class SpaceDetailViewModel(
             }
             sheets.value = sheets.value.copy(notice = notice)
         }
+    }
+
+    /**
+     * Opens the space's own overflow menu (SPEC §2.3). Its actions are off while the machine is offline. Nothing happens when
+     * the space is gone.
+     */
+    fun openSpaceMenu() {
+        val ref = currentSpaceRef() ?: return
+        sheets.value = sheets.value.copy(spaceMenu = ref, notice = null)
+    }
+
+    /** Closes the space's overflow menu. */
+    fun closeSpaceMenu() {
+        sheets.value = sheets.value.copy(spaceMenu = null)
+    }
+
+    /** Pins the space, or unpins it, and closes its menu. Nothing is sent on an offline machine. */
+    fun toggleSpacePin() {
+        if (sheets.value.spaceMenu == null) return
+        val ref = currentSpaceRef() ?: return
+        if (ref.offline) return
+        sheets.value = sheets.value.copy(spaceMenu = null)
+        viewModelScope.launch { spaces.setPinned(machineId, spaceId, !ref.pinned) }
+    }
+
+    /** Moves the space up within its pin section, and closes its menu. Nothing moves at the edge or on an offline machine. */
+    fun moveSpaceUp() = moveSpace(up = true)
+
+    /** Moves the space down within its pin section, and closes its menu. Nothing moves at the edge or on an offline machine. */
+    fun moveSpaceDown() = moveSpace(up = false)
+
+    /** Opens the space's rename sheet, with its current name. Nothing happens on an offline machine. */
+    fun askRenameSpace() {
+        if (sheets.value.spaceMenu == null) return
+        val ref = currentSpaceRef() ?: return
+        if (ref.offline) return
+        sheets.value = sheets.value.copy(spaceMenu = null, spaceRename = RenameUi(ref, ref.name, problem = null))
+    }
+
+    /** @param text the name typed. */
+    fun editRenameSpace(text: String) {
+        val ui = sheets.value.spaceRename ?: return
+        sheets.value = sheets.value.copy(spaceRename = ui.copy(draft = text, problem = null, machineOffline = false))
+    }
+
+    /** Saves the space's new name. A rejected name shows under the field and nothing is written. */
+    fun confirmRenameSpace() {
+        val open = sheets.value.spaceRename ?: return
+        viewModelScope.launch {
+            when (val result = spaces.rename(machineId, spaceId, open.draft)) {
+                is SpaceResult.Done -> sheets.value = sheets.value.copy(spaceRename = null)
+                is SpaceResult.Rejected -> sheets.value = sheets.value.copy(
+                    spaceRename = sheets.value.spaceRename?.copy(problem = problemOf(result.field, result.reason)),
+                )
+                // Offline: nothing was written. The sheet stays open, so the user can cancel, and it says why.
+                SpaceResult.MachineOffline -> sheets.value = sheets.value.copy(
+                    spaceRename = sheets.value.spaceRename?.copy(machineOffline = true),
+                )
+                is SpaceResult.UnknownSpace -> sheets.value = sheets.value.copy(spaceRename = null)
+            }
+        }
+    }
+
+    /** Closes the space's rename sheet without saving. */
+    fun cancelRenameSpace() {
+        sheets.value = sheets.value.copy(spaceRename = null)
+    }
+
+    /** Opens the close confirmation for the space, with its live agent count. Nothing happens on an offline machine. */
+    fun askCloseSpace() {
+        if (sheets.value.spaceMenu == null) return
+        val ref = currentSpaceRef() ?: return
+        if (ref.offline) return
+        val live = state.value.agents.count { it.live }
+        sheets.value = sheets.value.copy(spaceMenu = null, spaceClose = CloseUi(ref, live))
+    }
+
+    /** Closes the space: its live agents are stopped, then it leaves the document, and the screen leaves once closed. */
+    fun confirmCloseSpace() {
+        if (sheets.value.spaceClose == null) return
+        sheets.value = sheets.value.copy(spaceClose = null)
+        viewModelScope.launch {
+            spaces.close(machineId, spaceId)
+            sheets.value = sheets.value.copy(closed = true)
+        }
+    }
+
+    /** Keeps the space: the confirmation closes. */
+    fun cancelCloseSpace() {
+        sheets.value = sheets.value.copy(spaceClose = null)
+    }
+
+    private fun moveSpace(up: Boolean) {
+        if (sheets.value.spaceMenu == null) return
+        val ref = currentSpaceRef() ?: return
+        val allowed = if (up) ref.canMoveUp else ref.canMoveDown
+        if (ref.offline || !allowed) return
+        sheets.value = sheets.value.copy(spaceMenu = null)
+        viewModelScope.launch {
+            if (up) spaces.moveUp(machineId, spaceId) else spaces.moveDown(machineId, spaceId)
+        }
+    }
+
+    /**
+     * The space as the overflow menu's target, or `null` when it is gone. Its Move flags come from the same pin-section rule
+     * the Spaces list uses, and its offline flag from the group, so its actions are off exactly when the row menu's are.
+     */
+    private fun currentSpaceRef(): SpaceRef? {
+        val group = spaces.groups().value.firstOrNull { it.machineId == machineId } ?: return null
+        val space = group.spaces.firstOrNull { it.id == spaceId } ?: return null
+        val rules = moveRules(group.spaces)
+        val index = group.spaces.indexOf(space)
+        return SpaceRef(
+            machineId = machineId,
+            spaceId = spaceId,
+            name = space.name,
+            pinned = space.pinned,
+            canMoveUp = rules[index].first,
+            canMoveDown = rules[index].second,
+            offline = group.offline,
+        )
     }
 }

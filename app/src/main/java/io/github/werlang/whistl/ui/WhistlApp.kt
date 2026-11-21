@@ -47,6 +47,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -79,6 +82,7 @@ import io.github.werlang.whistl.ui.spaces.SpacesViewModel
 import io.github.werlang.whistl.ui.machines.MachinesViewModel
 import io.github.werlang.whistl.ui.settings.SettingsScreen
 import io.github.werlang.whistl.ui.settings.SettingsViewModel
+import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 
 /** The navigation routes of the app. */
 object Routes {
@@ -191,6 +195,7 @@ fun WhistlApp(startRoute: String = Routes.MACHINES, showSplash: Boolean = true) 
         },
     )
     val agentsState by agentsModel.state.collectAsState()
+    val spacesState by spacesModel.state.collectAsState()
 
     // The app opens on its mark while the machines load, and gets out of the way as soon as they are there: it is a
     // cover for the wait, not a curtain (0.6.4).
@@ -243,14 +248,26 @@ fun WhistlApp(startRoute: String = Routes.MACHINES, showSplash: Boolean = true) 
                     )
                 }
             } else if (route == Routes.SPACES) {
+                // New space needs a connected machine to create it on: without one the button is off and says why, the
+                // same shape as a blocked New agent (SPEC §2.2).
+                val canAdd = spacesState.hasConnectedMachine
+                val tokens = LocalWhistlTokens.current
+                val disabledDescription = stringResource(R.string.spaces_new_disabled_content_description)
+                val addSpace: () -> Unit = if (canAdd) spacesModel::openNewSpace else ({})
                 FloatingActionButton(
-                    onClick = spacesModel::openNewSpace,
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    onClick = addSpace,
+                    containerColor = if (canAdd) MaterialTheme.colorScheme.primary else tokens.field,
+                    contentColor = if (canAdd) MaterialTheme.colorScheme.onPrimary else tokens.muted,
+                    modifier = Modifier.semantics {
+                        if (!canAdd) {
+                            contentDescription = disabledDescription
+                            disabled()
+                        }
+                    },
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = stringResource(R.string.spaces_new_content_description),
+                        contentDescription = if (canAdd) stringResource(R.string.spaces_new_content_description) else null,
                     )
                 }
             } else if (route == Routes.AGENTS && agentsState.newAgent?.enabled == true) {
