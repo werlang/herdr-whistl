@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-21
+
 ### Added
 
 - **A warning before a subscription window runs out.** With watch notifications on, a provider window that reaches 90% used
@@ -70,6 +72,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 - **Portuguese limits agree in number**: "restantes", and "1 restante" when one is left, in the machine and agent limits.
 - **A missing space says so**, with a "Space not found" card explaining it and a "Back to Spaces" button, instead of an
   empty screen.
+
+## [0.7.9] - 2026-11-19
+
+### Added
+
+- **Structured Claude token setup guidance in limits.** `limits.py` now returns stable error codes (`claude_token_setup_required`, `claude_not_configured`, `claude_token_expired`) while leaving transient HTTP 429/5xx failures uncoded. The agent menu renders localized English and Portuguese guidance with Notice, Warning, and Error tones pointing to `claude setup-token` and `~/.config/agent-limits/claude-token`.
+- **Limits architecture documented in `docs/SPEC.md` (§10)**, covering the provider probe and Claude token resolution flow.
+
+### Fixed
+
+- **Desktop space adoption and terminal matching.** Spaces from the Herdr desktop app are adopted by id, `herdr.tab` labels are matched, and unknown space labels trigger a refresh so desktop terminals land in their space reliably.
 
 ## [0.7.8] - 2026-11-11
 
@@ -596,7 +609,9 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.7.8...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/werlang/herdr-whistl/compare/v0.7.9...v0.8.0
+[0.7.9]: https://github.com/werlang/herdr-whistl/compare/v0.7.8...v0.7.9
 [0.7.8]: https://github.com/werlang/herdr-whistl/compare/v0.7.7...v0.7.8
 [0.7.7]: https://github.com/werlang/herdr-whistl/compare/v0.7.6...v0.7.7
 [0.7.6]: https://github.com/werlang/herdr-whistl/compare/v0.7.5...v0.7.6
