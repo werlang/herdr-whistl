@@ -3,21 +3,29 @@ package io.github.werlang.whistl.ui.agents
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -28,26 +36,27 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.werlang.whistl.R
-import io.github.werlang.whistl.ui.theme.WhistlMono
+import io.github.werlang.whistl.data.LimitsResult
 import io.github.werlang.whistl.domain.LimitWindow
 import io.github.werlang.whistl.domain.ProviderLimits
-import io.github.werlang.whistl.data.LimitsResult
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.Alignment
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.Row
+import io.github.werlang.whistl.ui.components.MinTouchTarget
+import io.github.werlang.whistl.ui.components.SheetDragHandle
+import io.github.werlang.whistl.ui.components.whistlButtonColors
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
+import io.github.werlang.whistl.ui.theme.WhistlMono
 
 /** The test tag of the action sheet, so tests and screenshots can find it. */
 const val AGENT_ACTIONS_SHEET_TAG: String = "agent-actions-sheet"
 
+/** The test tag of the close confirmation's confirming button. */
+const val AGENT_CLOSE_CONFIRM_TAG: String = "agent-close-confirm"
+
 /**
- * The action sheet of one agent (phase 9, SPEC §2.4): Interrupt, Close & Remove, Rename, Pin.
+ * The action sheet of one agent (phase 9, SPEC §2.4): Interrupt, Close & Remove, Rename, Pin/Unpin, Check limits.
  *
- * The same sheet opens from the Agents list and from a space's agent rows, so the four actions are the same wherever an
- * agent is shown. Close & Remove asks once, in the sheet itself, because removing an agent cannot be undone.
+ * The same sheet opens from the Agents list, from a space's agent rows and from the agent's own screen, so the actions are
+ * the same and in the same order wherever an agent is shown. Close & Remove asks once, in the sheet itself, because
+ * removing an agent cannot be undone.
  *
  * @param menu the row and, when renaming or confirming, the draft and the question.
  * @param onInterrupt asks the agent to stop what it is doing.
@@ -58,6 +67,7 @@ const val AGENT_ACTIONS_SHEET_TAG: String = "agent-actions-sheet"
  * @param onDraft receives every keystroke of the new name.
  * @param onConfirmRename saves the typed name.
  * @param onTogglePin pins the agent, or unpins it.
+ * @param onShowLimits asks the agent's machine for its subscription limits.
  * @param onDismiss closes the sheet.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,7 +86,11 @@ fun AgentMenuSheet(
     onDismiss: () -> Unit,
 ) {
     val tokens = LocalWhistlTokens.current
-    ModalBottomSheet(onDismissRequest = onDismiss, modifier = Modifier.testTag(AGENT_ACTIONS_SHEET_TAG)) {
+    ModalBottomSheet(
+        dragHandle = { SheetDragHandle() },
+        onDismissRequest = onDismiss,
+        modifier = Modifier.testTag(AGENT_ACTIONS_SHEET_TAG),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -98,6 +112,39 @@ fun AgentMenuSheet(
                 color = tokens.dim,
             )
             when {
+                menu.confirmingClose -> {
+                    // Closing cannot be undone, so the sheet asks first, in place of the actions. The question is the same
+                    // wherever the sheet was opened (SPEC §3).
+                    Text(
+                        text = stringResource(R.string.agents_close_title, menu.row.name),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.agents_close_text),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = tokens.muted,
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    ) {
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = onCancelClose, modifier = Modifier.heightIn(min = MinTouchTarget)) {
+                            Text(stringResource(R.string.common_cancel))
+                        }
+                        Button(
+                            onClick = onClose,
+                            colors = whistlButtonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError,
+                            ),
+                            modifier = Modifier.heightIn(min = MinTouchTarget).testTag(AGENT_CLOSE_CONFIRM_TAG),
+                        ) {
+                            Text(stringResource(R.string.agents_action_close))
+                        }
+                    }
+                }
                 menu.renaming -> {
                     OutlinedTextField(
                         value = menu.draft,
@@ -116,11 +163,11 @@ fun AgentMenuSheet(
                     }
                 }
                 else -> {
-                    // A finished agent has nothing to interrupt; the other three always make sense.
+                    // A finished agent has nothing to interrupt; the other actions always make sense.
                     if (menu.row.live) {
                         SheetAction(stringResource(R.string.agents_action_interrupt), onInterrupt)
                     }
-                    SheetAction(stringResource(R.string.agents_action_close), onAskClose)
+                    SheetAction(stringResource(R.string.agents_action_close), onClick = onAskClose, danger = true)
                     SheetAction(stringResource(R.string.agents_action_rename), onStartRename)
                     SheetAction(
                         stringResource(if (menu.row.pinned) R.string.agents_action_unpin else R.string.agents_action_pin),
@@ -136,10 +183,22 @@ fun AgentMenuSheet(
     }
 }
 
+/**
+ * One action of the sheet. A danger action (Close & Remove) is written in the error colour, so it reads as destructive
+ * before it is tapped.
+ *
+ * @param label the action's text.
+ * @param onClick called when the action is tapped.
+ * @param danger whether the action is destructive.
+ */
 @Composable
-private fun SheetAction(label: String, onClick: () -> Unit) {
+private fun SheetAction(label: String, onClick: () -> Unit, danger: Boolean = false) {
     TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-        Text(text = label, modifier = Modifier.fillMaxWidth())
+        Text(
+            text = label,
+            color = if (danger) MaterialTheme.colorScheme.error else Color.Unspecified,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

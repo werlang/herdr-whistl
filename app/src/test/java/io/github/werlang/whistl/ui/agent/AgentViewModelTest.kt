@@ -3,9 +3,11 @@ package io.github.werlang.whistl.ui.agent
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import io.github.werlang.whistl.data.DefaultSettingsRepository
+import io.github.werlang.whistl.data.PinnedAgents
 import io.github.werlang.whistl.data.TerminalReach
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.ShortcutKey
+import io.github.werlang.whistl.support.FakePins
 import io.github.werlang.whistl.support.InMemorySettingsStore
 import io.github.werlang.whistl.support.MainDispatcherRule
 import io.github.werlang.whistl.support.RecordingLog
@@ -60,6 +62,7 @@ class AgentViewModelTest {
     /**
      * A screen on terminal `t1` of the connected machine `m1`, with [screen] as its output.
      *
+     * @param pins the pinned agents the screen observes and writes.
      * @return the stack, the view model, and the settings it reads.
      */
     private suspend fun TestScope.openAgent(
@@ -67,6 +70,7 @@ class AgentViewModelTest {
         state: String = "live",
         screen: String = "",
         settings: DefaultSettingsRepository = DefaultSettingsRepository(InMemorySettingsStore()),
+        pins: FakePins = FakePins(),
     ): Triple<RepoStack, AgentViewModel, DefaultSettingsRepository> {
         val h = RepoStack(this)
         val terminal = terminalJson("t1", state = state, status = status)
@@ -75,7 +79,7 @@ class AgentViewModelTest {
         h.connector.eventsPipeFactory = { snapshotPipe(eventsSnapshot(1, listOf(terminal))) }
         h.addMachine()
         runCurrent()
-        val vm = AgentViewModel(h.terminals, h.agents, h.machines, settings, "m1", "t1")
+        val vm = AgentViewModel(h.terminals, h.agents, h.machines, settings, "m1", "t1", pins)
         runCurrent()
         advanceTimeBy(100)
         runCurrent()
@@ -349,14 +353,34 @@ class AgentViewModelTest {
         assertFalse(vm.state.value.menuOpen)
     }
 
-    /** Stop and remove asks first; once confirmed it kills the terminal, then removes it, then the screen closes. */
+    /**
+     * Close & Remove asks first, in the action sheet: Cancel goes back without sending anything, and confirming kills the
+     * terminal, then removes it, then the screen closes.
+     */
     @Test
-    fun stopAndRemoveKillsThenRemovesThenCloses() = runTest {
+    fun closeAsksFirstThenKillsRemovesAndCloses() = runTest {
         val (h, vm, _) = openAgent()
+        vm.onOpenMenu()
 
-        vm.onAskStop()
-        assertTrue(vm.state.value.confirmStop)
-        vm.onConfirmStop()
+        vm.onAskClose()
+        runCurrent()
+        assertTrue(vm.state.value.confirmingClose)
+        vm.onCancelClose()
+        runCurrent()
+        assertFalse(vm.state.value.confirmingClose)
+        assertTrue("Cancel sends nothing", h.sent("terminal.kill").isEmpty())
+
+        // Dismissing the sheet while the question is up drops the question too: reopening it shows the actions.
+        vm.onAskClose()
+        vm.onCloseMenu()
+        runCurrent()
+        assertFalse(vm.state.value.confirmingClose)
+        vm.onOpenMenu()
+        runCurrent()
+        assertFalse("the sheet reopens on the actions", vm.state.value.confirmingClose)
+
+        vm.onAskClose()
+        vm.onConfirmClose()
         runCurrent()
 
         assertEquals(
@@ -365,6 +389,34 @@ class AgentViewModelTest {
         )
         assertEquals(listOf("t1"), h.core.removedTerminals)
         assertTrue(vm.state.value.closed)
+    }
+
+    /**
+     * Pin toggles the agent in the store the lists use, under the same key, and the screen shows the new state without
+     * asking the core.
+     */
+    @Test
+    fun togglePinFlipsTheSharedPinsAndTheState() = runTest {
+        val pins = FakePins()
+        val (h, vm, _) = openAgent(pins = pins)
+        val key = PinnedAgents.key("m1", "t1")
+        assertFalse(vm.state.value.pinned)
+
+        vm.onOpenMenu()
+        vm.onTogglePin()
+        runCurrent()
+
+        assertTrue(vm.state.value.pinned)
+        assertTrue("the pin is stored under the lists' key", key in pins.pinned.value)
+        assertEquals(1, pins.toggles)
+        assertTrue("a pin is local", h.sent("terminal.label").isEmpty() && h.sent("terminal.send").isEmpty())
+
+        vm.onTogglePin()
+        runCurrent()
+
+        assertFalse(vm.state.value.pinned)
+        assertFalse(key in pins.pinned.value)
+        assertEquals(2, pins.toggles)
     }
 
     /** A machine that drops leaves the input disabled with the offline notice; Send does nothing. */
@@ -405,7 +457,15 @@ class AgentViewModelTest {
         h.connector.eventsPipeFactory = { snapshotPipe(eventsSnapshot(1, listOf(terminal))) }
         h.addMachine()
         runCurrent()
-        val vm = AgentViewModel(h.terminals, h.agents, h.machines, DefaultSettingsRepository(InMemorySettingsStore()), "m1", "t1")
+        val vm = AgentViewModel(
+            h.terminals,
+            h.agents,
+            h.machines,
+            DefaultSettingsRepository(InMemorySettingsStore()),
+            "m1",
+            "t1",
+            FakePins(),
+        )
         runCurrent()
         assertEquals(AgentStatusLabel.Working, vm.state.value.statusLabel)
         assertEquals("web", vm.state.value.spaceName)
@@ -462,7 +522,7 @@ class AgentViewModelTest {
     fun openingATerminalOfAnUnknownMachineShowsItAsGone() = runTest {
         val h = RepoStack(this)
         val settings = DefaultSettingsRepository(InMemorySettingsStore())
-        val vm = AgentViewModel(h.terminals, h.agents, h.machines, settings, "no-such-machine", "t1")
+        val vm = AgentViewModel(h.terminals, h.agents, h.machines, settings, "no-such-machine", "t1", FakePins())
         runCurrent()
 
         assertEquals(AgentNotice.Gone, vm.state.value.notice)

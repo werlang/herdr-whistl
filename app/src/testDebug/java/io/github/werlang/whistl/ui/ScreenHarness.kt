@@ -48,7 +48,6 @@ import io.github.werlang.whistl.ui.machines.MENU_EDIT_TAG
 import io.github.werlang.whistl.ui.machines.MENU_REMOVE_TAG
 import io.github.werlang.whistl.ui.machines.REMOVE_MACHINE_SHEET_TAG
 import io.github.werlang.whistl.ui.settings.ADD_KEY_SHEET_TAG
-import io.github.werlang.whistl.ui.agent.AGENT_MENU_SHEET_TAG
 import io.github.werlang.whistl.ui.agents.AGENT_ACTIONS_SHEET_TAG
 import io.github.werlang.whistl.ui.machines.HOST_KEY_SHEET_TAG
 import io.github.werlang.whistl.ui.settings.LICENSES_SHEET_TAG
@@ -160,7 +159,7 @@ enum class ShotScreen(val slug: String) {
     /** The New agent picker, open over the Space detail. */
     NewAgentPicker("new-agent-picker"),
 
-    /** The Agent screen's options sheet (Interrupt, Stop and remove), open over a working agent. */
+    /** The Agent screen's action sheet, the same one the Agents list opens, over a working agent. */
     AgentMenu("agent-menu"),
 
     /** The Agents list's action sheet, with Check limits among the actions (0.7.5). */
@@ -309,8 +308,7 @@ fun ShotScreen.sheetTag(): String? = when (this) {
     ShotScreen.RenameSpace -> RENAME_SPACE_SHEET_TAG
     ShotScreen.CloseSpaceConfirm -> CLOSE_SPACE_SHEET_TAG
     ShotScreen.NewAgentPicker -> PICKER_SHEET_TAG
-    ShotScreen.AgentMenu -> AGENT_MENU_SHEET_TAG
-    ShotScreen.AgentActions -> AGENT_ACTIONS_SHEET_TAG
+    ShotScreen.AgentMenu, ShotScreen.AgentActions -> AGENT_ACTIONS_SHEET_TAG
     ShotScreen.LicencesSheet -> LICENSES_SHEET_TAG
     ShotScreen.MachineHostKeySheet -> HOST_KEY_SHEET_TAG
     else -> null
@@ -351,7 +349,7 @@ fun ShotScreen.expectedText(): String {
         ShotScreen.SpaceDetail -> "web"
         ShotScreen.SpaceDetailOffline -> "lab"
         ShotScreen.NewAgentPicker -> app.getString(R.string.new_agent)
-        ShotScreen.AgentMenu -> app.getString(R.string.agent_interrupt)
+        ShotScreen.AgentMenu -> app.getString(R.string.agents_action_interrupt)
         ShotScreen.LicencesSheet -> app.getString(R.string.licenses_title)
         ShotScreen.MachineHostKeySheet -> app.getString(R.string.add_host_key_title, "build")
         ShotScreen.AgentsWorking, ShotScreen.AgentsIdle, ShotScreen.AgentsEmpty -> app.getString(R.string.agents_title)

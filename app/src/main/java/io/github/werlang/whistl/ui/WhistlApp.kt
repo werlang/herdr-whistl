@@ -67,7 +67,6 @@ import io.github.werlang.whistl.ui.agent.AgentScreen
 import io.github.werlang.whistl.ui.agent.AgentViewModel
 import io.github.werlang.whistl.ui.agents.AgentRow
 import io.github.werlang.whistl.ui.agents.AgentsScreen
-import io.github.werlang.whistl.ui.agents.AgentCloseSheet
 import io.github.werlang.whistl.ui.agents.AgentMenuSheet
 import io.github.werlang.whistl.ui.agents.SpaceFilter
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -449,12 +448,8 @@ private fun AgentsRoute(
             onOpenStarted(machineId, address)
         }
     }
-    state.menu?.takeIf { it.confirmingClose }?.let { menu ->
-        // Removing an agent is a destructive question and gets the app's standard confirmation, not a second line
-        // inside the action sheet (SPEC §3).
-        AgentCloseSheet(name = menu.row.name, onConfirm = model::close, onCancel = model::cancelClose)
-    }
-    state.menu?.takeIf { !it.confirmingClose }?.let { menu ->
+    state.menu?.let { menu ->
+        // One sheet for every state: the actions, the rename field and the close question (SPEC §2.4, §3).
         AgentMenuSheet(
             menu = menu,
             onInterrupt = model::interrupt,
@@ -486,6 +481,7 @@ private fun AgentRoute(machineId: String, address: String, onBack: () -> Unit) {
                     container.settings,
                     machineId,
                     address,
+                    pins = container.pins,
                     limits = container.limits,
                 )
             }

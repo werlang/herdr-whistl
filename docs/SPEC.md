@@ -99,17 +99,21 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    explanation and **Back to Spaces**.
 4. **Agents** — every agent on connected machines; filter chips All / Needs
    you / Working / Idle with counts; sorted blocked → working → done → idle.
-   Each row has an **action sheet** (its overflow button, or a long press):
-   **Interrupt**, **Stop**, **Close and remove**, **Rename**. The same four
-   actions exist on the agent's own screen. Acting from the list does not open
-   the terminal's stream: it takes the machine's lease, sends one command and
-   releases it. Rename writes the `whistl.name` label — the core cannot rename a
-   live terminal — and the row shows that label over the name the terminal was
+   Each row has an **action sheet** (its overflow button, or a long press), the
+   same component the agent's own screen opens: the agent's name and address,
+   then **Interrupt** (only while the agent is live), **Close & Remove** in the
+   error colour, **Rename**, **Pin/Unpin** and **Check limits**, in that order.
+   The actions are the same and in the same order wherever an agent is shown.
+   Close & Remove asks once, inside the sheet itself, with Cancel and an
+   error-coloured confirm. Acting from the list does not open the terminal's
+   stream: it takes the machine's lease, sends one command and releases it.
+   Rename writes the `whistl.name` label — the core cannot rename a live
+   terminal — and the row shows that label over the name the terminal was
    started with. Every action reports itself under the chips: interrupted,
-   stopped, closed, renamed, machine offline, agent already gone, or the core
-   refused it. With no agent anywhere, the empty list says how to start the first
-   one — connect a machine, open a space and start one there — unlike an empty
-   filter, which says "No agents with this status."
+   closed, renamed, pinned, unpinned, machine offline, agent already gone, or the
+   core refused it. With no agent anywhere, the empty list says how to start the
+   first one — connect a machine, open a space and start one there — unlike an
+   empty filter, which says "No agents with this status."
 5. **Agent** — a tmux-like **terminal only**, no chat UI: full-height monospace
    screen, a one-line status bar `[machine] space · agent    status`, then a
    horizontally scrolling **shortcut key bar**, then a text field + Send.
@@ -131,10 +135,14 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    punctuation is inserted and Ctrl stays armed; typing into a field that has
    text, or a paste or IME commit of more than one character, inserts and keeps
    Ctrl armed (phase 7 r9, user decision). Send never applies Ctrl: the text
-   goes out plainly and clears the latch (phase 7 r5 amendment U3). Menu:
-   Interrupt (Ctrl+C), Stop and remove. While the machine has no connection
-   (offline or connecting), the screen keeps the agent's last known status and
-   space; its status bar says `offline · reconnect in Machines`, and `finished ·
+   goes out plainly and clears the latch (phase 7 r5 amendment U3). Menu: the
+   same action sheet as the Agents list (§2.4) — Interrupt (Ctrl+C), Close &
+   Remove, Rename, Pin/Unpin, Check limits — with the agent's name and address
+   at the top. Close & Remove asks inside the sheet, then closes the screen.
+   Dismissing the sheet also drops the question or the rename field, so it
+   reopens on the actions.
+   While the machine has no connection (offline or connecting), the screen keeps
+   the agent's last known status and space; its status bar says `offline · reconnect in Machines`, and `finished ·
    read-only` only when the core reported the program finished (phase 7 r7).
    TalkBack reads the full sentence behind either short notice. The place
    `[machine] space · agent` never truncates before the message: the message is

@@ -54,7 +54,6 @@ import androidx.compose.ui.unit.dp
 import io.github.werlang.whistl.R
 import io.github.werlang.whistl.data.StartChoice
 import io.github.werlang.whistl.ui.agentLabelRes
-import io.github.werlang.whistl.ui.agents.AgentCloseSheet
 import io.github.werlang.whistl.ui.agents.AgentMenuSheet
 import io.github.werlang.whistl.ui.agents.NoticeBar
 import io.github.werlang.whistl.ui.components.MiddleEllipsisPath
@@ -134,12 +133,8 @@ fun SpaceDetailRoute(
         onDismissNotice = model::dismissNotice,
         modifier = modifier,
     )
-    // The same sheet as the Agents list, so the four actions are the same wherever an agent is shown (SPEC §2.4).
-    state.menu?.takeIf { it.confirmingClose }?.let { menu ->
-        // Removing an agent gets the app's standard destructive confirmation, not a second line in the action sheet.
-        AgentCloseSheet(name = menu.row.name, onConfirm = model::close, onCancel = model::cancelClose)
-    }
-    state.menu?.takeIf { !it.confirmingClose }?.let { menu ->
+    // The same sheet as the Agents list, so the actions are the same wherever an agent is shown (SPEC §2.4).
+    state.menu?.let { menu ->
         AgentMenuSheet(
             menu = menu,
             onInterrupt = model::interrupt,

@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,15 +47,11 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -120,12 +115,12 @@ import io.github.werlang.whistl.domain.CellStyle
 import io.github.werlang.whistl.domain.ShortcutBar
 import io.github.werlang.whistl.domain.ShortcutKey
 import io.github.werlang.whistl.ui.components.MinTouchTarget
-import io.github.werlang.whistl.ui.components.SheetDragHandle
 import io.github.werlang.whistl.ui.components.StatusLabel
-import io.github.werlang.whistl.ui.components.whistlButtonColors
 import io.github.werlang.whistl.ui.keyNameRes
 import io.github.werlang.whistl.ui.statusColor
-import io.github.werlang.whistl.ui.agents.AgentLimitsBlock
+import io.github.werlang.whistl.ui.agents.AgentMenu
+import io.github.werlang.whistl.ui.agents.AgentMenuSheet
+import io.github.werlang.whistl.ui.agents.AgentRow
 import io.github.werlang.whistl.ui.theme.LocalWhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlTokens
 import io.github.werlang.whistl.ui.theme.WhistlMono
@@ -140,15 +135,13 @@ const val AGENT_SCREEN_TAG: String = "agent-screen"
 /** The test tag of the terminal output: its lines are separate semantics nodes inside it (phase 7 r6, row 13). */
 const val AGENT_OUTPUT_TAG: String = "agent-output"
 
-/** The test tag of the Agent screen's options sheet (Interrupt, Stop and remove). */
-const val AGENT_MENU_SHEET_TAG: String = "agent-menu-sheet"
-
 /**
  * The Agent screen (SPEC §2.5): a full-height terminal, the status bar, the shortcut keys in Settings order, the text field and
- * Send. The overflow menu holds Interrupt and Stop and remove; Stop and remove asks first, then closes the screen.
+ * Send. Its overflow opens the same action sheet as the Agents list and the Space detail; Close & Remove asks in the sheet,
+ * then closes the screen.
  *
  * @param viewModel the screen's state and events.
- * @param onBack called when the screen closes: the back arrow, or the agent was stopped and removed.
+ * @param onBack called when the screen closes: the back arrow, or the agent was closed and removed.
  * @param modifier the modifier for the screen.
  */
 @Composable
@@ -171,12 +164,13 @@ fun AgentScreen(
         onOpenMenu = viewModel::onOpenMenu,
         onCloseMenu = viewModel::onCloseMenu,
         onInterrupt = viewModel::onInterrupt,
-        onAskStop = viewModel::onAskStop,
-        onCancelStop = viewModel::onCancelStop,
-        onConfirmStop = viewModel::onConfirmStop,
+        onAskClose = viewModel::onAskClose,
+        onCancelClose = viewModel::onCancelClose,
+        onConfirmClose = viewModel::onConfirmClose,
         onStartRename = viewModel::onStartRename,
         onRenameDraft = viewModel::onRenameDraft,
         onConfirmRename = viewModel::onConfirmRename,
+        onTogglePin = viewModel::onTogglePin,
         onShowLimits = viewModel::onShowLimits,
         onPaneSize = viewModel::onPaneSize,
         modifier = modifier,
@@ -184,7 +178,6 @@ fun AgentScreen(
 }
 
 /** The screen without its view model: what it shows, and the events it reports. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AgentContent(
     state: AgentUiState,
@@ -196,12 +189,13 @@ fun AgentContent(
     onOpenMenu: () -> Unit,
     onCloseMenu: () -> Unit,
     onInterrupt: () -> Unit,
-    onAskStop: () -> Unit,
-    onCancelStop: () -> Unit,
-    onConfirmStop: () -> Unit,
+    onAskClose: () -> Unit,
+    onCancelClose: () -> Unit,
+    onConfirmClose: () -> Unit,
     onStartRename: () -> Unit = {},
     onRenameDraft: (String) -> Unit = {},
     onConfirmRename: () -> Unit = {},
+    onTogglePin: () -> Unit = {},
     onShowLimits: () -> Unit = {},
     onPaneSize: (Int, Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
@@ -238,69 +232,38 @@ fun AgentContent(
         }
     }
     if (state.menuOpen) {
-        ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = onCloseMenu, modifier = Modifier.testTag(AGENT_MENU_SHEET_TAG)) {
-            SheetAction(text = stringResource(R.string.agent_interrupt), onClick = onInterrupt)
-            SheetAction(text = stringResource(R.string.agent_stop), danger = true, onClick = onAskStop)
-            if (state.renaming) {
-                OutlinedTextField(
-                    value = state.renameDraft,
-                    onValueChange = onRenameDraft,
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.agents_rename_label)) },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).heightIn(min = 56.dp),
-                )
-                TextButton(
-                    onClick = onConfirmRename,
-                    enabled = state.renameDraft.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                ) {
-                    Text(stringResource(R.string.agents_rename_save))
-                }
-            } else {
-                SheetAction(text = stringResource(R.string.agents_action_rename), onClick = onStartRename)
-            }
-            SheetAction(text = stringResource(R.string.agents_action_limits), onClick = onShowLimits)
-            // The same block the Agents list shows, so the two sheets say the same things in the same order (0.7.6). It sits
-            // inside the sheet's own padding: without it the labels and the numbers ran off both edges of the screen.
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
-                AgentLimitsBlock(state.limitsLoading, state.limits)
-            }
-            Spacer(Modifier.height(24.dp))
-        }
-    }
-    if (state.confirmStop) {
-        ModalBottomSheet(dragHandle = { SheetDragHandle() }, onDismissRequest = onCancelStop) {
-            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = stringResource(R.string.agent_stop_title, state.name),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = stringResource(R.string.agent_stop_text),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = LocalWhistlTokens.current.muted,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    TextButton(onClick = onCancelStop, modifier = Modifier.heightIn(min = MinTouchTarget)) {
-                        Text(stringResource(R.string.common_cancel))
-                    }
-                    Spacer(Modifier.weight(1f))
-                    Button(
-                        onClick = onConfirmStop,
-                        colors = whistlButtonColors(
-                            containerColor = MaterialTheme.colorScheme.error,
-                            contentColor = MaterialTheme.colorScheme.onError,
-                        ),
-                        modifier = Modifier.heightIn(min = MinTouchTarget),
-                    ) {
-                        Text(stringResource(R.string.agent_stop_confirm))
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-            }
-        }
+        // The same sheet the Agents list and the Space detail open: the agent's own screen adds no second menu and no
+        // second confirmation (SPEC §2.4, §2.5).
+        AgentMenuSheet(
+            menu = AgentMenu(
+                row = AgentRow(
+                    machineId = state.machineId,
+                    address = state.address,
+                    name = state.name,
+                    status = state.status,
+                    waiting = state.statusLabel == AgentStatusLabel.NeedsYou,
+                    live = state.live,
+                    machineName = state.machineName,
+                    spaceName = state.spaceName,
+                    pinned = state.pinned,
+                ),
+                renaming = state.renaming,
+                draft = state.renameDraft,
+                confirmingClose = state.confirmingClose,
+                limits = state.limits,
+                limitsLoading = state.limitsLoading,
+            ),
+            onInterrupt = onInterrupt,
+            onAskClose = onAskClose,
+            onCancelClose = onCancelClose,
+            onClose = onConfirmClose,
+            onStartRename = onStartRename,
+            onDraft = onRenameDraft,
+            onConfirmRename = onConfirmRename,
+            onTogglePin = onTogglePin,
+            onShowLimits = onShowLimits,
+            onDismiss = onCloseMenu,
+        )
     }
 }
 
@@ -1128,25 +1091,6 @@ private const val SHADOW_LIMIT: Int = 256
 
 /** The test tag of the invisible field that receives the keyboard. */
 const val AGENT_KEYBOARD_TAG: String = "agent-keyboard"
-
-/** One row of the overflow menu sheet; a danger row is red. Touch target: the whole row, at least 48 dp. */
-@Composable
-private fun SheetAction(text: String, danger: Boolean = false, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = MinTouchTarget)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 24.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-        )
-    }
-}
 
 /** The terminal's font size in sp (SPEC §2.6): small 11, medium 12.5, large 14.5, as the prototype sets them. */
 fun fontSizeFor(size: FontSize): TextUnit = when (size) {

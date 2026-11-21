@@ -64,12 +64,6 @@
     <string name="agent_notice_finished_a11y">This program has finished. It is read-only.</string>
     <string name="agent_notice_blocked">The program refused the text. Try again.</string>
     <string name="agent_notice_refused">The machine did not accept that. Try again.</string>
-    <string name="agent_interrupt">Interrupt (Ctrl+C)</string>
-    <string name="agent_stop">Stop and remove</string>
-    <string name="agent_stop_title">Stop and remove %1$s?</string>
-    <string name="agent_stop_text">The program stops and its terminal is removed. This cannot be undone.</string>
-    <string name="agent_stop_confirm">Stop and remove</string>
-
     <!-- Shortcut key names, for accessibility. The glyphs on the keys are not translated. -->
     <string name="key_esc">Escape</string>
     <string name="key_tab">Tab</string>
@@ -317,7 +311,6 @@
     <string name="machines_open_spaces">Spaces of %1$s</string>
     <string name="agents_action_pin">Pin agent</string>
     <string name="agents_action_unpin">Unpin agent</string>
-    <string name="agents_close_confirm_body">It will be stopped and removed from the list. This cannot be undone.</string>
     <string name="agents_notice_pinned">Pinned.</string>
     <string name="agents_notice_unpinned">Unpinned.</string>
     <string name="agent_paste">Paste</string>

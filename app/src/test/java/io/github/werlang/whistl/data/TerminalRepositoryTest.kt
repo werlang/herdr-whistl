@@ -64,7 +64,7 @@ class TerminalRepositoryTest {
         handle.close()
     }
 
-    /** Stop and remove sends `terminal.kill` before `terminal.rm`. */
+    /** Closing an agent sends `terminal.kill` before `terminal.rm`. */
     @Test
     fun stopAndRemoveKillsBeforeItRemoves() = runTest {
         val (h, handle) = openOn(terminalJson("t1"))

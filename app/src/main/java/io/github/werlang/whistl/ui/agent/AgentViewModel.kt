@@ -12,6 +12,7 @@ import io.github.werlang.whistl.data.LimitsRepository
 import io.github.werlang.whistl.data.LimitsResult
 import io.github.werlang.whistl.data.MachineAgent
 import io.github.werlang.whistl.data.MachinesRepository
+import io.github.werlang.whistl.data.PinnedAgents
 import io.github.werlang.whistl.data.SettingsRepository
 import io.github.werlang.whistl.data.TerminalAction
 import io.github.werlang.whistl.data.TerminalHandle
@@ -99,10 +100,12 @@ enum class AgentStatusLabel {
  *
  * @property name the agent's name.
  * @property address the terminal address.
+ * @property machineId the machine the agent runs on, for the action sheet's row.
  * @property machineName the machine's name.
  * @property spaceName the space's name, or `null` for "No space".
  * @property statusLabel the label next to the status dot.
  * @property status the raw status, for the dot's colour; `null` for a plain program.
+ * @property live whether the terminal is live: a finished agent has nothing to interrupt.
  * @property frame the terminal as the emulator holds it: history and the screen rows, with the cursor.
  * @property reach whether the output is current.
  * @property input the text field, with its cursor.
@@ -113,20 +116,23 @@ enum class AgentStatusLabel {
  * @property canType whether the text field and the key bar take input.
  * @property canSend whether Send is enabled: input allowed and the field not empty.
  * @property blockedAgent whether the agent is blocked, so the screen explains that Send forces the text.
- * @property menuOpen whether the overflow menu sheet is open.
- * @property confirmStop whether the stop-and-remove confirmation is open.
- * @property closed `true` once the agent was stopped and removed: the screen navigates back.
+ * @property menuOpen whether the action sheet is open.
+ * @property confirmingClose whether the close-and-remove question is open inside the action sheet.
+ * @property closed `true` once the agent was closed and removed: the screen navigates back.
+ * @property pinned whether the agent is pinned on this device.
  * @property fontSize the terminal font size from Settings.
  */
 data class AgentUiState(
     val name: String,
     val address: String,
+    val machineId: String,
     val machineName: String,
     /** The user the machine logs in as: what the empty input field says (0.6.0). */
     val user: String,
     val spaceName: String?,
     val statusLabel: AgentStatusLabel,
     val status: AgentStatus?,
+    val live: Boolean,
     val frame: TerminalFrame,
     val reach: TerminalReach,
     val input: TextFieldValue,
@@ -138,8 +144,9 @@ data class AgentUiState(
     val canSend: Boolean,
     val blockedAgent: Boolean,
     val menuOpen: Boolean,
-    val confirmStop: Boolean,
+    val confirmingClose: Boolean,
     val closed: Boolean,
+    val pinned: Boolean,
     val fontSize: FontSize,
     /** Whether the menu is asking for a new name, and what has been typed (0.7.6). */
     val renaming: Boolean = false,
@@ -167,7 +174,7 @@ private data class Interaction(
     /** Set when the terminal could not be opened: the machine or the terminal is no longer there (phase 6 P0-2). */
     val unavailable: Boolean = false,
     val menuOpen: Boolean = false,
-    val confirmStop: Boolean = false,
+    val confirmingClose: Boolean = false,
     val closed: Boolean = false,
     /** Whether the hold-to-send hint has already been shown for this screen (0.6.2). */
     val taughtHold: Boolean = false,
@@ -190,7 +197,8 @@ private data class Interaction(
  *   and Ctrl disarms (phase 7 r9, user decision); other typing inserts and keeps Ctrl armed. Send never applies Ctrl: the
  *   text goes out plainly and clears the latch (phase 7 r5 amendment U3).
  * - `/ | ~ -` insert their character at the cursor. Every other bar key is sent at once with `terminal.keys`.
- * - Interrupt sends Ctrl+C. Stop and remove asks first, then kills and removes the terminal, and the screen closes.
+ * - Interrupt sends Ctrl+C. Close & Remove asks first, in the same action sheet the lists use, then kills and removes the
+ *   terminal, and the screen closes.
  * - Input is disabled while the machine is offline, the terminal is gone, or the program has finished.
  * - While the machine has no connection (offline or connecting), the agent is shown as it was last seen: its status and its
  *   space stay, and its label says offline. Only a program the core reported finished says finished (phase 7 r7).
@@ -201,6 +209,7 @@ private data class Interaction(
  * @param settings the font size and the shortcut bar.
  * @param machineId the machine the agent runs on.
  * @param address the terminal address.
+ * @param pins the pinned agents of this device, the same set the Agents list uses.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AgentViewModel(
@@ -210,11 +219,18 @@ class AgentViewModel(
     settings: SettingsRepository,
     private val machineId: String,
     private val address: String,
+    private val pins: PinnedAgents,
     private val agentsRepo: AgentsRepository = agents,
     private val limits: LimitsRepository? = null,
 ) : ViewModel() {
     private val handle = MutableStateFlow<TerminalHandle?>(null)
     private val interaction = MutableStateFlow(Interaction())
+
+    /** The key the pin is stored under, the same one the Agents list and the Space detail use. */
+    private val pinKey: String = PinnedAgents.key(machineId, address)
+
+    /** The screen's own state and whether this agent is pinned, as one flow so the state stays a five-way combine. */
+    private val ownAndPin = combine(interaction, pins.pinned) { own, keys -> own to (pinKey in keys) }
 
     private val screen = handle.flatMapLatest { open ->
         open?.screen ?: flowOf(TerminalScreen(frame = TerminalFrame.empty(DEFAULT_COLS, DEFAULT_ROWS), reach = TerminalReach.Offline))
@@ -239,8 +255,8 @@ class AgentViewModel(
         agent,
         machines.machines(),
         settings.settings,
-        interaction,
-    ) { output, sighting, machineList, prefs, own ->
+        ownAndPin,
+    ) { output, sighting, machineList, prefs, (own, pinned) ->
         val machine = machineList.firstOrNull { it.id == machineId }
         build(
             output,
@@ -250,6 +266,7 @@ class AgentViewModel(
             prefs.fontSize,
             prefs.shortcutBar,
             own,
+            pinned,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, placeholder())
 
@@ -450,9 +467,12 @@ class AgentViewModel(
         interaction.value = interaction.value.copy(menuOpen = true)
     }
 
-    /** Closes the overflow menu. */
+    /**
+     * Closes the overflow menu. A dismissed sheet also drops the close question and the rename field: otherwise opening the
+     * sheet again would show it stuck in that step.
+     */
     fun onCloseMenu() {
-        interaction.value = interaction.value.copy(menuOpen = false)
+        interaction.value = interaction.value.copy(menuOpen = false, confirmingClose = false, renaming = false)
     }
 
     /** Turns the menu into the rename field, with the current name in it (0.7.6). */
@@ -504,19 +524,22 @@ class AgentViewModel(
         }
     }
 
-    /** Asks for confirmation before stopping and removing the agent. */
-    fun onAskStop() {
-        interaction.value = interaction.value.copy(menuOpen = false, confirmStop = true)
+    /**
+     * Turns the action sheet into the close question. The sheet stays open: the question is the same one the Agents list
+     * and the Space detail ask, in the same component.
+     */
+    fun onAskClose() {
+        interaction.value = interaction.value.copy(confirmingClose = true)
     }
 
-    /** Cancels the stop-and-remove confirmation. */
-    fun onCancelStop() {
-        interaction.value = interaction.value.copy(confirmStop = false)
+    /** Goes back from the close question to the actions. */
+    fun onCancelClose() {
+        interaction.value = interaction.value.copy(confirmingClose = false)
     }
 
     /** Confirmed: kills the terminal, removes it, and closes the screen. */
-    fun onConfirmStop() {
-        interaction.value = interaction.value.copy(confirmStop = false)
+    fun onConfirmClose() {
+        interaction.value = interaction.value.copy(confirmingClose = false, menuOpen = false)
         viewModelScope.launch {
             val outcome = handle.value?.stopAndRemove() ?: TerminalAction.Offline
             interaction.value = if (outcome == TerminalAction.Done || outcome == TerminalAction.Gone) {
@@ -525,6 +548,15 @@ class AgentViewModel(
                 interaction.value.copy(refusal = outcome.notice())
             }
         }
+    }
+
+    /**
+     * Pins this agent, or unpins it, in the same store the Agents list and the Space detail write. A pin is local: nothing
+     * is sent to the core, and the sheet closes as it does on the lists.
+     */
+    fun onTogglePin() {
+        pins.toggle(pinKey)
+        interaction.value = interaction.value.copy(menuOpen = false)
     }
 
     /** The screen closes: the terminal stops being read and the machine's lease is given back. */
@@ -571,6 +603,7 @@ class AgentViewModel(
         fontSize: FontSize,
         keyBar: List<ShortcutKey>,
         own: Interaction,
+        pinned: Boolean,
     ): AgentUiState {
         // No connection (offline, or still connecting): the agent is shown as last seen, so its status and space stay (phase 7 r7).
         val offline = output.reach == TerminalReach.Offline && !own.unavailable
@@ -593,6 +626,7 @@ class AgentViewModel(
         return AgentUiState(
             name = terminal?.let { displayName(it.name, it.argv, it.address) } ?: address,
             address = address,
+            machineId = machineId,
             machineName = machineName,
             user = machineUser,
             spaceName = current?.space?.name,
@@ -602,6 +636,7 @@ class AgentViewModel(
                 statusLabel(status, live, terminal != null)
             },
             status = status,
+            live = live,
             frame = output.frame,
             reach = output.reach,
             input = input,
@@ -613,8 +648,9 @@ class AgentViewModel(
             canSend = canType && input.text.isNotBlank(),
             blockedAgent = status == AgentStatus.Blocked && live,
             menuOpen = own.menuOpen,
-            confirmStop = own.confirmStop,
+            confirmingClose = own.confirmingClose,
             closed = own.closed,
+            pinned = pinned,
             fontSize = fontSize,
             renaming = own.renaming,
             renameDraft = own.renameDraft,
@@ -636,11 +672,13 @@ class AgentViewModel(
     private fun placeholder(): AgentUiState = AgentUiState(
         name = address,
         address = address,
+        machineId = machineId,
         machineName = "",
         user = "",
         spaceName = null,
         statusLabel = AgentStatusLabel.Offline,
         status = null,
+        live = false,
         frame = TerminalFrame.empty(DEFAULT_COLS, DEFAULT_ROWS),
         reach = TerminalReach.Offline,
         input = TextFieldValue(""),
@@ -652,8 +690,9 @@ class AgentViewModel(
         canSend = false,
         blockedAgent = false,
         menuOpen = false,
-        confirmStop = false,
+        confirmingClose = false,
         closed = false,
+        pinned = false,
         fontSize = FontSize.Medium,
     )
 }
