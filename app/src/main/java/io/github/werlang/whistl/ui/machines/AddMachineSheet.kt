@@ -83,6 +83,9 @@ const val ADD_TRUST_TAG: String = "add-trust"
 /** The test tag of the Retry button. */
 const val ADD_RETRY_TAG: String = "add-retry"
 
+/** The test tag of the Edit button of the Add machine error stages. */
+const val ADD_EDIT_TAG: String = "add-edit"
+
 /** The test tag of the Remove machine button of the changed-key stage. */
 const val ADD_REMOVE_TAG: String = "add-remove"
 
@@ -94,11 +97,12 @@ const val ADD_CLOSE_TAG: String = "add-close"
  * sheet then shows what the connection needs: a host key to trust, a changed key that refuses the connection, a refused login
  * or an unreachable machine with Retry, or the hc version it cannot speak. Connected closes the sheet.
  *
- * Each stage has one primary action, next to Close, in the sheet's bottom row: Connect, Trust and connect, Remove machine (for
- * a changed key, the only action besides Close), or Retry.
+ * Each stage has its actions next to Close, in the sheet's bottom row: Connect, Trust and connect, Remove machine (for a
+ * changed key, the only action besides Close), or Retry. In Add mode, a failed attempt also offers Edit, which discards the
+ * provisional machine and returns to the form.
  *
  * The password is typed into this sheet only. It is handed to the view model at Connect as a `CharArray`, and the typed text
- * is dropped as soon as the flow leaves the form. It is never part of [state].
+ * is dropped as soon as the flow leaves the form, including when Edit returns to it. It is never part of [state].
  *
  * @param state what the sheet shows.
  * @param onHost called when the host text changes.
@@ -109,6 +113,7 @@ const val ADD_CLOSE_TAG: String = "add-close"
  * @param onConnect called with the password in password mode, or `null` in key mode.
  * @param onTrust called to trust the presented host key and connect.
  * @param onRetry called to try the connection again.
+ * @param onEdit called to discard the provisional machine and reopen the form, in the Add machine error stages.
  * @param onRemove called to forget the machine that was added.
  * @param onCopyKey called to copy the device's public key.
  * @param onClose called when the sheet closes, by a button or by dismissal.
@@ -125,42 +130,62 @@ fun AddMachineSheet(
     onConnect: (CharArray?) -> Unit,
     onTrust: () -> Unit,
     onRetry: () -> Unit,
+    onEdit: () -> Unit,
     onRemove: () -> Unit,
     onCopyKey: () -> Unit,
     onClose: () -> Unit,
     onPasswordEntered: (Boolean) -> Unit = {},
 ) {
     var password by remember { mutableStateOf(TextFieldValue("")) }
-    LaunchedEffect(state.stage) {
-        if (state.stage != AddStage.Form) password = TextFieldValue("")
-    }
+    // Every stage change drops the typed password: Connect hands it over, and Edit must come back to an empty field.
+    LaunchedEffect(state.stage) { password = TextFieldValue("") }
     LaunchedEffect(password.text) { onPasswordEntered(password.text.isNotEmpty()) }
-    val primary: PrimaryAction? = when (state.stage) {
+    // Edit empties the field before returning to the form, so the old text is never painted again.
+    val clearAndEdit: () -> Unit = {
+        password = TextFieldValue("")
+        onEdit()
+    }
+    val actions: List<PrimaryAction> = when (state.stage) {
         AddStage.Form -> if (state.editing) {
             // Edit machine: Save waits for a change, and for a password where the login method needs one.
-            PrimaryAction(
-                label = R.string.edit_save,
-                tag = ADD_CONNECT_TAG,
-                enabled = state.canSave,
-                danger = false,
-                onClick = { onConnect(if (state.auth == AuthChoice.Password && password.text.isNotEmpty()) password.text.toCharArray() else null) },
+            listOf(
+                PrimaryAction(
+                    label = R.string.edit_save,
+                    tag = ADD_CONNECT_TAG,
+                    enabled = state.canSave,
+                    danger = false,
+                    onClick = { onConnect(if (state.auth == AuthChoice.Password && password.text.isNotEmpty()) password.text.toCharArray() else null) },
+                ),
             )
         } else {
-            PrimaryAction(
-                label = R.string.add_connect,
-                tag = ADD_CONNECT_TAG,
-                // Connect waits for every required field: host and user, and the password in password mode.
-                enabled = state.canConnect && (state.auth == AuthChoice.Key || password.text.isNotEmpty()),
-                danger = false,
-                onClick = { onConnect(if (state.auth == AuthChoice.Password) password.text.toCharArray() else null) },
+            listOf(
+                PrimaryAction(
+                    label = R.string.add_connect,
+                    tag = ADD_CONNECT_TAG,
+                    // Connect waits for every required field: host and user, and the password in password mode.
+                    enabled = state.canConnect && (state.auth == AuthChoice.Key || password.text.isNotEmpty()),
+                    danger = false,
+                    onClick = { onConnect(if (state.auth == AuthChoice.Password) password.text.toCharArray() else null) },
+                ),
             )
         }
 
-        AddStage.HostKeyUnknown -> PrimaryAction(R.string.add_trust, ADD_TRUST_TAG, true, false, onTrust)
-        AddStage.HostKeyChanged -> PrimaryAction(R.string.machine_remove, ADD_REMOVE_TAG, true, true, onRemove)
-        AddStage.LoginRefused, AddStage.Unreachable, AddStage.ConnectionRefused, AddStage.Internal, AddStage.CoreMissing ->
-            PrimaryAction(R.string.add_retry, ADD_RETRY_TAG, true, false, onRetry)
-        AddStage.Connecting, AddStage.UnsupportedCore, AddStage.Connected, AddStage.Missing -> null
+        AddStage.HostKeyUnknown -> listOf(PrimaryAction(R.string.add_trust, ADD_TRUST_TAG, true, false, onTrust))
+        AddStage.HostKeyChanged -> listOf(PrimaryAction(R.string.machine_remove, ADD_REMOVE_TAG, true, true, onRemove))
+        AddStage.LoginRefused, AddStage.Unreachable, AddStage.ConnectionRefused, AddStage.Internal, AddStage.CoreMissing -> buildList {
+            add(PrimaryAction(R.string.add_retry, ADD_RETRY_TAG, true, false, onRetry))
+            // Edit is Add machine only: it discards the provisional machine and reopens the form. Edit machine keeps Retry.
+            if (!state.editing) add(editAction(clearAndEdit))
+        }
+
+        // Add machine can retry an unsupported protocol (the machine may have been updated); Edit is available there too.
+        AddStage.UnsupportedCore -> if (state.editing) {
+            emptyList()
+        } else {
+            listOf(PrimaryAction(R.string.add_retry, ADD_RETRY_TAG, true, false, onRetry), editAction(clearAndEdit))
+        }
+
+        AddStage.Connecting, AddStage.Connected, AddStage.Missing -> emptyList()
     }
     // The sheet's title names what the stage is about, so the host-key stages do not repeat it in the panel below.
     val name = state.machineName ?: state.host
@@ -209,20 +234,21 @@ fun AddMachineSheet(
             } else {
                 StagePanel(state = state)
             }
-            ActionRow(primary = primary, onClose = onClose)
+            ActionRow(actions = actions, onClose = onClose)
             Spacer(Modifier.size(16.dp))
         }
     }
 }
 
 /**
- * The one primary action of a stage, shown next to Close.
+ * An action of a stage, shown next to Close.
  *
  * @property label the action's label.
  * @property tag the action's test tag.
  * @property enabled whether it can be tapped.
  * @property danger whether it is destructive, in the error colour.
  * @property onClick called when tapped.
+ * @property filled whether it is the stage's main button, or a secondary text button.
  */
 private class PrimaryAction(
     val label: Int,
@@ -230,7 +256,17 @@ private class PrimaryAction(
     val enabled: Boolean,
     val danger: Boolean,
     val onClick: () -> Unit,
+    val filled: Boolean = true,
 )
+
+/**
+ * The Edit action of the Add machine error stages: it leaves the failed attempt and reopens the form.
+ *
+ * @param onEdit called when tapped.
+ * @return the action.
+ */
+private fun editAction(onEdit: () -> Unit): PrimaryAction =
+    PrimaryAction(R.string.machine_edit, ADD_EDIT_TAG, true, false, onEdit, filled = false)
 
 /**
  * The form's fields: host, user, port, name, the login method, and the key or the password for it.
@@ -565,33 +601,44 @@ private fun StagePanel(state: AddMachineUiState) {
 }
 
 /**
- * The sheet's bottom row: Close on the left, and the stage's primary action on the right when it has one.
+ * The sheet's bottom row: Close on the left, and the stage's actions on the right, in order.
  *
- * @param primary the primary action, or `null` for none.
+ * @param actions the stage's actions, empty when it has none.
  * @param onClose called to close the sheet.
  */
 @Composable
-private fun ActionRow(primary: PrimaryAction?, onClose: () -> Unit) {
+private fun ActionRow(actions: List<PrimaryAction>, onClose: () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = onClose, modifier = Modifier.heightIn(min = MinTouchTarget).testTag(ADD_CLOSE_TAG)) {
             Text(stringResource(R.string.add_close))
         }
         Spacer(Modifier.weight(1f))
-        if (primary != null) {
-            Button(
-                onClick = primary.onClick,
-                enabled = primary.enabled,
-                colors = if (primary.danger) {
-                    whistlButtonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError,
-                    )
-                } else {
-                    whistlButtonColors()
-                },
-                modifier = Modifier.heightIn(min = MinTouchTarget).testTag(primary.tag),
-            ) {
-                Text(stringResource(primary.label))
+        actions.forEachIndexed { index, action ->
+            if (index > 0) Spacer(Modifier.size(8.dp))
+            if (action.filled) {
+                Button(
+                    onClick = action.onClick,
+                    enabled = action.enabled,
+                    colors = if (action.danger) {
+                        whistlButtonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError,
+                        )
+                    } else {
+                        whistlButtonColors()
+                    },
+                    modifier = Modifier.heightIn(min = MinTouchTarget).testTag(action.tag),
+                ) {
+                    Text(stringResource(action.label))
+                }
+            } else {
+                TextButton(
+                    onClick = action.onClick,
+                    enabled = action.enabled,
+                    modifier = Modifier.heightIn(min = MinTouchTarget).testTag(action.tag),
+                ) {
+                    Text(stringResource(action.label))
+                }
             }
         }
     }

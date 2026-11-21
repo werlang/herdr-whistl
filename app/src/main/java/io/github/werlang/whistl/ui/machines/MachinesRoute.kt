@@ -120,6 +120,7 @@ private fun MachineFormRoute(
         onConnect = add::connect,
         onTrust = add::trust,
         onRetry = add::retry,
+        onEdit = add::editForm,
         onRemove = add::removeMachine,
         onCopyKey = add::copyPublicKey,
         onClose = {

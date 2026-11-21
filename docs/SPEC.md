@@ -40,7 +40,18 @@ The Agents destination shows a badge with the count of agents in `blocked`.
    SSH key mode shows this device's public key with a Copy button and the
    hint "add it to ~/.ssh/authorized_keys". Connect → first-connection
    host-key confirmation (algorithm + SHA256 fingerprint) → Trust and connect →
-   detection of installed agents. The host-key sheet is titled for the context —
+   detection of installed agents. Connect adds the machine **provisionally**:
+   the record exists so the first connection can run (host key, login), and it
+   becomes permanent the first time the machine reaches connected. Closing the
+   sheet before that — Close, drag or back, or the sheet going away — discards
+   the provisional record and its saved credentials. A failed attempt (login
+   refused, unreachable, core missing, connection refused, unsupported protocol
+   generation, internal failure) offers **Retry · Edit · Close**: Retry keeps the
+   provisional record and tries again; Edit discards it and reopens the form
+   with name, host, port, user and login method as typed, and the password field
+   empty. A changed host key still offers only Remove machine or Close, and
+   closing without a successful connection never trusts the presented key.
+   The host-key sheet is titled for the context —
    "First connection to <machine>" or "The host key of <machine> changed", never
    "Add machine". Card menu: Edit machine, Reconnect, Remove
    (confirm; spaces of that machine leave the app, agents keep running there).

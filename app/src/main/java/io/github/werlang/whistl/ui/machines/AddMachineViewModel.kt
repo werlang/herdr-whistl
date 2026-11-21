@@ -12,6 +12,8 @@ import io.github.werlang.whistl.data.ErrorKind
 import io.github.werlang.whistl.data.MachinesRepository
 import io.github.werlang.whistl.data.NewMachine
 import io.github.werlang.whistl.domain.Machine
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -64,6 +66,19 @@ enum class AddStage {
     /** The machine is no longer added (removed elsewhere, or never stored): nothing can be done with it. Close shows (phase 6 P0-2). */
     Missing,
 }
+
+/**
+ * Whether the Add machine sheet offers Edit in this stage: the first attempt failed before the machine connected, so the
+ * provisional record can be discarded and the form reopened with what the user typed. The host-key stages do not: there the
+ * user must trust the key (unknown) or remove the machine (changed), and the other stages are not failures of the form.
+ */
+val AddStage.canEdit: Boolean
+    get() = when (this) {
+        AddStage.LoginRefused, AddStage.Unreachable, AddStage.ConnectionRefused, AddStage.Internal,
+        AddStage.CoreMissing, AddStage.UnsupportedCore -> true
+
+        AddStage.Form, AddStage.Connecting, AddStage.HostKeyUnknown, AddStage.HostKeyChanged, AddStage.Connected, AddStage.Missing -> false
+    }
 
 /**
  * What the Add machine sheet shows.
@@ -120,6 +135,9 @@ data class AddMachineUiState(
  * machine through the repository; the connection state then drives the sheet: a host key to trust, a blocking changed key, a
  * refused login, an unreachable machine, or connected, which closes it. Events in, state out.
  *
+ * The machine added for the first connection is provisional until it connects once: closing the sheet before that discards it,
+ * and so does Edit, which reopens the form with the values as typed. Once connected it is permanent, and Close keeps it.
+ *
  * Edit machine (phase 7 P2) is the same sheet with [editing] set: the form starts with the stored machine, and Connect is Save.
  * Save edits the machine in place, and follows the new host's first connection only when the host changed.
  *
@@ -168,6 +186,13 @@ class AddMachineViewModel(
     private var passwordEntered = false
     private var observer: Job? = null
     private var attempted = false
+
+    /**
+     * Add mode: the machine added for this attempt, until it connects once. It is discarded when the sheet closes, when Edit
+     * returns to the form, or when the view model is cleared, so a machine that never connected leaves nothing behind. Edit
+     * machine (existing machine) never sets it, so closing there can never remove the stored machine.
+     */
+    private var provisionalId: String? = null
 
     /** The sheet's state. */
     val uiState: StateFlow<AddMachineUiState> = state
@@ -230,6 +255,8 @@ class AddMachineViewModel(
                     val machine = NewMachine(name = draft.name, host = draft.host, port = draft.port, user = draft.user)
                     when (val result = machines.add(machine, passwordGiven)) {
                         is AddResult.Added -> {
+                            // Provisional until the first successful connection: Close and Edit discard it until then.
+                            provisionalId = result.machine.id
                             state.value = state.value.copy(
                                 machineId = result.machine.id,
                                 machineName = result.machine.name,
@@ -362,7 +389,7 @@ class AddMachineViewModel(
         }
     }
 
-    /** Retry: tries the connection once more after a refused login or an unreachable machine. */
+    /** Retry: tries the connection once more after a failed attempt. The provisional machine is kept for the new attempt. */
     fun retry() {
         val id = state.value.machineId ?: return
         viewModelScope.launch {
@@ -374,10 +401,37 @@ class AddMachineViewModel(
         }
     }
 
+    /**
+     * Add mode, Edit: forgets the provisional machine and goes back to the form, with the host, user, port, name and login
+     * method as typed. No password is here to restore: the sheet empties its own field when the stage returns to the form.
+     */
+    fun editForm() {
+        if (editing != null || !state.value.stage.canEdit) return
+        val id = provisionalId ?: return
+        observer?.cancel()
+        provisionalId = null
+        discard(id)
+        // A new attempt starts from scratch: an initial Offline is Connecting again, not a failure of the previous try.
+        attempted = false
+        val next = state.value.copy(
+            stage = AddStage.Form,
+            problems = emptyMap(),
+            hostKeyAlgorithm = null,
+            hostKeyFingerprint = null,
+            trustedFingerprint = null,
+            presentedFingerprint = null,
+            machineId = null,
+            machineName = null,
+        )
+        state.value = next.copy(canConnect = canConnect(next), canSave = false)
+    }
+
     /** Remove machine: forgets the machine that was added, from the changed-key stage. The sheet closes. */
     fun removeMachine() {
         val id = state.value.machineId ?: return
         observer?.cancel()
+        // The machine is removed here on purpose: clear the provisional marker so closing cannot remove it twice.
+        if (provisionalId == id) provisionalId = null
         viewModelScope.launch {
             machines.remove(id)
             state.value = state.value.copy(closed = true)
@@ -390,14 +444,37 @@ class AddMachineViewModel(
         state.value = state.value.copy(publicKeyCopied = true)
     }
 
-    /** Closes the sheet. A machine that was added stays in the list, and keeps its connection. */
+    /**
+     * Closes the sheet. A machine that connected once stays in the list, and keeps its connection. A machine that never
+     * connected was provisional: it is discarded, with the credentials stored with it.
+     */
     fun close() {
         observer?.cancel()
+        val provisional = provisionalId.also { provisionalId = null }
         state.value = state.value.copy(closed = true)
+        if (provisional != null) discard(provisional)
     }
 
     override fun onCleared() {
         observer?.cancel()
+        val provisional = provisionalId.also { provisionalId = null } ?: return
+        discard(provisional)
+    }
+
+    /**
+     * Forgets a provisional machine outside `viewModelScope`: [close] and [onCleared] can run as the sheet is going away, when
+     * that scope is already cancelled. Nothing can show the result, so a failure is ignored.
+     *
+     * @param id the provisional machine.
+     */
+    private fun discard(id: String) {
+        CoroutineScope(Dispatchers.Unconfined).launch {
+            try {
+                machines.remove(id)
+            } catch (_: Exception) {
+                // The machine may already be gone, or the store cannot write; the sheet is closing either way.
+            }
+        }
     }
 
     /** Follows the new machine's connection state until the sheet closes. */
@@ -431,7 +508,11 @@ class AddMachineViewModel(
             }
 
             ConnectionState.Offline -> current.copy(stage = if (attempted) AddStage.Unreachable else AddStage.Connecting)
-            is ConnectionState.Connected -> current.copy(stage = AddStage.Connected, closed = true)
+            is ConnectionState.Connected -> {
+                // The first successful connection makes the added machine permanent: from now on, Close keeps it.
+                provisionalId = null
+                current.copy(stage = AddStage.Connected, closed = true)
+            }
             is ConnectionState.HostKeyUnknown -> current.copy(
                 stage = AddStage.HostKeyUnknown,
                 hostKeyAlgorithm = connection.algorithm,

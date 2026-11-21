@@ -1,5 +1,9 @@
 package io.github.werlang.whistl.ui.machines
 
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.werlang.whistl.KeyPublicKey
 import io.github.werlang.whistl.core.secure.KeystoreSecretStore
 import io.github.werlang.whistl.core.ssh.KeyManager
@@ -33,7 +37,8 @@ import org.junit.Test
 
 /**
  * The Add machine sheet (SPEC §2.1, phase 4b r1 §2.5, §2.6): the form's rules and messages, the password that never becomes a
- * String in the state, the host-key stages, a refused login with Retry, an unreachable machine, and the public key copy.
+ * String in the state, the host-key stages, a refused login with Retry, an unreachable machine, the public key copy, and the
+ * provisional machine that Close and Edit discard until the first connection.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AddMachineViewModelTest {
@@ -444,18 +449,139 @@ class AddMachineViewModelTest {
         assertNotNull(vm.uiState.value.machineId)
     }
 
-    /** Closing the sheet keeps the machine in the list: it only marks the sheet closed. */
+    /** A failed attempt is provisional: Close discards the machine and the credentials stored with it. */
     @Test
-    fun closingTheSheetKeepsTheMachine() = runTest {
+    fun closingAfterAFailedAttemptDiscardsTheProvisionalMachine() = runTest {
+        machines.addAnswer = { draft ->
+            val machine = Machine("s-auth", draft.name, draft.host, draft.port, draft.user)
+            machines.put(machine, ConnectionState.Error(ErrorKind.AuthFailed), AuthMethod.Password)
+            AddResult.Added(machine)
+        }
+        val vm = vm()
+        fill(vm, host = "auth.demo")
+        vm.onAuth(AuthChoice.Password)
+        vm.connect("hunter2".toCharArray())
+        assertEquals(AddStage.LoginRefused, vm.uiState.value.stage)
+
+        vm.close()
+
+        assertEquals(listOf("s-auth"), machines.removed)
+        assertTrue(machines.machines().value.isEmpty())
+        assertTrue(vm.uiState.value.closed)
+    }
+
+    /** Edit on a failed attempt discards it and reopens the form with what was typed, but never the password. */
+    @Test
+    fun editAfterAFailedAttemptReopensTheFormWithoutThePassword() = runTest {
+        machines.addAnswer = { draft ->
+            val machine = Machine("s-auth", draft.name, draft.host, draft.port, draft.user)
+            machines.put(machine, ConnectionState.Error(ErrorKind.AuthFailed))
+            AddResult.Added(machine)
+        }
+        val vm = vm()
+        fill(vm, host = "auth.demo", user = "deploy")
+        vm.onPort("2222")
+        vm.onName("Auth box")
+        vm.onAuth(AuthChoice.Password)
+        vm.connect("hunter2".toCharArray())
+        assertEquals(AddStage.LoginRefused, vm.uiState.value.stage)
+
+        vm.editForm()
+
+        assertEquals(listOf("s-auth"), machines.removed)
+        val state = vm.uiState.value
+        assertEquals(AddStage.Form, state.stage)
+        assertEquals("auth.demo", state.host)
+        assertEquals("deploy", state.user)
+        assertEquals("2222", state.port)
+        assertEquals("Auth box", state.name)
+        assertEquals(AuthChoice.Password, state.auth)
+        assertTrue(state.canConnect)
+        assertNull(state.machineId)
+        assertFalse(state.closed)
+        assertFalse("the state holds no password", state.toString().contains("hunter2"))
+
+        vm.close()
+
+        assertEquals("the discarded machine is removed only once", listOf("s-auth"), machines.removed)
+    }
+
+    /** Retry keeps the provisional record for the new attempt; Close after it still discards the machine. */
+    @Test
+    fun retryKeepsTheProvisionalMachine() = runTest {
+        machines.addAnswer = { draft ->
+            val machine = Machine("s-auth", draft.name, draft.host, draft.port, draft.user)
+            machines.put(machine, ConnectionState.Error(ErrorKind.AuthFailed))
+            AddResult.Added(machine)
+        }
+        val vm = vm()
+        fill(vm, host = "auth.demo")
+        vm.connect(null)
+        assertEquals(AddStage.LoginRefused, vm.uiState.value.stage)
+
+        vm.retry()
+
+        assertEquals(listOf("s-auth"), machines.reconnected)
+        assertTrue(machines.removed.isEmpty())
+
+        vm.close()
+
+        assertEquals(listOf("s-auth"), machines.removed)
+    }
+
+    /** A machine that connected once is permanent: Close keeps it. */
+    @Test
+    fun closingAfterTheFirstConnectionKeepsTheMachine() = runTest {
+        machines.addAnswer = { draft ->
+            val machine = Machine("s-ok", draft.name, draft.host, draft.port, draft.user)
+            machines.put(machine, ConnectionState.Connected(testHello()))
+            AddResult.Added(machine)
+        }
         val vm = vm()
         fill(vm)
+
         vm.connect(null)
+        assertEquals(AddStage.Connected, vm.uiState.value.stage)
 
         vm.close()
 
         assertTrue(vm.uiState.value.closed)
         assertTrue(machines.removed.isEmpty())
-        assertNull(machines.removed.firstOrNull())
+        assertEquals(listOf("s-ok"), machines.machines().value.map { it.id })
+    }
+
+    /** A sheet that goes away without close() still discards the provisional machine, through onCleared. */
+    @Test
+    fun clearingTheSheetDiscardsTheProvisionalMachine() = runTest {
+        machines.addAnswer = { draft ->
+            val machine = Machine("s-auth", draft.name, draft.host, draft.port, draft.user)
+            machines.put(machine, ConnectionState.Error(ErrorKind.AuthFailed))
+            AddResult.Added(machine)
+        }
+        val store = ViewModelStore()
+        val sheet = ViewModelProvider(store, viewModelFactory { initializer { vm() } }).get(AddMachineViewModel::class.java)
+        fill(sheet, host = "auth.demo")
+        sheet.connect(null)
+        assertEquals(AddStage.LoginRefused, sheet.uiState.value.stage)
+
+        store.clear()
+
+        assertEquals(listOf("s-auth"), machines.removed)
+    }
+
+    /** Closing before the machine ever connected discards the provisional record: it only becomes permanent on connection. */
+    @Test
+    fun closingBeforeTheFirstConnectionDiscardsTheMachine() = runTest {
+        val vm = vm()
+        fill(vm)
+        vm.connect(null)
+        assertEquals(AddStage.Connecting, vm.uiState.value.stage)
+
+        vm.close()
+
+        assertTrue(vm.uiState.value.closed)
+        assertEquals(listOf("s1"), machines.removed)
+        assertTrue(machines.machines().value.isEmpty())
     }
 
     /**
@@ -540,6 +666,25 @@ class AddMachineViewModelTest {
         assertEquals(AuthChoice.Password, state.auth)
         assertEquals(AddStage.Form, state.stage)
         assertFalse(state.canSave)
+    }
+
+    /** Edit machine has no provisional record: the Edit action can never discard the stored machine. */
+    @Test
+    fun editFormNeverDiscardsAStoredMachine() = runTest {
+        val vm = editVm()
+        machines.editAnswer = { call ->
+            machines.setState(call.id, ConnectionState.Error(ErrorKind.AuthFailed))
+            EditResult.Saved(Machine(call.id, call.draft.name, call.draft.host, call.draft.port, call.draft.user))
+        }
+        vm.onHost("new.lan")
+        vm.connect(null)
+        runCurrent()
+        assertEquals(AddStage.LoginRefused, vm.uiState.value.stage)
+
+        vm.editForm()
+
+        assertTrue(machines.removed.isEmpty())
+        assertEquals(AddStage.LoginRefused, vm.uiState.value.stage)
     }
 
     /** Save is disabled until a field differs from the stored machine, and disabled again when it is typed back. */
