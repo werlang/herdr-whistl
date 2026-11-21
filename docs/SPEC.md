@@ -243,6 +243,12 @@ content): icon-only on the three lists, extended with the icon and the label
 Machines, the splash and Settings' About.
 
 Shape: cards 14dp radius, sheets 22dp top radius, chips/pills fully rounded.
+Card list rhythm: card lists (Machines, Spaces) share one card grammar — 14dp
+radius, 1dp `outlineVariant` border, `surface` fill, 14dp inner padding
+(`start`/`top`/`bottom`, 6dp `end` before the overflow button), 6dp between
+lines inside a card, and **10dp vertical spacing between cards** (each group
+header and each space card is its own `LazyColumn` item, never stacked with 0dp
+inside a single group item).
 Spacing on a 4dp grid; screen gutter 16dp. Touch targets ≥48dp. Status is
 never color-only: always a text label next to the dot. Every icon-only button
 has a content description. Dynamic type: layouts must survive 1.3× font scale.

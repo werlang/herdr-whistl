@@ -125,18 +125,25 @@ fun SpacesScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 88.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(state.groups, key = { it.machineId }) { group ->
-                GroupHeader(group)
+            state.groups.forEach { group ->
+                item(key = "header-${group.machineId}") { // i18n-ok: lazy-list key, never shown
+                    GroupHeader(group)
+                }
                 // Unfiltered and empty, the card at the end says it once: the groups do not repeat it (SPEC §2.2).
                 if (group.rows.isEmpty() && !(state.isEmpty && state.filterName == null)) {
-                    Text(
-                        text = stringResource(R.string.spaces_empty_title),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = LocalWhistlTokens.current.muted,
-                        modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 6.dp),
-                    )
+                    item(key = "empty-${group.machineId}") { // i18n-ok: lazy-list key, never shown
+                        Text(
+                            text = stringResource(R.string.spaces_empty_title),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = LocalWhistlTokens.current.muted,
+                            modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 6.dp),
+                        )
+                    }
                 }
-                group.rows.forEach { row ->
+                items(
+                    items = group.rows,
+                    key = { row -> "${group.machineId}/${row.spaceId}" }, // i18n-ok: lazy-list key, never shown
+                ) { row ->
                     SpaceRowView(row = row, onOpen = { onOpen(row.machineId, row.spaceId) }, onMenu = { onMenu(row.machineId, row.spaceId) })
                 }
             }
@@ -286,7 +293,7 @@ private fun SpaceRowView(row: SpaceRow, onOpen: () -> Unit, onMenu: () -> Unit) 
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 14.dp, top = 12.dp, bottom = 12.dp, end = 6.dp),
+                    .padding(start = 14.dp, top = 14.dp, bottom = 14.dp, end = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
