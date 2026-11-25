@@ -5,6 +5,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-25
+
+### Fixed
+
+- **Space and terminal names inherited from the remote machine.** Herdr desktop spaces are adopted with their document name
+  even when their folder is blank, synced with CAS retry ordering while preserving explicit renames made in Whistl, and
+  terminal names resolve through the fallback chain (`whistl.name`, exact desktop tab id, `labels.where`/`where`, core name,
+  `status.app`, `argv`, and address).
+- **Spaces card rhythm matches Machines.** Space cards use the same 10 dp card spacing and inner padding rhythm as the
+  Machines list.
+
 ## [0.8.0] - 2026-11-21
 
 ### Added
@@ -609,7 +620,8 @@ delivered it as a line (the agent answered).
 - herdr-core 0.1.18 protocol client with recorded conformance fixtures, Ed25519 keys held in the
   Android Keystore, no telemetry and no network traffic other than SSH to hosts you add.
 
-[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/werlang/herdr-whistl/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/werlang/herdr-whistl/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/werlang/herdr-whistl/compare/v0.7.9...v0.8.0
 [0.7.9]: https://github.com/werlang/herdr-whistl/compare/v0.7.8...v0.7.9
 [0.7.8]: https://github.com/werlang/herdr-whistl/compare/v0.7.7...v0.7.8
