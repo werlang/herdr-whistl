@@ -135,9 +135,28 @@ class FakeCore : DemoCore {
      * @param status the agent status, or `null` for a plain shell.
      * @param cwd the folder.
      * @param name the terminal's name, or `null` for the address.
+     * @param labels the terminal labels, including a Herdr `where` when the state needs one.
      */
-    fun addAgent(machineId: String, address: String, status: AgentStatus?, cwd: String, name: String? = null) {
-        state.addAgent(machineId, address, status, cwd, name = name)
+    fun addAgent(
+        machineId: String,
+        address: String,
+        status: AgentStatus?,
+        cwd: String,
+        name: String? = null,
+        labels: Map<String, String> = emptyMap(),
+    ) {
+        state.addAgent(machineId, address, status, cwd, name = name, labels = labels)
+    }
+
+    /**
+     * Replaces the labels of a demo agent, for a screenshot state whose name comes from the Herdr desktop document.
+     *
+     * @param machineId the machine.
+     * @param address the terminal address.
+     * @param labels the labels to set.
+     */
+    fun setAgentLabels(machineId: String, address: String, labels: Map<String, String>) {
+        state.setAgentLabels(machineId, address, labels)
     }
 
     /**
@@ -431,8 +450,17 @@ private class FakeState {
         cwd: String,
         state: TerminalState = TerminalState.Live,
         name: String? = null,
+        labels: Map<String, String> = emptyMap(),
     ) {
-        addTerminal(id, demoTerminal(address, status, cwd, state = state, name = name))
+        addTerminal(id, demoTerminal(address, status, cwd, state = state, name = name, labels = labels))
+    }
+
+    /** Replaces one terminal's labels and publishes, for a screenshot whose name comes from `where`. */
+    fun setAgentLabels(id: String, address: String, labels: Map<String, String>) {
+        terminals[id] = terminals[id].orEmpty().map { terminal ->
+            if (terminal.address == address) terminal.copy(labels = labels) else terminal
+        }
+        publish()
     }
 
     /** Removes the terminals of a machine that match [predicate], and publishes. */

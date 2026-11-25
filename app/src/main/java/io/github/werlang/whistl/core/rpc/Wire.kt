@@ -276,6 +276,11 @@ internal class TerminalWire(
     val signal: Int? = null,
     val reason: String? = null,
     val keep: Boolean = false,
+    /**
+     * The `space / tab` text some hc paths put at the top level; the RPC's `terminal.list` carries it in `labels.where`.
+     * Kept raw so an object or array in a variant this app does not know cannot make it drop the whole terminal.
+     */
+    val where: JsonElement? = null,
 )
 
 /** A `machine` object inside `terminal.list` and `machine.list`. Lenient: unknown keys are ignored. */
@@ -409,6 +414,25 @@ internal fun statusOf(value: JsonElement?): String? = when (value) {
     else -> null
 }
 
+/**
+ * The `status.app` identifier in a wire `status` value, when hc sends the object shape. It names the agent (`claude-code`,
+ * `codex`, …) for the terminal-name fallback; a plain status string has no app.
+ *
+ * @param value the `status` member, or `null` when absent.
+ * @return the app identifier, or `null`.
+ */
+internal fun appOf(value: JsonElement?): String? =
+    (value as? JsonObject)?.get("app")?.let { (it as? JsonPrimitive)?.takeIf { prim -> prim.isString }?.content }
+
+/**
+ * The top-level `where` when it is a JSON string; any other shape is treated as absent, so `labels.where` still decides.
+ *
+ * @param value the raw `where` member.
+ * @return the text, or `null`.
+ */
+internal fun whereOf(value: JsonElement?): String? =
+    (value as? JsonPrimitive)?.takeIf { it.isString }?.content
+
 /** The decoded terminals of one result, and how many of its entries were skipped (see [decodeTerminals]). */
 internal data class TerminalDecode(val terminals: List<Terminal>, val skipped: Int)
 
@@ -457,6 +481,8 @@ internal fun TerminalWire.toDomain(): Terminal = Terminal(
     signal = signal,
     reason = reason,
     keep = keep,
+    where = whereOf(where),
+    agentApp = appOf(status),
 )
 
 /** Converts a wire machine to the domain [CoreMachine]. */

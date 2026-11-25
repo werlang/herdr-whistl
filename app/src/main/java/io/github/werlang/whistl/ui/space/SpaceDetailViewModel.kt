@@ -27,7 +27,6 @@ import io.github.werlang.whistl.domain.TerminalState
 import io.github.werlang.whistl.ui.agents.AgentMenu
 import io.github.werlang.whistl.ui.agents.AgentNotice
 import io.github.werlang.whistl.ui.agents.AgentRow
-import io.github.werlang.whistl.ui.agents.displayName
 import io.github.werlang.whistl.ui.machines.MachineIssue
 import io.github.werlang.whistl.ui.machines.MachineStatus
 import io.github.werlang.whistl.ui.machines.classify
@@ -286,7 +285,7 @@ class SpaceDetailViewModel(
             return emptyState().copy(missing = true, opened = open.opened, closed = open.closed)
         }
         val machine = machineList.firstOrNull { it.id == machineId }
-        val folderState = folderStateOf(group.resolutionOf(space))
+        val folderState = folderStateOf(group.resolutionOf(space), space.folder)
         // The space's own menu uses the same pin-section rules as the row menu, and its edits are off on an offline machine.
         val rules = moveRules(group.spaces)
         val index = group.spaces.indexOf(space)
@@ -322,7 +321,7 @@ class SpaceDetailViewModel(
                 val terminal = agent.agent.terminal
                 DetailAgent(
                     address = terminal.address,
-                    name = displayName(terminal.name, terminal.argv, terminal.address, terminal.labels),
+                    name = agent.displayName,
                     status = terminal.status,
                     live = terminal.state == TerminalState.Live,
                     waiting = terminal.isWaitingForUser(),

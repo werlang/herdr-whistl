@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -318,25 +320,35 @@ private fun SpaceRowView(row: SpaceRow, onOpen: () -> Unit, onMenu: () -> Unit) 
                     }
                 }
                 AgentDots(row.agents)
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                if (row.folder.isBlank()) {
+                    // No folder to show: the count stands alone, and there is no invented "not checked yet" line.
                     Text(
-                        text = stringResource(
-                            R.string.spaces_summary,
-                            pluralStringResource(R.plurals.space_agents_count, row.agents.size, row.agents.size),
-                        ),
+                        text = pluralStringResource(R.plurals.space_agents_count, row.agents.size, row.agents.size),
                         style = MaterialTheme.typography.bodySmall,
                         color = tokens.muted,
                         maxLines = 1,
                     )
-                    Spacer(Modifier.width(4.dp))
-                    MiddleEllipsisPath(
-                        path = row.folder,
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = WhistlMono),
-                        color = tokens.muted,
-                        modifier = Modifier.weight(1f),
-                    )
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = stringResource(
+                                R.string.spaces_summary,
+                                pluralStringResource(R.plurals.space_agents_count, row.agents.size, row.agents.size),
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = tokens.muted,
+                            maxLines = 1,
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        MiddleEllipsisPath(
+                            path = row.folder,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = WhistlMono),
+                            color = tokens.muted,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    FolderLine(row.folderState)
                 }
-                FolderLine(row.folderState)
             }
             IconButton(onClick = onMenu, modifier = Modifier.size(width = MinTouchTarget, height = 52.dp)) {
                 Icon(
@@ -350,23 +362,43 @@ private fun SpaceRowView(row: SpaceRow, onOpen: () -> Unit, onMenu: () -> Unit) 
 }
 
 /**
- * One dot per agent. Each dot is named by its status in words, so the colour is never the only signal (SPEC §3).
+ * One dot per agent, each beside the agent's name. The dot is named by its status in words and the row merges both, so the
+ * colour is never the only signal and the name is not only visual (SPEC §2.2, §3).
  *
  * @param agents the agents of the space.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AgentDots(agents: List<AgentDot>) {
     if (agents.isEmpty()) return
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
         agents.forEach { agent ->
             val label = stringResource(agentLabelRes(live = agent.live, waiting = agent.waiting, status = agent.status))
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(statusColor(agent.status, agent.live))
-                    .semantics { contentDescription = label },
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                modifier = Modifier.semantics(mergeDescendants = true) {},
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(statusColor(agent.status, agent.live))
+                        .semantics { contentDescription = label },
+                )
+                if (agent.name.isNotBlank()) {
+                    Text(
+                        text = agent.name,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LocalWhistlTokens.current.muted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
     }
 }
@@ -397,7 +429,7 @@ private fun WaitingBadge() {
 @Composable
 private fun FolderLine(state: FolderState) {
     val text = when (state) {
-        FolderState.Resolved -> return
+        FolderState.Resolved, FolderState.None -> return
         FolderState.NotChecked -> stringResource(R.string.space_folder_not_checked)
         is FolderState.Unavailable -> stringResource(unresolvedTextRes(state.reason))
     }

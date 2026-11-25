@@ -325,21 +325,28 @@ private fun Header(state: SpaceDetailUiState) {
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = stringResource(R.string.space_detail_header, state.machineName),
+                // The colon is the separator before the path; with no path it would be a dangling "rpi5:".
+                text = if (state.folder.isBlank()) {
+                    state.machineName
+                } else {
+                    stringResource(R.string.space_detail_header, state.machineName)
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 fontFamily = WhistlMono,
                 color = tokens.muted,
                 maxLines = 1,
             )
-            MiddleEllipsisPath(
-                path = state.folder,
-                style = MaterialTheme.typography.bodyMedium.copy(fontFamily = WhistlMono),
-                color = tokens.muted,
-                modifier = Modifier.weight(1f),
-            )
+            if (state.folder.isNotBlank()) {
+                MiddleEllipsisPath(
+                    path = state.folder,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = WhistlMono),
+                    color = tokens.muted,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
         when (val folder = state.folderState) {
-            FolderState.Resolved -> Unit
+            FolderState.Resolved, FolderState.None -> Unit
             FolderState.NotChecked -> Text(
                 text = stringResource(R.string.space_folder_not_checked),
                 style = MaterialTheme.typography.bodySmall,
@@ -475,6 +482,7 @@ private fun NewAgentButton(ui: NewAgentUi, machineName: String, onClick: () -> U
         null -> null
         NewAgentBlock.MachineOffline -> stringResource(R.string.new_agent_off_machine, machineName)
         is NewAgentBlock.Folder -> when (block.state) {
+            FolderState.None -> stringResource(R.string.new_agent_off_folder_missing)
             FolderState.NotChecked -> stringResource(R.string.new_agent_off_folder_unchecked)
             else -> stringResource(R.string.new_agent_off_folder)
         }

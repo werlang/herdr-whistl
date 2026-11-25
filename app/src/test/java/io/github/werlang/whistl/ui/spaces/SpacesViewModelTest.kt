@@ -209,7 +209,7 @@ class SpacesViewModelTest {
         val rows = vm.state.value.groups.single().rows.associateBy { it.name }
         assertEquals(1, rows.getValue("web").waitingCount)
         assertEquals(0, rows.getValue("docs").waitingCount)
-        assertEquals(listOf(AgentDot(AgentStatus.Blocked, live = true, waiting = true)), rows.getValue("web").agents)
+        assertEquals(listOf(AgentDot(AgentStatus.Blocked, live = true, waiting = true, name = "t-1")), rows.getValue("web").agents)
     }
 
     /** A finished blocked agent is not waiting for the user: it has no badge. */

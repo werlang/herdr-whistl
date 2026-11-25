@@ -305,6 +305,26 @@ class SpaceDetailViewModelTest {
         assertTrue(rows.single().live)
     }
 
+    /** A row inherits the terminal's `where` tab name after the exact space prefix, not the core's argv or address. */
+    @Test
+    fun theRowsInheritTheWhereTabName() {
+        val named = MachineAgent(
+            MACHINE,
+            Agent(
+                terminal(
+                    "t-1",
+                    AgentStatus.Working,
+                    labels = mapOf(Agent.HERDR_SPACE_LABEL to SPACE, "where" to "web / Claude Code"),
+                ),
+            ),
+            web,
+        )
+
+        val rows = model(listOf(group()), agents = ScriptedAgents(listOf(named))).state.value.agents
+
+        assertEquals("Claude Code", rows.single().name)
+    }
+
     /** New agent is on when the machine is connected and the folder is resolved. */
     @Test
     fun theNewAgentButtonIsOnWhenConnectedAndTheFolderIsResolved() {
@@ -332,6 +352,19 @@ class SpaceDetailViewModelTest {
 
         vm.openPicker()
         assertNull("no picker from an offline FAB", vm.state.value.picker)
+    }
+
+    /** A space with no folder (the desktop's `folder: ""`) has no pending check: it reads as None and cannot start an agent. */
+    @Test
+    fun aSpaceWithoutAFolderHasNoPendingCheckAndCannotStartAnAgent() {
+        val blank = SpaceRecord(id = SPACE, name = "gladcode2", folder = "", pinned = false, order = 0)
+        val vm = model(listOf(group(records = listOf(blank), resolution = null)))
+
+        assertEquals(FolderState.None, vm.state.value.folderState)
+        assertFalse(vm.state.value.newAgent.enabled)
+        assertEquals(NewAgentBlock.Folder(FolderState.None), vm.state.value.newAgent.block)
+        vm.openPicker()
+        assertNull("there is no folder to start in", vm.state.value.picker)
     }
 
     /** New agent is off on an unresolved folder, and says why. */

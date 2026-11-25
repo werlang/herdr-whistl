@@ -255,6 +255,205 @@ class SpacesRepositoryTest {
     }
 
     /**
+     * The rpi5 shape: the desktop's spaces have `folder: ""` and a name of their own. They are adopted with that name, the
+     * empty folder is not probed, and the tabs keep the names the desktop gave them.
+     */
+    @Test
+    fun desktopSpacesWithBlankFoldersAreAdoptedWithTheirNamesAndNotProbed() = runTest {
+        val h = RepoStack(this)
+        h.core.value = spacesDocJson(emptyList())
+        h.core.desktop = JsonObject(
+            mapOf(
+                "spaces" to JsonArray(
+                    listOf(
+                        desktopSpaceJson(
+                            "sp9aed68",
+                            "gladcode2",
+                            "",
+                            tabs = listOf("tb987745"),
+                            tabNames = mapOf("tb987745" to "Claude Code"),
+                        ),
+                        desktopSpaceJson("sp646103", "cv-mapa", ""),
+                        desktopSpaceJson("sp820ec2", "node-aec", "/root"),
+                    ),
+                ),
+            ),
+        )
+
+        h.addMachine()
+        runCurrent()
+
+        val group = h.spaces.groups().value.single()
+        assertEquals(listOf("sp9aed68", "sp646103", "sp820ec2"), group.spaces.map { it.id })
+        assertEquals(listOf("gladcode2", "cv-mapa", "node-aec"), group.spaces.map { it.name })
+        assertEquals(listOf("", "", "/root"), group.spaces.map { it.folder })
+        assertEquals(mapOf("tb987745" to "sp9aed68"), group.tabSpaces)
+        assertEquals(mapOf("tb987745" to "Claude Code"), group.tabNames)
+        assertEquals("only the real folder is probed", listOf("/root"), h.core.probeFolders)
+    }
+
+    /**
+     * The adopted name follows the desktop document until the user renames the space here. A refresh with the same document
+     * writes nothing; a desktop rename is written once; an explicit Whistl rename survives later desktop changes.
+     */
+    @Test
+    fun adoptedNamesFollowTheDesktopUntilAWhistlRenameWins() = runTest {
+        val h = RepoStack(this)
+        h.core.value = spacesDocJson(emptyList())
+        h.core.desktop = desktopDoc("sp9aed68", "gladcode2")
+        val machineId = h.addMachine()
+        runCurrent()
+        assertEquals("gladcode2", h.spaces.groups().value.single().spaces.single().name)
+
+        h.core.methods.clear()
+        h.docChanges.notifyChanged(machineId)
+        runCurrent()
+        assertFalse("an unchanged name is not rewritten", h.core.methods.contains("doc.set"))
+
+        h.core.desktop = desktopDoc("sp9aed68", "gladcode2 production")
+        h.docChanges.notifyChanged(machineId)
+        runCurrent()
+        assertEquals("gladcode2 production", h.spaces.groups().value.single().spaces.single().name)
+
+        assertEquals(SpaceResult.Done("sp9aed68"), h.spaces.rename(machineId, "sp9aed68", "mine"))
+        runCurrent()
+        h.core.desktop = desktopDoc("sp9aed68", "something else")
+        h.docChanges.notifyChanged(machineId)
+        runCurrent()
+        assertEquals("mine", h.spaces.groups().value.single().spaces.single().name)
+    }
+
+    /**
+     * A space adopted before the override marker existed is aligned to the desktop on the first refresh, even when its stored
+     * name came from the old import. The folder follows the desktop too, while pin, order and a Rename made after the upgrade
+     * stay the user's.
+     */
+    @Test
+    fun aLegacyAdoptedSpaceAlignsOnUpgradeAndKeepsItsRenameLater() = runTest {
+        val h = RepoStack(this)
+        h.core.value = spacesDocJson(
+            listOf(spaceJson("sp9aed68", "old imported", "/old", pinned = true, order = 7)),
+        )
+        h.core.desktop = desktopDoc("sp9aed68", "gladcode2")
+        val machineId = h.addMachine()
+        runCurrent()
+
+        val aligned = h.spaces.groups().value.single().spaces.single()
+        assertEquals("gladcode2", aligned.name)
+        assertEquals("/root", aligned.folder)
+        assertEquals(true, aligned.pinned)
+        assertEquals(7, aligned.order)
+
+        assertEquals(SpaceResult.Done("sp9aed68"), h.spaces.rename(machineId, "sp9aed68", "mine"))
+        h.core.desktop = JsonObject(
+            mapOf(
+                "spaces" to JsonArray(
+                    listOf(desktopSpaceJson("sp9aed68", "later desktop", "")),
+                ),
+            ),
+        )
+        h.docChanges.notifyChanged(machineId)
+        runCurrent()
+
+        val after = h.spaces.groups().value.single().spaces.single()
+        assertEquals("mine", after.name)
+        assertEquals("the desktop still owns the folder", "", after.folder)
+        assertEquals(true, after.pinned)
+        assertEquals(7, after.order)
+    }
+
+    /**
+     * A desktop folder can become blank after adoption. The record takes the new folder, so it no longer matches by a stale
+     * cwd and no folder line is invented; its name, pin and order stay as they were.
+     */
+    @Test
+    fun anAdoptedSpaceFollowsAFolderThatBecomesBlank() = runTest {
+        val h = RepoStack(this)
+        h.core.value = spacesDocJson(emptyList())
+        h.core.desktop = desktopDoc("sp9aed68", "gladcode2")
+        val machineId = h.addMachine()
+        runCurrent()
+        assertEquals("/root", h.spaces.groups().value.single().spaces.single().folder)
+
+        h.core.desktop = JsonObject(
+            mapOf(
+                "spaces" to JsonArray(
+                    listOf(desktopSpaceJson("sp9aed68", "gladcode2", "")),
+                ),
+            ),
+        )
+        h.docChanges.notifyChanged(machineId)
+        runCurrent()
+
+        val space = h.spaces.groups().value.single().spaces.single()
+        assertEquals("", space.folder)
+        assertEquals("gladcode2", space.name)
+        assertEquals(false, space.pinned)
+        assertEquals(0, space.order)
+    }
+
+    /**
+     * A compare-and-set conflict re-reads the desktop document as well: the retry must not write a name from a revision that
+     * the newer desktop read already replaced.
+     */
+    @Test
+    fun aConflictingWriteRereadsTheDesktopBeforeRetrying() = runTest {
+        val h = RepoStack(this)
+        h.core.value = spacesDocJson(emptyList())
+        h.core.desktop = desktopDoc("sp9aed68", "first")
+        var changed = false
+        h.core.beforeSet = { core ->
+            if (!changed) {
+                changed = true
+                core.desktop = desktopDoc("sp9aed68", "newest")
+                core.version += 1
+            }
+        }
+
+        h.addMachine()
+        runCurrent()
+
+        assertEquals("newest", h.spaces.groups().value.single().spaces.single().name)
+    }
+
+    /**
+     * A desktop document that cannot be read keeps the last tab map and names, so a refresh does not make a named terminal
+     * anonymous again; the written spaces stay as they were.
+     */
+    @Test
+    fun anUnavailableDesktopDocumentKeepsTheLastTabNames() = runTest {
+        val h = RepoStack(this)
+        h.core.value = spacesDocJson(emptyList())
+        h.core.desktop = JsonObject(
+            mapOf(
+                "spaces" to JsonArray(
+                    listOf(
+                        desktopSpaceJson(
+                            "sp9aed68",
+                            "gladcode2",
+                            "/root",
+                            tabs = listOf("tb1"),
+                            tabNames = mapOf("tb1" to "Claude Code"),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val machineId = h.addMachine()
+        runCurrent()
+        assertEquals(mapOf("tb1" to "Claude Code"), h.spaces.groups().value.single().tabNames)
+
+        h.core.desktopReadFails = true
+        h.docChanges.notifyChanged(machineId)
+        runCurrent()
+
+        val group = h.spaces.groups().value.single()
+        assertEquals(mapOf("tb1" to "sp9aed68"), group.tabSpaces)
+        assertEquals(mapOf("tb1" to "Claude Code"), group.tabNames)
+        assertEquals(listOf("gladcode2"), group.spaces.map { it.name })
+    }
+
+    /**
      * Close kills an agent that reaches the space through the desktop's tab map, even when its cwd does not match and its
      * `herdr.space` is unknown (0.7.3).
      */
@@ -480,16 +679,33 @@ class SpacesRepositoryTest {
         )
     }
 
-    /** A desktop space object for [HERDR_DOCUMENT], with the tabs it owns (0.7.3). */
-    private fun desktopSpaceJson(id: String, name: String, folder: String, tabs: List<String> = emptyList()): JsonObject =
-        JsonObject(
-            mapOf(
-                "id" to JsonPrimitive(id),
-                "name" to JsonPrimitive(name),
-                "folder" to JsonPrimitive(folder),
-                "tabs" to JsonArray(tabs.map { tab -> JsonObject(mapOf("id" to JsonPrimitive(tab))) }),
+    /** A desktop space object for [HERDR_DOCUMENT], with the tabs it owns and their names (0.7.3). */
+    private fun desktopSpaceJson(
+        id: String,
+        name: String,
+        folder: String,
+        tabs: List<String> = emptyList(),
+        tabNames: Map<String, String> = emptyMap(),
+    ): JsonObject = JsonObject(
+        mapOf(
+            "id" to JsonPrimitive(id),
+            "name" to JsonPrimitive(name),
+            "folder" to JsonPrimitive(folder),
+            "tabs" to JsonArray(
+                tabs.map { tab ->
+                    JsonObject(
+                        mapOf<String, JsonElement>("id" to JsonPrimitive(tab)) +
+                            (tabNames[tab]?.let { mapOf("name" to JsonPrimitive(it)) } ?: emptyMap()),
+                    )
+                },
             ),
-        )
+        ),
+    )
+
+    /** A desktop document with one space and no tabs. */
+    private fun desktopDoc(id: String, name: String): JsonObject = JsonObject(
+        mapOf("spaces" to JsonArray(listOf(desktopSpaceJson(id, name, "/root")))),
+    )
 
     /** A request object for [method] with the given params (no id; [Exchange] compares without it). */
     private fun rpc(method: String, vararg params: Pair<String, JsonElement>): JsonObject = JsonObject(

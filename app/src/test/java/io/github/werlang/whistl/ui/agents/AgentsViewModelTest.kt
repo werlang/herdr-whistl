@@ -5,6 +5,9 @@ import io.github.werlang.whistl.support.FakePins
 import io.github.werlang.whistl.support.StaticInstalled
 import io.github.werlang.whistl.support.MainDispatcherRule
 import io.github.werlang.whistl.support.RepoStack
+import io.github.werlang.whistl.support.desktopDocJson
+import io.github.werlang.whistl.support.desktopSpaceJson
+import io.github.werlang.whistl.support.desktopTabJson
 import io.github.werlang.whistl.support.eventsSnapshot
 import io.github.werlang.whistl.support.snapshotPipe
 import io.github.werlang.whistl.support.spaceJson
@@ -39,6 +42,35 @@ class AgentsViewModelTest {
         runCurrent()
         return h to vm
     }
+
+    /** A stack whose desktop document is [desktop], with [terminals] in its events snapshot. */
+    private suspend fun TestScope.listingWithDesktop(
+        desktop: JsonObject,
+        vararg terminals: JsonObject,
+    ): Pair<RepoStack, AgentsViewModel> {
+        val h = RepoStack(this)
+        h.core.value = spacesDocJson(emptyList())
+        h.core.desktop = desktop
+        h.connector.eventsPipeFactory = { snapshotPipe(eventsSnapshot(1, terminals.toList())) }
+        h.addMachine()
+        runCurrent()
+        val vm = AgentsViewModel(h.agents, h.machines, FakePins(), h.spaces, StaticInstalled())
+        runCurrent()
+        return h to vm
+    }
+
+    /** A desktop document with one space `gladcode2`, a tab `tb1`, and the folder the desktop document really has. */
+    private fun gladcodeDesktop(tabName: String? = "Claude Code"): JsonObject =
+        desktopDocJson(
+            listOf(
+                desktopSpaceJson(
+                    "sp9aed68",
+                    "gladcode2",
+                    "/root",
+                    listOf(desktopTabJson("tb1", tabName)),
+                ),
+            ),
+        )
 
     /** With no agents, every chip counts zero, there are no rows, and the badge is hidden. */
     @Test
@@ -155,5 +187,130 @@ class AgentsViewModelTest {
         assertEquals(null, row.spaceName)
         assertEquals(AgentStatus.Blocked, row.status)
         assertTrue(row.waiting)
+    }
+
+    /**
+     * The name comes from the desktop tab whose id the terminal carries, matched exactly. The core sends no name and the
+     * dynamic title is ignored; a tab name with " / " in it stays whole, which the `where` string cannot promise.
+     */
+    @Test
+    fun aTerminalInheritsItsExactDesktopTabName() = runTest {
+        val terminal = terminalJson(
+            "t-tab",
+            name = null,
+            labels = mapOf(
+                "herdr.space" to "sp9aed68",
+                "herdr.tab" to "tb1",
+                "where" to "gladcode2 / Wrong / Name",
+            ),
+        )
+
+        val (h, vm) = listingWithDesktop(gladcodeDesktop(tabName = "Fix / Deploy"), terminal)
+
+        assertEquals(mapOf("tb1" to "Fix / Deploy"), h.spaces.groups().value.single().tabNames)
+        val repoAgent = h.agents.agents.value.single()
+        assertEquals("tb1", repoAgent.agent.terminal.labels["herdr.tab"])
+        assertEquals("Fix / Deploy", repoAgent.tabName)
+        assertEquals("gladcode2", vm.state.value.rows.single().spaceName)
+        assertEquals("Fix / Deploy", vm.state.value.rows.single().name)
+    }
+
+    /** With no tab name in the document, `labels.where` gives the tab's name after the exact space prefix. */
+    @Test
+    fun aTerminalUsesTheWhereLabelWhenTheTabNameIsMissing() = runTest {
+        val terminal = terminalJson(
+            "t-where",
+            name = null,
+            labels = mapOf(
+                "herdr.space" to "sp9aed68",
+                "where" to "gladcode2 / Codex",
+            ),
+        )
+
+        val (_, vm) = listingWithDesktop(gladcodeDesktop(tabName = null), terminal)
+
+        assertEquals("Codex", vm.state.value.rows.single().name)
+    }
+
+    /** A Whistl Rename of the space does not break the `where` prefix, which keeps the raw Herdr name. */
+    @Test
+    fun aRenamedSpaceStillSplitsWhereByTheHerdrName() = runTest {
+        val terminal = terminalJson(
+            "t-where",
+            name = null,
+            labels = mapOf("herdr.space" to "sp9aed68", "where" to "gladcode2 / Fix / Deploy"),
+        )
+        val (h, vm) = listingWithDesktop(gladcodeDesktop(tabName = null), terminal)
+        val machineId = h.machines.machines().value.single().id
+
+        assertEquals("Fix / Deploy", vm.state.value.rows.single().name)
+        assertEquals(io.github.werlang.whistl.data.SpaceResult.Done("sp9aed68"), h.spaces.rename(machineId, "sp9aed68", "mine"))
+        runCurrent()
+
+        assertEquals("mine", vm.state.value.rows.single().spaceName)
+        assertEquals("Fix / Deploy", vm.state.value.rows.single().name)
+    }
+
+    /** The top-level `where` some hc paths compose is accepted too, for the sample `hc ls` prints. */
+    @Test
+    fun aTerminalUsesTheTopLevelWhere() = runTest {
+        val terminal = terminalJson(
+            "t-where-top",
+            name = null,
+            labels = mapOf("herdr.space" to "sp9aed68"),
+            where = "gladcode2 / OpenCode",
+        )
+
+        val (_, vm) = listingWithDesktop(gladcodeDesktop(tabName = null), terminal)
+
+        assertEquals("OpenCode", vm.state.value.rows.single().name)
+    }
+
+    /** The explicit Whistl rename wins over the desktop tab and over `where`. */
+    @Test
+    fun aCustomNameWinsOverTheDesktopTab() = runTest {
+        val terminal = terminalJson(
+            "t-named",
+            name = null,
+            labels = mapOf(
+                "herdr.space" to "sp9aed68",
+                "herdr.tab" to "tb1",
+                "where" to "gladcode2 / Claude Code",
+                "whistl.name" to "Deploy",
+            ),
+        )
+
+        val (_, vm) = listingWithDesktop(gladcodeDesktop(), terminal)
+
+        assertEquals("Deploy", vm.state.value.rows.single().name)
+    }
+
+    /** The explicit name the core was given is preserved when no tab or where supplies one. */
+    @Test
+    fun anExplicitCoreNameIsPreserved() = runTest {
+        val terminal = terminalJson(
+            "t-core",
+            name = "my terminal",
+            labels = mapOf("herdr.space" to "sp9aed68"),
+        )
+
+        val (_, vm) = listingWithDesktop(gladcodeDesktop(tabName = null), terminal)
+
+        assertEquals("my terminal", vm.state.value.rows.single().name)
+    }
+
+    /** Without any name, the core's `status.app` identifies the agent; nothing else is invented. */
+    @Test
+    fun aTerminalFallsBackToItsCoreAgent() = runTest {
+        val terminal = terminalJson(
+            "t-app",
+            name = null,
+            app = "codex",
+            labels = mapOf("herdr.space" to "sp9aed68"),
+        )
+
+        val (_, vm) = listingWithDesktop(gladcodeDesktop(tabName = null), terminal)
+
+        assertEquals("codex", vm.state.value.rows.single().name)
     }
 }

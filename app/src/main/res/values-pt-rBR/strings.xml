@@ -264,6 +264,7 @@
     <string name="new_agent_off_machine">Novo agente desligado: %1$s está offline.</string>
     <string name="new_agent_off_folder">Novo agente desligado: a pasta não está disponível na máquina.</string>
     <string name="new_agent_off_folder_unchecked">Novo agente desligado: a pasta ainda não foi verificada.</string>
+    <string name="new_agent_off_folder_missing">Novo agente desligado: este ambiente não tem pasta.</string>
     <string name="picker_installed">Instalados em %1$s</string>
     <string name="picker_terminal">Terminal</string>
     <string name="picker_terminal_sub">O shell da máquina</string>

@@ -45,6 +45,19 @@ class SpaceMatchingTest {
         assertNull(matchSpace(agent(cwd = null), spaces))
     }
 
+    /**
+     * A space the desktop has no folder for is never a cwd match: a blank folder is not `/`, and it must not claim every
+     * terminal on the machine (rpi5 spaces). It can still be matched by its id or tab.
+     */
+    @Test
+    fun aSpaceWithABlankFolderNeverMatchesByCwd() {
+        val blank = listOf(space("sp_blank", ""))
+
+        assertNull(matchSpace(agent(cwd = "/"), blank))
+        assertNull(matchSpace(agent(cwd = "/tmp"), blank))
+        assertEquals("sp_blank", matchSpace(agent(cwd = "/tmp", labels = mapOf(Agent.HERDR_SPACE_LABEL to "sp_blank")), blank)?.id)
+    }
+
     /** A label that names no space on the machine falls through to the cwd rule. */
     /** A terminal the desktop Herdr started carries `herdr.space`; its id is unknown here, so the folder decides (0.7.1). */
     @Test

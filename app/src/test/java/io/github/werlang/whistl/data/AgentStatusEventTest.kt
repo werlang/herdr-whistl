@@ -27,12 +27,23 @@ class AgentStatusEventTest {
     private fun statusEvent(data: JsonObject): HcEvent.TerminalChanged =
         HcEvent.TerminalChanged(seq = 1L, terminal = "t1", kind = TerminalEventKind.Status, data = data)
 
-    /** The object form sets the status from `state`. */
+    /** The object form sets the status from `state` and the app from `app`. */
     @Test
     fun aStatusObjectSetsTheStatusFromItsState() {
         val data = buildJsonObject { put("status", buildJsonObject { put("app", "claude-code"); put("state", "working") }) }
         val after = AgentEventReducer.apply(mapOf("t1" to terminal("t1")), statusEvent(data))
         assertEquals(AgentStatus.Working, after.getValue("t1").status)
+        assertEquals("claude-code", after.getValue("t1").agentApp)
+    }
+
+    /** A later string/state-only event changes the status but keeps the agent app already known. */
+    @Test
+    fun aStringStatusKeepsTheAgentApp() {
+        val withApp = terminal("t1").copy(agentApp = "codex", status = AgentStatus.Idle)
+        val data = buildJsonObject { put("status", "done") }
+        val after = AgentEventReducer.apply(mapOf("t1" to withApp), statusEvent(data))
+        assertEquals(AgentStatus.Done, after.getValue("t1").status)
+        assertEquals("codex", after.getValue("t1").agentApp)
     }
 
     /** The plain string form still sets the status. */

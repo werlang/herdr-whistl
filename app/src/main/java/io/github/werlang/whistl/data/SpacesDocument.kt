@@ -41,7 +41,11 @@ class MalformedDocument(reason: String) : DocumentException("whistl document is 
  * @property folder the folder on the machine.
  * @property pinned whether the space is pinned.
  * @property order the user's order within the machine.
- * @property unknownFields keys outside the five above, kept as sent.
+ * @property herdrName the desktop name an adopted space was last synced with, or `null` for a space this app made or the
+ *   user renamed. It is how a desktop rename is followed without overwriting a deliberate Whistl rename.
+ * @property nameOverride whether the name was set by a Rename here. It is written so a later refresh and a restart both keep
+ *   the user's name, instead of mistaking the absence of [herdrName] for an old adoption.
+ * @property unknownFields keys outside the seven above, kept as sent.
  */
 data class SpaceRecord(
     val id: String,
@@ -50,8 +54,10 @@ data class SpaceRecord(
     val pinned: Boolean,
     val order: Int,
     val unknownFields: JsonObject = JsonObject(emptyMap()),
+    val herdrName: String? = null,
+    val nameOverride: Boolean = false,
 ) {
-    /** The record as a JSON object: the unknown fields plus the five known ones. */
+    /** The record as a JSON object: the unknown fields plus the seven known ones. */
     fun toJson(): JsonObject {
         val fields = LinkedHashMap<String, JsonElement>(unknownFields)
         fields["id"] = JsonPrimitive(id)
@@ -59,11 +65,13 @@ data class SpaceRecord(
         fields["folder"] = JsonPrimitive(folder)
         fields["pinned"] = JsonPrimitive(pinned)
         fields["order"] = JsonPrimitive(order)
+        herdrName?.let { fields["herdrName"] = JsonPrimitive(it) }
+        if (nameOverride) fields["nameOverride"] = JsonPrimitive(true)
         return JsonObject(fields)
     }
 
     companion object {
-        private val KNOWN_KEYS = setOf("id", "name", "folder", "pinned", "order")
+        private val KNOWN_KEYS = setOf("id", "name", "folder", "pinned", "order", "herdrName", "nameOverride")
 
         /**
          * Reads one space object.
@@ -88,6 +96,9 @@ data class SpaceRecord(
                 pinned = pinned,
                 order = order,
                 unknownFields = JsonObject(obj.filterKeys { it !in KNOWN_KEYS }),
+                herdrName = (obj["herdrName"] as? JsonPrimitive)
+                    ?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() },
+                nameOverride = (obj["nameOverride"] as? JsonPrimitive)?.booleanOrNull ?: false,
             )
         }
     }

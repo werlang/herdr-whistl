@@ -2,12 +2,14 @@ package io.github.werlang.whistl.data
 
 import io.github.werlang.whistl.core.rpc.HcEvent
 import io.github.werlang.whistl.core.rpc.TerminalEventKind
+import io.github.werlang.whistl.core.rpc.appOf
 import io.github.werlang.whistl.core.rpc.decodeTerminals
 import io.github.werlang.whistl.core.rpc.statusOf
 import io.github.werlang.whistl.domain.Agent
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.Terminal
 import io.github.werlang.whistl.domain.TerminalState
+import io.github.werlang.whistl.domain.terminalDisplayName
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -24,6 +26,8 @@ import kotlinx.serialization.json.longOrNull
  * @property machineId the machine the agent runs on.
  * @property agent the agent (its terminal).
  * @property space the matched space, or `null` for "No space".
+ * @property tabName the name of the desktop tab whose id the terminal carries, or `null` when the machine's document has none.
+ * @property herdrSpaceName the raw desktop name of the space, for the `where` prefix even after a Whistl Rename.
  */
 data class MachineAgent(
     val machineId: String,
@@ -31,10 +35,16 @@ data class MachineAgent(
     val space: SpaceRecord?,
     /** When this agent last changed on this device (an event arrived, or the snapshot named it): the recency the list sorts by. */
     val updatedMs: Long = 0L,
+    val tabName: String? = null,
+    val herdrSpaceName: String? = null,
 ) {
     /** The matched space's id, or `null` for "No space". */
     val spaceId: String?
         get() = space?.id
+
+    /** The name every surface shows, with the desktop tab and the raw Herdr space name in the rule (SPEC §1). */
+    val displayName: String
+        get() = terminalDisplayName(agent.terminal, tabName, herdrSpaceName ?: space?.name)
 }
 
 /**
@@ -99,7 +109,11 @@ object AgentEventReducer {
         val updated = when (event.kind) {
             TerminalEventKind.Keep -> current.copy(keep = data.boolean("keep") ?: current.keep)
             TerminalEventKind.Title -> current.copy(title = data.string("title") ?: current.title)
-            TerminalEventKind.Status -> current.copy(status = AgentStatus.fromWire(statusOf(data["status"])))
+            TerminalEventKind.Status -> current.copy(
+                status = AgentStatus.fromWire(statusOf(data["status"])),
+                // A status event can carry the object form for the first time; a string/state-only event keeps the app known.
+                agentApp = appOf(data["status"]) ?: current.agentApp,
+            )
             TerminalEventKind.Turn -> current.copy(turn = data.long("turn") ?: current.turn)
             TerminalEventKind.Finished -> current.copy(
                 state = TerminalState.Finished,

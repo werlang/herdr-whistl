@@ -22,6 +22,10 @@ package io.github.werlang.whistl.domain
  * @property signal terminating signal number, if the process was killed.
  * @property reason why it finished (for example `exited`), if reported.
  * @property keep whether hc keeps the terminal after it finishes.
+ * @property where the top-level `where` an `hc ls` path may compose (`space / tab`), or `null` when absent. The RPC's
+ *   `terminal.list` carries the same text as the label `where`, so the name rule reads both.
+ * @property agentApp the core's `status.app` identifier (`claude-code`, `codex`, …), or `null` for a plain program. It is the
+ *   last identity before argv and address when the core sends no name at all.
  */
 data class Terminal(
     val address: String,
@@ -40,4 +44,6 @@ data class Terminal(
     val signal: Int?,
     val reason: String?,
     val keep: Boolean,
+    val where: String? = null,
+    val agentApp: String? = null,
 )

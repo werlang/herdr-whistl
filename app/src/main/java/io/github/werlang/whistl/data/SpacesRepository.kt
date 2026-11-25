@@ -1,5 +1,6 @@
 package io.github.werlang.whistl.data
 
+import io.github.werlang.whistl.core.rpc.Conflict
 import io.github.werlang.whistl.core.rpc.HcClient
 import io.github.werlang.whistl.core.rpc.HcException
 import io.github.werlang.whistl.core.rpc.NotFound
@@ -17,6 +18,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 
@@ -40,6 +43,10 @@ private const val MAX_ATTEMPTS: Int = 5
  *   entry is the typed error the space row shows.
  * @property tabSpaces the space each Herdr desktop tab belongs to, keyed by tab id (0.7.3). Agents whose `herdr.tab` label
  *   names one of these resolve to the owning space. Empty until the desktop's document has been read.
+ * @property tabNames the desktop's own tab names, keyed by tab id. A terminal's `herdr.tab` gets its name here before any
+ *   `where` fallback; the map is per machine, like [tabSpaces].
+ * @property desktopSpaceNames the raw `name` the desktop's document gives each space id. It is the context for a `where`
+ *   prefix after the user renaming the Whistl space, because the Herdr text keeps the desktop name.
  */
 data class MachineSpaces(
     val machineId: String,
@@ -47,6 +54,8 @@ data class MachineSpaces(
     val spaces: List<SpaceRecord>,
     val resolutions: Map<String, FolderResolution> = emptyMap(),
     val tabSpaces: Map<String, String> = emptyMap(),
+    val tabNames: Map<String, String> = emptyMap(),
+    val desktopSpaceNames: Map<String, String> = emptyMap(),
 ) {
     /**
      * The resolution of a space's folder.
@@ -213,8 +222,17 @@ class DefaultSpacesRepository(
     /** The resolution job of each machine, cancelled when its connection ends or a newer one replaces it. */
     private val resolving = ConcurrentHashMap<String, Job>()
 
-    /** The desktop's tab-to-space map per machine, from the last successful read of [HERDR_DOCUMENT] (0.7.3). */
-    private val tabSpaces = ConcurrentHashMap<String, Map<String, String>>()
+    /**
+     * The desktop's tabs and spaces per machine, from one successful read of [HERDR_DOCUMENT]. Publishing both maps from this
+     * one snapshot keeps an owner and a name from the same revision.
+     */
+    private val desktopReads = ConcurrentHashMap<String, DesktopRead>()
+
+    /** One refresh at a time per machine: a connection refresh and a doc-triggered one must not overwrite each other. */
+    private val refreshLocks = ConcurrentHashMap<String, Mutex>()
+
+    /** One coherent desktop read: the tabs by id, and the spaces by id (the first entry of a duplicate id). */
+    private data class DesktopRead(val tabs: Map<String, DesktopTab>, val spaces: Map<String, DesktopSpace>)
 
     override fun groups(): StateFlow<List<MachineSpaces>> = view.asStateFlow()
 
@@ -251,7 +269,11 @@ class DefaultSpacesRepository(
             is Validation.Valid -> r.value
             is Validation.Invalid -> return SpaceResult.Rejected(SpaceField.Name, r.reason)
         }
-        return change(machineId, spaceId) { it.mapSpace(spaceId) { space -> space.copy(name = spaceName) } }
+        // A deliberate name stops following the desktop document: the explicit marker is what a later refresh and a restart
+        // read, so the absence of herdrName cannot make this look like an old adopted record.
+        return change(machineId, spaceId) {
+            it.mapSpace(spaceId) { space -> space.copy(name = spaceName, herdrName = null, nameOverride = true) }
+        }
     }
 
     override suspend fun setPinned(machineId: String, spaceId: String, pinned: Boolean): SpaceResult =
@@ -267,7 +289,7 @@ class DefaultSpacesRepository(
         if (documents[machineId]?.hasSpace(spaceId) == false) return SpaceResult.UnknownSpace(spaceId)
         val client = leases[machineId]?.client() ?: return SpaceResult.MachineOffline
         val known = documents[machineId]?.spaces.orEmpty()
-        val knownTabs = tabSpaces[machineId].orEmpty()
+        val knownTabs = desktopReads[machineId]?.tabs.orEmpty().mapValues { (_, tab) -> tab.spaceId }
         try {
             for (terminal in client.terminalList().terminals) {
                 val match = matchSpace(
@@ -321,7 +343,8 @@ class DefaultSpacesRepository(
                 verdicts.remove(id)
                 cache.remove(id)
                 folderCache.remove(id)
-                tabSpaces.remove(id)
+                desktopReads.remove(id)
+                refreshLocks.remove(id)
             }
         }
         for (id in current) {
@@ -374,8 +397,17 @@ class DefaultSpacesRepository(
         resolvers.remove(id)
     }
 
-    /** Reads the document from the live client and keeps it. A read that fails keeps the copy already held. */
+    /**
+     * Reads the document from the live client and keeps it. A read that fails keeps the copy already held. Refreshes of one
+     * machine are serialized: a connection refresh and a doc-triggered refresh can arrive together, and the older desktop
+     * read must not win the compare-and-set of the newer one.
+     */
     private suspend fun refresh(id: String) {
+        refreshLocks.getOrPut(id) { Mutex() }.withLock { refreshLocked(id) }
+    }
+
+    /** The body of [refresh], already serialized per machine. */
+    private suspend fun refreshLocked(id: String) {
         val client = leases[id]?.client() ?: return
         val read = try {
             client.docGet(WHISTL_DOCUMENT)
@@ -387,7 +419,7 @@ class DefaultSpacesRepository(
         } catch (e: DocumentException) {
             return
         }
-        remember(id, adoptDesktopSpaces(id, client, doc))
+        remember(id, adoptDesktopSpaces(id, client, doc, read.version))
         resolveFolders(id)
     }
 
@@ -400,31 +432,65 @@ class DefaultSpacesRepository(
      * resolve to it by label or tab instead of by cwd. Its spaces are deduplicated by id only: the desktop may keep
      * several spaces on the same folder, and each is a space of its own.
      *
+     * The space's name is the desktop's `name`; its folder is optional and may be blank. The tabs are kept with their ids,
+     * their owning space and their names. An adopted space's name and folder follow later desktop changes until the user
+     * renames it here ([syncDesktopSpaces]); a Rename stops only the name, never the folder.
+     *
      * A desktop document that cannot be read leaves the document and the tab map as they are. A desktop document with
-     * nothing new still refreshes the tab map, so a terminal can resolve by tab even when no space is adopted. A write that
-     * fails still shows the adopted spaces: they come back on the next refresh.
+     * nothing new still refreshes the tab map and names, so a terminal can resolve by tab even when no space is adopted. A
+     * write that fails still shows the adopted spaces: they come back on the next refresh.
      *
      * @param machineId the machine.
      * @param client the machine's live client.
      * @param doc the document this app holds.
+     * @param initialVersion the version of [WHISTL_DOCUMENT] that [doc] was read from.
      * @return the document to keep.
      */
-    private suspend fun adoptDesktopSpaces(machineId: String, client: HcClient, doc: SpacesDocument): SpacesDocument {
-        val desktopValue = try {
-            client.docGet(HERDR_DOCUMENT).value
-        } catch (e: HcException) {
-            return doc
-        }
-        tabSpaces[machineId] = parseDesktopTabSpaces(desktopValue)
-        val desktop = parseDesktopSpaces(desktopValue)
-        if (adoptedSpaces(doc.spaces, desktop).isEmpty()) return doc
-        return try {
-            docReadModifyWrite(client, WHISTL_DOCUMENT, MAX_ATTEMPTS) { current ->
-                val missing = adoptedSpaces(current.spaces, desktop)
-                if (missing.isEmpty()) current else SpacesDocument(current.spaces + missing, current.unknownFields)
+    private suspend fun adoptDesktopSpaces(
+        machineId: String,
+        client: HcClient,
+        doc: SpacesDocument,
+        initialVersion: Long,
+    ): SpacesDocument {
+        var base = doc
+        var version = initialVersion
+        var attempts = 0
+        while (true) {
+            val desktopValue = try {
+                client.docGet(HERDR_DOCUMENT).value
+            } catch (e: HcException) {
+                // A document that cannot be read keeps the last tab map and names; a blank folder on a stale map is no worse than
+                // no name at all.
+                return base
             }
-        } catch (e: HcException) {
-            SpacesDocument(doc.spaces + adoptedSpaces(doc.spaces, desktop), doc.unknownFields)
+            val tabs = parseDesktopTabs(desktopValue)
+            val desktop = parseDesktopSpaces(desktopValue)
+            desktopReads[machineId] = DesktopRead(tabs, indexDesktopSpaces(desktop))
+            val synced = syncDesktopSpaces(base.spaces, desktop)
+            val missing = adoptedSpaces(synced, desktop)
+            if (synced == base.spaces && missing.isEmpty()) return base
+            val merged = SpacesDocument(synced + missing, base.unknownFields)
+            try {
+                client.docSet(WHISTL_DOCUMENT, merged.toJson(), version)
+                return merged
+            } catch (e: Conflict) {
+                attempts++
+                if (attempts >= MAX_ATTEMPTS) return merged
+                // Re-read whistl first so the next attempt reads herdr against the latest whistl version.
+                val read = try {
+                    client.docGet(WHISTL_DOCUMENT)
+                } catch (e: HcException) {
+                    return merged
+                }
+                base = try {
+                    SpacesDocument.fromJson(read.value)
+                } catch (e: DocumentException) {
+                    return merged
+                }
+                version = read.version
+            } catch (e: HcException) {
+                return merged
+            }
         }
     }
 
@@ -439,7 +505,8 @@ class DefaultSpacesRepository(
         val resolver = resolvers[id] ?: return
         resolving.remove(id)?.cancel()
         resolving[id] = scope.launch {
-            val folders = documents[id]?.spaces.orEmpty().map { it.folder }.distinct()
+            // A blank folder is not probed: there is no path to check, and the space stays usable by label and tab.
+            val folders = documents[id]?.spaces.orEmpty().map { it.folder }.filter { it.isNotBlank() }.distinct()
             for (folder in folders) {
                 val verdict = try {
                     resolver.resolve(folder)
@@ -472,14 +539,18 @@ class DefaultSpacesRepository(
     private fun publish() {
         view.value = machines.machines().value.map { machine ->
             val spaces = sortSpaces(documents[machine.id]?.spaces.orEmpty())
+            val desktop = desktopReads[machine.id]
+            val tabs = desktop?.tabs.orEmpty()
             MachineSpaces(
                 machineId = machine.id,
                 offline = online[machine.id] != true,
                 spaces = spaces,
-                resolutions = spaces.mapNotNull { space ->
+                resolutions = spaces.filter { it.folder.isNotBlank() }.mapNotNull { space ->
                     resolutionOf(machine.id, space.folder)?.let { space.id to it }
                 }.toMap(),
-                tabSpaces = tabSpaces[machine.id].orEmpty(),
+                tabSpaces = tabs.mapValues { (_, tab) -> tab.spaceId },
+                tabNames = tabs.mapNotNull { (id, tab) -> tab.name?.let { id to it } }.toMap(),
+                desktopSpaceNames = desktop?.spaces.orEmpty().mapValues { (_, space) -> space.name },
             )
         }
     }

@@ -18,6 +18,9 @@ import io.github.werlang.whistl.support.RecordingLog
 import io.github.werlang.whistl.support.RepoStack
 import io.github.werlang.whistl.support.ScriptedMachines
 import io.github.werlang.whistl.support.StaticAgents
+import io.github.werlang.whistl.support.desktopDocJson
+import io.github.werlang.whistl.support.desktopSpaceJson
+import io.github.werlang.whistl.support.desktopTabJson
 import io.github.werlang.whistl.support.eventsSnapshot
 import io.github.werlang.whistl.support.plainTextScreen
 import io.github.werlang.whistl.support.snapshotPipe
@@ -79,9 +82,11 @@ class AgentViewModelTest {
         screen: String = "",
         settings: DefaultSettingsRepository = DefaultSettingsRepository(InMemorySettingsStore()),
         pins: FakePins = FakePins(),
+        terminal: JsonObject = terminalJson("t1", state = state, status = status),
+        desktop: JsonObject? = null,
     ): Triple<RepoStack, AgentViewModel, DefaultSettingsRepository> {
         val h = RepoStack(this)
-        val terminal = terminalJson("t1", state = state, status = status)
+        h.core.desktop = desktop
         h.core.terminals += terminal
         h.core.screens["t1"] = screen
         h.connector.eventsPipeFactory = { snapshotPipe(eventsSnapshot(1, listOf(terminal))) }
@@ -120,6 +125,57 @@ class AgentViewModelTest {
         // The placeholder has no machine name; the real state means the machine list and its connection were read.
         assertEquals("mac", vm.state.value.machineName)
         return vm
+    }
+
+    /** The desktop document that names space `gladcode2` and tab `tb1`. */
+    private fun gladcodeDesktop(): JsonObject = desktopDocJson(
+        listOf(
+            desktopSpaceJson(
+                "sp9aed68",
+                "gladcode2",
+                "/root",
+                listOf(desktopTabJson("tb1", "Claude Code")),
+            ),
+        ),
+    )
+
+    /**
+     * The header names the agent as the desktop tab does, exactly by id; the core sent no name and the dynamic title is not
+     * used (the header used to drop labels altogether, so this showed the argv).
+     */
+    @Test
+    fun theHeaderInheritsTheDesktopTabName() = runTest {
+        val terminal = terminalJson(
+            "t1",
+            name = null,
+            labels = mapOf(
+                "herdr.space" to "sp9aed68",
+                "herdr.tab" to "tb1",
+                "where" to "gladcode2 / Wrong",
+            ),
+        )
+
+        val (_, vm, _) = openAgent(terminal = terminal, desktop = gladcodeDesktop())
+
+        assertEquals("Claude Code", vm.state.value.name)
+    }
+
+    /** A name the user set in Whistl arrives as `whistl.name` and the open header shows it. */
+    @Test
+    fun theHeaderShowsTheWhistlName() = runTest {
+        val terminal = terminalJson(
+            "t1",
+            name = null,
+            labels = mapOf(
+                "herdr.space" to "sp9aed68",
+                "herdr.tab" to "tb1",
+                "whistl.name" to "Deploy",
+            ),
+        )
+
+        val (_, vm, _) = openAgent(terminal = terminal, desktop = gladcodeDesktop())
+
+        assertEquals("Deploy", vm.state.value.name)
     }
 
     /** While connected, the output is read and shown, and the field takes input. */

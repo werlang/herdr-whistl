@@ -51,6 +51,36 @@ class SpacesDocumentTest {
         assertEquals(rawSpace.getValue("future_field"), writtenSpace.getValue("future_field"))
     }
 
+    /**
+     * A document written before adopted names were tracked has no `herdrName`; it reads with `null` and round-trips unchanged,
+     * so opening the new version does not rewrite the user's spaces.
+     */
+    @Test
+    fun aDocumentWithoutTheAdoptedNameMarkerRoundTripsUnchanged() {
+        val legacy = Json.parseToJsonElement(
+            """{"v":1,"spaces":[{"id":"sp1","name":"mine","folder":"/p","pinned":false,"order":0}]}""",
+        )
+
+        val document = SpacesDocument.fromJson(legacy)
+
+        assertEquals(null, document.spaces.single().herdrName)
+        assertEquals(legacy, document.toJson())
+    }
+
+    /** The adopted-name and override markers round-trip when present, and are not left among the unknown fields. */
+    @Test
+    fun theAdoptedNameAndOverrideMarkersRoundTrip() {
+        val raw = Json.parseToJsonElement(
+            """{"v":1,"spaces":[{"id":"sp1","name":"desktop","folder":"/p","pinned":false,"order":0,"herdrName":"desktop","nameOverride":true}]}""",
+        )
+
+        val document = SpacesDocument.fromJson(raw)
+
+        assertEquals("desktop", document.spaces.single().herdrName)
+        assertEquals(true, document.spaces.single().nameOverride)
+        assertEquals(raw, document.toJson())
+    }
+
     /** A `null` value (never written) reads as the empty version-1 document. */
     @Test
     fun nullValueIsTheEmptyVersionOneDocument() {

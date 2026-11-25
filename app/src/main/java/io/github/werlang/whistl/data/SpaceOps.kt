@@ -40,7 +40,7 @@ fun sortSpaces(spaces: List<SpaceRecord>): List<SpaceRecord> =
  * **The id and the tab are what the desktop and this app agree on.** A terminal started on the desktop carries the
  * desktop's own space id, which this app's document may not know yet; the shots at the id, then the tab, let it land in the
  * adopted space before the folder has to decide. A space whose [resolvedPath] is `null` (not resolved yet, or unresolvable)
- * never matches by cwd.
+ * never matches by cwd. A blank folder is treated the same way: it is not `/`, and it must not claim every terminal.
  *
  * @param terminal the agent's terminal.
  * @param spaces the machine's spaces, in display order.
@@ -63,11 +63,15 @@ fun matchSpace(
     if (tab != null) {
         tabSpaceId(tab)?.let { spaceId -> spaces.firstOrNull { it.id == spaceId } }?.let { return it }
     }
-    val cwd = terminal.cwd?.let(::normalizeFolder) ?: return null
+    val cwd = terminal.cwd?.takeIf { it.isNotBlank() }?.let(::normalizeFolder) ?: return null
+    // A blank folder is not a folder: normalizing it to "" would make it a prefix of every absolute cwd (rpi5 spaces). It
+    // still matches by label or tab above; only the path rules skip it.
+    fun folderOf(space: SpaceRecord): String? =
+        resolvedPath(space)?.takeIf { it.isNotBlank() }?.let(::normalizeFolder)
     // Deepest match wins: a folder inside another space is the more specific answer.
-    return spaces.firstOrNull { space -> resolvedPath(space)?.let(::normalizeFolder) == cwd }
+    return spaces.firstOrNull { space -> folderOf(space) == cwd }
         ?: spaces
-            .mapNotNull { space -> resolvedPath(space)?.let(::normalizeFolder)?.let { it to space } }
+            .mapNotNull { space -> folderOf(space)?.let { it to space } }
             .filter { (folder, _) -> cwd.startsWith(folder.trimEnd('/') + "/") }
             .maxByOrNull { (folder, _) -> folder.length }
             ?.second

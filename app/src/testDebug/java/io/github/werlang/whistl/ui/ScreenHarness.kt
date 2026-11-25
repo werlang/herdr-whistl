@@ -324,7 +324,7 @@ fun ShotScreen.expectedText(): String {
     val app = RuntimeEnvironment.getApplication()
     return when (this) {
         ShotScreen.AgentsAll, ShotScreen.AgentsNeedsYou -> app.getString(R.string.agents_title)
-        ShotScreen.AgentWorking -> "claude"
+        ShotScreen.AgentWorking -> "Claude Code"
         ShotScreen.AgentColour -> "shell"
         ShotScreen.AgentAltScreen -> "htop"
         ShotScreen.AgentBlocked -> "codex"
@@ -390,6 +390,24 @@ private fun ShotScreen.seed(core: FakeCore, container: AppContainer) {
                 .forEach { (machineId, spaceId) -> container.spaces.close(machineId, spaceId) }
         }
 
+        ShotScreen.Spaces, ShotScreen.AgentsAll -> {
+            // The rpi5 state: the desktop name in `where`, and a space the desktop keeps with no folder at all.
+            core.addDemoSpace("mac", "sp_gladcode2", "gladcode2", "")
+            core.addAgent(
+                "mac",
+                "t-glad",
+                AgentStatus.Working,
+                "/home/workspaces/gladcode2",
+                labels = mapOf("herdr.space" to "sp_gladcode2", "where" to "gladcode2 / Claude Code"),
+            )
+        }
+
+        ShotScreen.AgentWorking -> core.setAgentLabels(
+            "mac",
+            "t-working",
+            mapOf("whistl.space" to "sp_api", "where" to "api / Claude Code"),
+        )
+
         ShotScreen.SpacesLong -> runBlocking {
             container.spaces.create("mac", folder = LONG_FOLDER, name = LONG_SPACE_NAME)
         }
@@ -411,7 +429,7 @@ private fun ShotScreen.seed(core: FakeCore, container: AppContainer) {
         }
 
         ShotScreen.AgentOffline -> core.addAgent("lab", "t-lab", AgentStatus.Idle, "/srv/lab")
-        ShotScreen.SpaceDetailEmpty -> core.addDemoSpace("mac", "sp_empty", "empty", "/home/demo/empty")
+        ShotScreen.SpaceDetailEmpty -> core.addDemoSpace("mac", "sp_empty", "gladcode2", "")
         ShotScreen.SpacesUnresolvedHome -> core.addDemoSpace("mac", "sp_home", "home", "/home/demo/unreadable")
         ShotScreen.MachinesIssues -> {
             clearMachines(container)

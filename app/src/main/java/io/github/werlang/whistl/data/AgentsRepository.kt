@@ -210,7 +210,17 @@ class DefaultAgentsRepository(
                     resolvedPath = { group?.resolvedPathOf(it) },
                     tabSpaceId = { tab -> group?.tabSpaces?.get(tab) },
                 )
-                MachineAgent(machine.id, Agent(terminal), space, updated["${machine.id}/${terminal.address}"] ?: 0L)
+                val tabName = terminal.labels[Agent.HERDR_TAB_LABEL]?.let { tab -> group?.tabNames?.get(tab) }
+                val desktopSpaceId = space?.id ?: terminal.labels[Agent.HERDR_SPACE_LABEL]
+                val herdrSpaceName = desktopSpaceId?.let { id -> group?.desktopSpaceNames?.get(id) }
+                MachineAgent(
+                    machineId = machine.id,
+                    agent = Agent(terminal),
+                    space = space,
+                    updatedMs = updated["${machine.id}/${terminal.address}"] ?: 0L,
+                    tabName = tabName,
+                    herdrSpaceName = herdrSpaceName,
+                )
             }
         }
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())

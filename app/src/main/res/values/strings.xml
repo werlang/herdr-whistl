@@ -260,6 +260,7 @@
     <string name="new_agent_off_machine">New agent is off: %1$s is offline.</string>
     <string name="new_agent_off_folder">New agent is off: the folder is not available on the machine.</string>
     <string name="new_agent_off_folder_unchecked">New agent is off: the folder has not been checked yet.</string>
+    <string name="new_agent_off_folder_missing">New agent is off: this space has no folder.</string>
     <string name="picker_installed">Installed on %1$s</string>
     <string name="picker_terminal">Terminal</string>
     <string name="picker_terminal_sub">The machine’s shell</string>

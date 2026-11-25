@@ -18,15 +18,22 @@ fun terminalJson(
     title: String = "",
     keep: Boolean = false,
     turn: Long = 0,
+    // The explicit name the core was given at run time; `null` is the RPC shape for a terminal it did not name.
+    name: String? = address,
+    // The top-level label `hc` composes on some paths; the RPC terminal.list carries it inside `labels.where`.
+    where: String? = null,
+    // The `status.app` identifier of the object status shape, e.g. `claude-code`.
+    app: String? = null,
 ): JsonObject = JsonObject(
     mapOf<String, JsonElement>(
         "address" to JsonPrimitive(address),
-        "name" to JsonPrimitive(address),
+        "name" to (name?.let { JsonPrimitive(it) } ?: JsonNull),
         "argv" to JsonArray(listOf(JsonPrimitive("sh"))),
         "cwd" to (cwd?.let { JsonPrimitive(it) } ?: JsonNull),
         "labels" to JsonObject(labels.mapValues { JsonPrimitive(it.value) }),
         "state" to JsonPrimitive(state),
-        "status" to (status?.let { JsonPrimitive(it) } ?: JsonNull),
+        "status" to statusJson(status, app),
+        "where" to (where?.let { JsonPrimitive(it) } ?: JsonNull),
         "status_ms" to JsonNull,
         "turn" to JsonPrimitive(turn),
         "title" to JsonPrimitive(title),
@@ -41,6 +48,24 @@ fun terminalJson(
         "rows" to JsonPrimitive(120),
     ),
 )
+
+/**
+ * The `status` value of a terminal in the shapes hc sends: a string, or the object `{"app":…,"state":…}`.
+ *
+ * @param status the status name, or `null` for a plain program.
+ * @param app the `status.app` identifier, which makes the object shape.
+ * @return the JSON value.
+ */
+private fun statusJson(status: String?, app: String?): JsonElement = when {
+    app != null -> JsonObject(
+        mapOf(
+            "app" to JsonPrimitive(app),
+            "state" to JsonPrimitive(status ?: "idle"),
+        ),
+    )
+    status != null -> JsonPrimitive(status)
+    else -> JsonNull
+}
 
 /** A `events.subscribe` reply: the snapshot with its sequence number and the terminals. */
 fun eventsSnapshot(seq: Long, terminals: List<JsonObject>): JsonObject = JsonObject(
@@ -125,4 +150,44 @@ fun spaceJson(
  */
 fun spacesDocJson(spaces: List<JsonObject>, extra: Map<String, JsonElement> = emptyMap()): JsonObject = JsonObject(
     extra + mapOf<String, JsonElement>("v" to JsonPrimitive(1), "spaces" to JsonArray(spaces)),
+)
+
+/**
+ * One tab of a Herdr desktop space, as its document holds it.
+ *
+ * @param id the tab id.
+ * @param name the tab's own name, or `null` when it has none.
+ * @return the tab object.
+ */
+fun desktopTabJson(id: String, name: String? = null): JsonObject = JsonObject(
+    mapOf<String, JsonElement>("id" to JsonPrimitive(id)) +
+        (name?.let { mapOf("name" to JsonPrimitive(it)) } ?: emptyMap()),
+)
+
+/**
+ * One space of the Herdr desktop's document (`herdr-app`).
+ *
+ * @param id the space id.
+ * @param name the space's own name.
+ * @param folder the folder, which the desktop may leave empty.
+ * @param tabs the tabs the space owns.
+ * @return the space object.
+ */
+fun desktopSpaceJson(
+    id: String,
+    name: String,
+    folder: String,
+    tabs: List<JsonObject> = emptyList(),
+): JsonObject = JsonObject(
+    mapOf(
+        "id" to JsonPrimitive(id),
+        "name" to JsonPrimitive(name),
+        "folder" to JsonPrimitive(folder),
+        "tabs" to JsonArray(tabs),
+    ),
+)
+
+/** A Herdr desktop document: `{ "spaces": [...] }`. */
+fun desktopDocJson(spaces: List<JsonObject>): JsonObject = JsonObject(
+    mapOf("spaces" to JsonArray(spaces)),
 )

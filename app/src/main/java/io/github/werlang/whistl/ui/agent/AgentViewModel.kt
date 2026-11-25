@@ -30,7 +30,6 @@ import io.github.werlang.whistl.domain.TerminalState
 import io.github.werlang.whistl.domain.action
 import io.github.werlang.whistl.domain.ctrlCombination
 import io.github.werlang.whistl.domain.letterCombination
-import io.github.werlang.whistl.ui.agents.displayName
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -661,7 +660,7 @@ class AgentViewModel(
         val status = terminal?.status
         val input = own.input
         return AgentUiState(
-            name = terminal?.let { displayName(it.name, it.argv, it.address) } ?: address,
+            name = current?.displayName ?: address,
             address = address,
             machineId = machineId,
             machineName = machineName,

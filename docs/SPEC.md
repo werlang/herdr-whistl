@@ -24,6 +24,26 @@ the deepest folder winning when spaces nest. Otherwise the agent shows under
 "No space" in the Agents tab. The desktop's own spaces are adopted with their
 ids (§5), so a space made there works here without retyping the folder.
 
+**Names.** A space's identity is its `id`; its label is the desktop document's
+`name`. The folder is an optional attribute, never a name: a space with
+`folder: ""` is still shown, with its name, and keeps no invented folder line.
+A blank folder is not `/`: it never matches a terminal by `cwd`, is never
+probed, and cannot start an agent until it has a folder.
+
+A terminal's name is the first available of: the `whistl.name` rename; the
+Herdr desktop tab whose id is the terminal's `herdr.tab`, by exact id; the
+tab name in `labels.where` (or the top-level `where` older `hc ls` output
+composes), with the matched space's exact `name / ` prefix removed; when the
+space was renamed here, the raw desktop name is used for that prefix, because
+the Herdr text does not change with the Whistl name. An empty or non-string
+`where` is ignored so the next source is read, and a blank tab after the
+separator is not a name; the terminal's explicit core `name`; the core's
+`status.app` (kept when a later status event carries only a string); the program's file
+name; the address. The dynamic `title` is never used. With no space context,
+`where` falls back to its last ` / ` segment, which is why the exact tab id is
+tried first. This rule is the same on the Spaces card, Space detail, Agents
+list, Agent header and finished-agent notification.
+
 ## 2. Screens (see prototype)
 
 Bottom navigation, 4 destinations: **Machines, Spaces, Agents, Settings**.
@@ -94,10 +114,11 @@ and the label **New agent**.
    card tapped on the Machines screen shows **only that machine's group**, with
    a banner naming it and one tap to show every machine again; the filter lives
    in the container because Spaces is a bottom destination without arguments. Row: name,
-   status dots per agent, "waiting" badge if any agent is blocked, `N agents ·
-   folder`. The count is sans and only the folder monospace; a long folder
+   a status dot and the name of each agent, "waiting" badge if any agent is blocked,
+   `N agents · folder`. The count is sans and only the folder monospace; a long folder
    truncates in the middle, keeping its last segment (and so does the New space
-   folder picker). A group whose machine is not connected shows the same real
+   folder picker). A space with no folder shows the count alone: no empty path
+   and no "folder not checked" line. A group whose machine is not connected shows the same real
    state label and colour as its Machines card — connecting, offline, login
    refused, host key — in the header and in New space's machine picker, instead
    of a generic "offline"; its rows are dimmed.
@@ -109,8 +130,8 @@ and the label **New agent**.
    button that opens **New space**, and the groups do not repeat "No spaces
    yet".
 3. **Space detail** — header `name` + `machine:folder`, the folder truncated in
-   the middle; when the machine is not connected it shows the machine's real
-   state in its colour. The header has the space's own overflow menu: Pin/Unpin,
+   the middle; a space with no folder shows only `machine:`. When the machine is
+   not connected it shows the machine's real state in its colour. The header has the space's own overflow menu: Pin/Unpin,
    Move up, Move down, Rename and Close space, with every action off while the
    machine is offline (and the moves off at the edge of the pin section).
    Closing the space confirms first and returns to the previous screen.
@@ -136,14 +157,16 @@ and the label **New agent**.
    error-coloured confirm. Acting from the list does not open the terminal's
    stream: it takes the machine's lease, sends one command and releases it.
    Rename writes the `whistl.name` label — the core cannot rename a live
-   terminal — and the row shows that label over the name the terminal was
-   started with. Every action reports itself under the chips: interrupted,
+   terminal — and that label wins over the desktop tab, `where` and every name
+   the terminal was started with, on the row, the card, the Agent header and
+   the notification. Every action reports itself under the chips: interrupted,
    closed, renamed, pinned, unpinned, machine offline, agent already gone, or the
    core refused it. With no agent anywhere, the empty list says how to start the
    first one — connect a machine, open a space and start one there — unlike an
    empty filter, which says "No agents with this status."
 5. **Agent** — a tmux-like **terminal only**, no chat UI: full-height monospace
-   screen, a one-line status bar `[machine] space · agent    status`, then a
+   screen, a one-line status bar `[machine] space · agent    status`, where the
+   pair is `space / tab` from the Herdr document (never the dynamic title), then a
    horizontally scrolling **shortcut key bar**, then a text field + Send.
    The screen is the terminal's own: its bytes come from a framed stream
    (`terminal.attach`, §5.1) into a VT emulator, and the screen draws the
@@ -413,10 +436,14 @@ to be in the table.
 The `whistl` document on each machine:
 
 ```json
-{ "v": 1, "spaces": [ { "id": "sp_<16 hex>", "name": "web-app", "folder": "~/code/web-app", "pinned": true, "order": 0 } ] }
+{ "v": 1, "spaces": [ { "id": "sp_<16 hex>", "name": "web-app", "folder": "~/code/web-app", "pinned": true, "order": 0,
+  "herdrName": "web-app", "nameOverride": false } ] }
 ```
 
-Unknown fields are preserved on write (round-trip `JsonObject`).
+`herdrName` and `nameOverride` are optional adoptions of the desktop document:
+`herdrName` is the last imported name and `nameOverride` marks a Rename made
+here. A document without them (an older version) still reads, with `null` and
+`false`. Unknown fields are preserved on write (round-trip `JsonObject`).
 
 ### The Herdr desktop's spaces (0.7.3)
 
@@ -425,13 +452,24 @@ The desktop keeps its spaces in a second document on the same core,
 with an `id`. Every refresh reads both documents.
 
 - **Adoption keeps the desktop's id and deduplicates by id only.** A desktop
-  space missing from `whistl` is appended as it is. The folder is not a key:
-  the desktop may keep several spaces on the same folder, and each of them is
-  adopted, so none of their terminals is left under "No space". A trailing
-  slash, or a hand-made space on the same folder, does not hide one either.
-- **The tab map is kept per machine, in memory.** `spaces[].tabs[].id` maps to
-  the owning `spaces[].id`; it is replaced on each successful read, and a
-  failed read keeps the last map. It is never written to the document.
+  space missing from `whistl` is appended with its `name`, its optional
+  `folder` and `herdrName`. The folder is not a key: the desktop may keep
+  several spaces on the same folder, and each of them is adopted, so none of
+  their terminals is left under "No space". A trailing slash, or a hand-made
+  space on the same folder, does not hide one either.
+- **Adopted names and folders follow the desktop until a Rename.** On each
+  successful read, a record whose id is in the desktop document takes that
+  document's current `folder` (including `""`), and its `name` unless
+  `nameOverride` marks a Rename made here. A record without markers from an
+  older version is treated as imported and aligned on the first refresh;
+  because the old version stored an imported name and a local Rename in the
+  same field, a legacy local Rename with no marker may be replaced once by this
+  migration. A Rename after the upgrade persists across refreshes and restarts.
+  Pin state and order are never taken from the desktop.
+- **The tab map is kept per machine, in memory.** One successful read gives
+  `spaces[].tabs[].id`, their owning `spaces[].id` and their names; the owner
+  and the name published together come from the same read. A failed read keeps
+  the last map. It is never written to the document.
 - **Matching precedence** is: `whistl.space` / `herdr.space` by space id;
   `herdr.tab` through the tab map; then `cwd` (exact folder first, then the
   deepest folder that is a prefix); then no space.

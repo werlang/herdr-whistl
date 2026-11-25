@@ -46,6 +46,9 @@ sealed interface FolderState {
     /** Checked on the live connection: the folder is a directory hc can enter. */
     data object Resolved : FolderState
 
+    /** The space has no folder recorded (the desktop's `folder: ""`): there is nothing to probe, match by cwd or start in. */
+    data object None : FolderState
+
     /** Not checked on this device yet: the machine has not connected with this folder. */
     data object NotChecked : FolderState
 
@@ -61,12 +64,16 @@ sealed interface FolderState {
  * The folder state of a space, from its resolution in the repository.
  *
  * @param resolution the resolution, or `null` when the folder has not been checked on this device.
+ * @param folder the folder as stored; a blank one is [FolderState.None], never a pending check.
  * @return the state.
  */
-fun folderStateOf(resolution: FolderResolution?): FolderState = when (resolution) {
-    null -> FolderState.NotChecked
-    is FolderResolution.Resolved -> FolderState.Resolved
-    is FolderResolution.Unresolvable -> FolderState.Unavailable(resolution.reason)
+fun folderStateOf(resolution: FolderResolution?, folder: String? = null): FolderState {
+    if (folder != null && folder.isBlank()) return FolderState.None
+    return when (resolution) {
+        null -> FolderState.NotChecked
+        is FolderResolution.Resolved -> FolderState.Resolved
+        is FolderResolution.Unresolvable -> FolderState.Unavailable(resolution.reason)
+    }
 }
 
 /**
@@ -76,8 +83,15 @@ fun folderStateOf(resolution: FolderResolution?): FolderState = when (resolution
  * @property status the agent's status, or `null` for a plain program.
  * @property live whether the terminal is live.
  * @property waiting whether it waits for the user (`isWaitingForUser`).
+ * @property name the terminal's name, as every other surface shows it. The card shows it beside the dot, so the dot is not
+ *   the only identity the user has.
  */
-data class AgentDot(val status: AgentStatus?, val live: Boolean, val waiting: Boolean)
+data class AgentDot(
+    val status: AgentStatus?,
+    val live: Boolean,
+    val waiting: Boolean,
+    val name: String = "",
+)
 
 /**
  * A space row (SPEC §2.2).
@@ -693,10 +707,15 @@ class SpacesViewModel(
                     pinned = space.pinned,
                     agents = mine.map { agent ->
                         val terminal = agent.agent.terminal
-                        AgentDot(terminal.status, terminal.state == TerminalState.Live, terminal.isWaitingForUser())
+                        AgentDot(
+                            status = terminal.status,
+                            live = terminal.state == TerminalState.Live,
+                            waiting = terminal.isWaitingForUser(),
+                            name = agent.displayName,
+                        )
                     },
                     waitingCount = mine.count { it.agent.terminal.isWaitingForUser() },
-                    folderState = folderStateOf(group.resolutionOf(space)),
+                    folderState = folderStateOf(group.resolutionOf(space), space.folder),
                     canMoveUp = rules[index].first,
                     canMoveDown = rules[index].second,
                     dimmed = group.offline,

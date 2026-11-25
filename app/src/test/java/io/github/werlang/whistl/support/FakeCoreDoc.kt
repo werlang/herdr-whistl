@@ -31,6 +31,9 @@ class FakeCoreDoc(initialValue: JsonObject? = null, initialVersion: Long = 1) {
      */
     var desktop: JsonObject? = null
 
+    /** Whether `doc.get` for the desktop document answers an error, as an unavailable core would. */
+    var desktopReadFails: Boolean = false
+
     /** The stored version. */
     var version: Long = initialVersion
 
@@ -123,6 +126,16 @@ class FakeCoreDoc(initialValue: JsonObject? = null, initialVersion: Long = 1) {
         return when (method) {
             "doc.get" -> {
                 val name = params["name"]?.jsonPrimitive?.contentOrNull
+                if (name == HERDR_DOCUMENT && desktopReadFails) {
+                    return errorReply(
+                        JsonObject(
+                            mapOf<String, JsonElement>(
+                                "code" to JsonPrimitive(-32603),
+                                "message" to JsonPrimitive("the desktop document is unavailable"),
+                            ),
+                        ),
+                    )
+                }
                 val stored = if (name == HERDR_DOCUMENT) desktop else value
                 reply(
                     mapOf<String, JsonElement>("value" to (stored ?: JsonNull), "version" to JsonPrimitive(version)),

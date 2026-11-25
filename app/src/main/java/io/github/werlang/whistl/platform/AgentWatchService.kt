@@ -17,7 +17,6 @@ import io.github.werlang.whistl.domain.FinishedAgents
 import io.github.werlang.whistl.domain.LimitAlert
 import io.github.werlang.whistl.domain.LimitAlerts
 import io.github.werlang.whistl.data.isWaitingForUser
-import io.github.werlang.whistl.ui.agents.displayName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -105,7 +104,7 @@ class AgentWatchService : Service() {
     private fun notifyFinished(agent: io.github.werlang.whistl.data.MachineAgent) {
         if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) return
         val terminal = agent.agent.terminal
-        val name = displayName(terminal.name, terminal.argv, terminal.address, terminal.labels)
+        val name = agent.displayName
         val where = agent.space?.name ?: agent.machineId
         val notification = NotificationCompat.Builder(this, FINISHED_CHANNEL)
             .setSmallIcon(R.drawable.ic_mark)

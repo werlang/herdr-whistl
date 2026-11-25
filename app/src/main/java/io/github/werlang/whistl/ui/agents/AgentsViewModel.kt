@@ -23,7 +23,6 @@ import io.github.werlang.whistl.data.PinnedAgents
 import io.github.werlang.whistl.data.isWaitingForUser
 import io.github.werlang.whistl.data.sortWithPinned
 import io.github.werlang.whistl.data.withLiveTerminal
-import io.github.werlang.whistl.domain.Agent
 import io.github.werlang.whistl.domain.AgentStatus
 import io.github.werlang.whistl.domain.TerminalState
 import kotlinx.coroutines.flow.Flow
@@ -237,7 +236,7 @@ class AgentsViewModel(
         // here on a connected machine (0.6.5).
         val group = only?.let { filter -> groups.firstOrNull { it.machineId == filter.machineId } }
         val space = only?.let { filter -> group?.spaces?.firstOrNull { it.id == filter.spaceId } }
-        val folderState = if (space == null || group == null) null else folderStateOf(group.resolutionOf(space))
+        val folderState = if (space == null || group == null) null else folderStateOf(group.resolutionOf(space), space.folder)
         val block = when {
             only == null -> null
             group == null || group.offline -> NewAgentBlock.MachineOffline
@@ -448,7 +447,7 @@ class AgentsViewModel(
         return AgentRow(
             machineId = machineId,
             address = terminal.address,
-            name = displayName(terminal.name, terminal.argv, terminal.address, terminal.labels),
+            name = this.displayName,
             status = terminal.status,
             waiting = terminal.isWaitingForUser(),
             live = terminal.state == TerminalState.Live,
@@ -458,21 +457,3 @@ class AgentsViewModel(
         )
     }
 }
-
-/**
- * The name the screens show for a terminal: the name hc has, else the program's file name, else the address.
- *
- * @param name the name given at run time, if any.
- * @param argv the program and its arguments.
- * @param address the terminal address.
- * @return the name to show.
- */
-internal fun displayName(
-    name: String?,
-    argv: List<String>,
-    address: String,
-    labels: Map<String, String> = emptyMap(),
-): String = labels[Agent.NAME_LABEL]?.takeIf { it.isNotBlank() }
-    ?: name?.takeIf { it.isNotBlank() }
-    ?: argv.firstOrNull()?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
-    ?: address
